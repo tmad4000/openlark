@@ -1,0 +1,8 @@
+# OpenLark — Ralph Progress Log
+# Started: 2026-03-04
+# Branch: ralph/openlark-v1
+# Stories: 120 (US-001 through US-120)
+#
+# Format: [YYYY-MM-DD HH:MM] US-XXX — Title — STATUS
+# STATUS: PASS | FAIL | SKIP
+#
