@@ -1,0 +1,2040 @@
+{
+  "project": "OpenLark",
+  "branchName": "ralph/openlark-v1",
+  "description": "OpenLark - Open source workplace super-app (Lark/Feishu clone). SaaS-first, multi-tenant, real-time collaboration. Tech: Next.js 15, Fastify, PostgreSQL, Redis, Yjs+Hocuspocus, LiveKit, S3.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Scaffold monorepo with Turborepo",
+      "description": "As a developer, I need the project scaffolded as a Turborepo monorepo so all packages share tooling.",
+      "acceptanceCriteria": [
+        "Create Turborepo monorepo with apps/web (Next.js 15 App Router), apps/api (Fastify), and packages/shared (TypeScript types/utils)",
+        "Configure TypeScript strict mode across all packages",
+        "Add ESLint + Prettier with shared configs",
+        "Add turbo.json with build, dev, lint, typecheck pipelines",
+        "pnpm install succeeds and turbo dev starts both apps",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": false,
+      "notes": "Use pnpm workspaces. Next.js 15 with App Router. Fastify 5 for API."
+    },
+    {
+      "id": "US-002",
+      "title": "Database setup with Drizzle ORM",
+      "description": "As a developer, I need PostgreSQL database connection and ORM configured.",
+      "acceptanceCriteria": [
+        "Add drizzle-orm and drizzle-kit to apps/api",
+        "Create drizzle.config.ts pointing to DATABASE_URL env var",
+        "Create db/index.ts with connection pool setup",
+        "Add docker-compose.yml with postgres:16 and redis:7 services",
+        "docker compose up starts database successfully",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": false,
+      "notes": "Use drizzle-orm with postgres-js driver. Connection pooling built in."
+    },
+    {
+      "id": "US-003",
+      "title": "Core entity schemas - User and Organization",
+      "description": "As a developer, I need the foundational User and Organization tables.",
+      "acceptanceCriteria": [
+        "Create users table: id (uuid), email (unique), phone, password_hash, display_name, avatar_url, timezone, locale, status, working_hours_start, working_hours_end, org_id (fk), created_at, updated_at, deleted_at",
+        "Create organizations table: id (uuid), name, domain (unique), logo_url, industry, plan (enum: starter/pro/enterprise), settings (jsonb), created_at, updated_at",
+        "Add org_id index on users table",
+        "Run drizzle-kit generate and drizzle-kit migrate successfully",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": "All tables use uuid primary keys. Soft deletes via deleted_at timestamp."
+    },
+    {
+      "id": "US-004",
+      "title": "Department and membership schemas",
+      "description": "As a developer, I need department hierarchy and membership tables.",
+      "acceptanceCriteria": [
+        "Create departments table: id, name, parent_id (self-ref fk), org_id (fk), created_at, updated_at",
+        "Create department_members table: department_id (fk), user_id (fk), role (enum: head/member), primary key on (department_id, user_id)",
+        "Add indexes on org_id, parent_id",
+        "Migration runs successfully",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": "parent_id enables tree structure for nested departments."
+    },
+    {
+      "id": "US-005",
+      "title": "Session and API key schemas",
+      "description": "As a developer, I need session and API key tables for authentication.",
+      "acceptanceCriteria": [
+        "Create sessions table: id, user_id (fk), token_hash, device_info (jsonb), ip, expires_at, created_at",
+        "Create api_keys table: id, org_id (fk), user_id (fk), key_hash, scopes (text[]), name, last_used_at, created_at, revoked_at",
+        "Add index on token_hash for fast session lookup",
+        "Migration runs successfully",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "Auth API - Registration endpoint",
+      "description": "As a user, I want to register with email and password so I can create an account.",
+      "acceptanceCriteria": [
+        "POST /auth/register accepts {email, password, display_name}",
+        "Password hashed with bcrypt (12 rounds)",
+        "Returns 201 with user object (no password_hash) and session token",
+        "Returns 409 if email already exists",
+        "Validates email format and password min length (8 chars)",
+        "Typecheck passes"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": "Auto-create a personal organization for the user on registration."
+    },
+    {
+      "id": "US-007",
+      "title": "Auth API - Login endpoint",
+      "description": "As a user, I want to login with email and password.",
+      "acceptanceCriteria": [
+        "POST /auth/login accepts {email, password}",
+        "Returns 200 with user object and session token on success",
+        "Returns 401 with generic message on wrong email or password",
+        "Creates session record in database",
+        "Session token is a cryptographically random string (32 bytes hex)",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "Auth middleware and session validation",
+      "description": "As a developer, I need middleware that validates session tokens on protected routes.",
+      "acceptanceCriteria": [
+        "Create auth middleware that reads Authorization: Bearer <token> header",
+        "Looks up session by token_hash, checks not expired",
+        "Attaches user and org to request context",
+        "Returns 401 if no token, invalid token, or expired session",
+        "POST /auth/logout invalidates the current session",
+        "Typecheck passes"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": "Hash the token before lookup to prevent timing attacks."
+    },
+    {
+      "id": "US-009",
+      "title": "Registration page UI",
+      "description": "As a user, I want a registration page to create my account.",
+      "acceptanceCriteria": [
+        "Create /register page with form: email, password, confirm password, display name",
+        "Client-side validation: email format, password match, min length",
+        "On submit, call POST /auth/register API",
+        "On success, redirect to /app (main dashboard)",
+        "On error, show error message below form",
+        "Responsive layout centered on page",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": "Use Tailwind CSS. Clean, minimal design."
+    },
+    {
+      "id": "US-010",
+      "title": "Login page UI",
+      "description": "As a user, I want a login page to access my account.",
+      "acceptanceCriteria": [
+        "Create /login page with form: email, password",
+        "On submit, call POST /auth/login API",
+        "Store session token in httpOnly cookie",
+        "On success, redirect to /app",
+        "On error, show error message",
+        "Link to /register for new users",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-011",
+      "title": "App shell layout with navigation rail",
+      "description": "As a user, I want the main app layout with a left sidebar navigation rail.",
+      "acceptanceCriteria": [
+        "Create /app layout with three-panel structure: left sidebar (56px nav rail + resizable panel), center content, optional right panel",
+        "Navigation rail has icon buttons: Messenger, Calendar, Docs, Tasks, Base, Wiki, Email, Admin",
+        "Active nav item highlighted; clicking navigates to /app/[module]",
+        "User avatar + dropdown menu at bottom of nav rail (profile, settings, logout)",
+        "Redirect to /login if no valid session",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": "Use Radix UI for dropdown. Lucide icons for nav. Three-panel layout matches Lark desktop."
+    },
+    {
+      "id": "US-012",
+      "title": "Organization creation and settings API",
+      "description": "As an admin, I need APIs to create and manage organizations.",
+      "acceptanceCriteria": [
+        "POST /orgs creates organization with {name, domain}; creator becomes primary admin",
+        "GET /orgs/:id returns organization details",
+        "PATCH /orgs/:id updates name, logo_url, industry, settings",
+        "Only primary admin or users with org.manage scope can update",
+        "Typecheck passes"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-013",
+      "title": "User invitation API",
+      "description": "As an admin, I want to invite users to my organization.",
+      "acceptanceCriteria": [
+        "POST /orgs/:id/invitations accepts {emails: string[]}",
+        "Creates invitation records with unique tokens",
+        "Returns invitation links",
+        "GET /auth/accept-invite/:token validates and shows accept page",
+        "POST /auth/accept-invite/:token creates user in org (or adds existing user to org)",
+        "Typecheck passes"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": "Email sending is a background job via BullMQ - stub for now."
+    },
+    {
+      "id": "US-014",
+      "title": "Department management API",
+      "description": "As an admin, I want to create and manage departments.",
+      "acceptanceCriteria": [
+        "GET /orgs/:id/departments returns department tree",
+        "POST /orgs/:id/departments creates department with {name, parent_id?}",
+        "PATCH /departments/:id updates name or moves to new parent",
+        "DELETE /departments/:id soft-deletes (only if no members)",
+        "POST /departments/:id/members adds user to department",
+        "DELETE /departments/:id/members/:userId removes user",
+        "Typecheck passes"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-015",
+      "title": "User profile API",
+      "description": "As a user, I want to view and update my profile.",
+      "acceptanceCriteria": [
+        "GET /users/me returns current user profile with departments",
+        "PATCH /users/me updates display_name, avatar_url, timezone, locale, working_hours_start, working_hours_end, phone",
+        "GET /users/:id returns public profile (name, avatar, status, department)",
+        "Typecheck passes"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-016",
+      "title": "Contacts directory API",
+      "description": "As a user, I want to search and browse organization contacts.",
+      "acceptanceCriteria": [
+        "GET /contacts?q=search returns users matching name or email (within same org)",
+        "GET /contacts/departments returns department tree with member counts",
+        "Results paginated with cursor-based pagination",
+        "Only returns users in same org_id",
+        "Typecheck passes"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-017",
+      "title": "Chat and Message schemas",
+      "description": "As a developer, I need the core messaging database tables.",
+      "acceptanceCriteria": [
+        "Create chats table: id, type (enum: dm/group/topic_group/supergroup/meeting), name, avatar_url, org_id, is_public, max_members, settings (jsonb), created_at, updated_at",
+        "Create chat_members table: chat_id, user_id, role (enum: owner/admin/member), joined_at, muted (bool), label, last_read_message_id, primary key (chat_id, user_id)",
+        "Create messages table: id, chat_id, sender_id, type (enum: text/rich_text/code/voice/card/system), content (jsonb), thread_id (self-ref), reply_to_id (self-ref), edited_at, recalled_at, scheduled_for, created_at",
+        "Add indexes: messages(chat_id, created_at), chat_members(user_id), messages(thread_id)",
+        "Migration runs successfully",
+        "Typecheck passes"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": "content is JSONB to support different message types (text, rich_text blocks, code with language, etc.)"
+    },
+    {
+      "id": "US-018",
+      "title": "Messenger support schemas - reactions, pins, favorites",
+      "description": "As a developer, I need tables for message reactions, pins, and favorites.",
+      "acceptanceCriteria": [
+        "Create message_reactions table: message_id, user_id, emoji (varchar), created_at; primary key (message_id, user_id, emoji)",
+        "Create message_read_receipts table: message_id, user_id, read_at; primary key (message_id, user_id)",
+        "Create pins table: chat_id, message_id, pinned_by, pinned_at; primary key (chat_id, message_id)",
+        "Create favorites table: user_id, message_id, created_at; primary key (user_id, message_id)",
+        "Create chat_tabs table: id, chat_id, type (enum: auto/custom), name, url, position",
+        "Create announcements table: id, chat_id, content (text), author_id, created_at",
+        "Migration runs successfully",
+        "Typecheck passes"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-019",
+      "title": "WebSocket infrastructure with Redis pub/sub",
+      "description": "As a developer, I need WebSocket server with Redis pub/sub for real-time messaging.",
+      "acceptanceCriteria": [
+        "Add WebSocket server to Fastify API using @fastify/websocket",
+        "On connect, authenticate via token query param, subscribe to user's chat channels in Redis",
+        "Create Redis pub/sub helper: publish(channel, event) and subscribe(channel, callback)",
+        "When a message is published to a chat channel, all connected members receive it via WebSocket",
+        "Handle disconnect: clean up subscriptions",
+        "Typecheck passes"
+      ],
+      "priority": 19,
+      "passes": false,
+      "notes": "Each chat has a Redis pub/sub channel: chat:{chat_id}. User presence tracked via Redis sorted set."
+    },
+    {
+      "id": "US-020",
+      "title": "Create DM and Group Chat APIs",
+      "description": "As a user, I want to create 1:1 DMs and group chats.",
+      "acceptanceCriteria": [
+        "POST /chats/dm accepts {user_id} - creates DM or returns existing DM with that user",
+        "POST /chats/group accepts {name, member_ids} - creates group chat, creator is owner",
+        "Both return full chat object with member list",
+        "DMs have type='dm', groups have type='group'",
+        "Validates all member_ids are in same org",
+        "Typecheck passes"
+      ],
+      "priority": 20,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-021",
+      "title": "Send and receive messages API",
+      "description": "As a user, I want to send messages and retrieve chat history.",
+      "acceptanceCriteria": [
+        "POST /chats/:id/messages accepts {type, content} - creates message, publishes to Redis channel",
+        "GET /chats/:id/messages returns paginated messages (cursor-based, newest first)",
+        "Only chat members can send/read messages",
+        "System message auto-created when members join/leave",
+        "Updates sender's last_read_message_id on send",
+        "Typecheck passes"
+      ],
+      "priority": 21,
+      "passes": false,
+      "notes": "content is JSONB: {text: 'hello'} for text, {blocks: [...]} for rich text, {code: '...', language: 'js'} for code blocks."
+    },
+    {
+      "id": "US-022",
+      "title": "Chat list API",
+      "description": "As a user, I want to get my list of chats sorted by recent activity.",
+      "acceptanceCriteria": [
+        "GET /chats returns user's chats with: last message preview, unread count, member count, chat name/avatar",
+        "Sorted by last message timestamp (most recent first)",
+        "Includes unread count: messages after user's last_read_message_id",
+        "Supports filter query param: ?filter=dm|group|unread|muted",
+        "Typecheck passes"
+      ],
+      "priority": 22,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-023",
+      "title": "Chat list UI sidebar",
+      "description": "As a user, I want to see my chats in the left sidebar panel.",
+      "acceptanceCriteria": [
+        "Messenger page (/app/messenger) shows chat list in left panel",
+        "Each chat row: avatar, name, last message preview, timestamp, unread badge",
+        "Click a chat to select it and show messages in center panel",
+        "Filter bar at top: All, Private, Group, @Mentions, Unread, Muted",
+        "Search box to filter chats by name",
+        "New chat button opens create dialog",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 23,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-024",
+      "title": "Chat view and message list UI",
+      "description": "As a user, I want to see messages in the selected chat.",
+      "acceptanceCriteria": [
+        "Center panel shows: chat header (name, member count, info button), scrollable message list, input box at bottom",
+        "Messages show: sender avatar, display name, timestamp, message content",
+        "Messages grouped by date with date separators",
+        "Auto-scroll to bottom on new messages",
+        "Load more messages on scroll up (infinite scroll)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 24,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-025",
+      "title": "Message input with rich text formatting",
+      "description": "As a user, I want to compose messages with formatting options.",
+      "acceptanceCriteria": [
+        "Message input box at bottom of chat view",
+        "Expandable formatting toolbar: bold (Cmd+B), italic (Cmd+I), strikethrough, underline, bullet list, numbered list, blockquote, inline code, link",
+        "Send on Enter (configurable to Cmd+Enter)",
+        "Line break on Shift+Enter",
+        "Emoji picker button opens emoji selector panel",
+        "Attachment button for file uploads",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 25,
+      "passes": false,
+      "notes": "Use a lightweight rich text input (TipTap instance) for the message composer."
+    },
+    {
+      "id": "US-026",
+      "title": "Real-time message delivery via WebSocket",
+      "description": "As a user, I want to see new messages appear instantly without refreshing.",
+      "acceptanceCriteria": [
+        "Frontend WebSocket client connects on app load with auth token",
+        "When receiving a message event, append to message list in real-time",
+        "When sending a message, optimistic UI update (show immediately, confirm on ACK)",
+        "Reconnect automatically on disconnect with exponential backoff",
+        "Show connection status indicator (connected/reconnecting)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 26,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-027",
+      "title": "Typing indicators and online presence",
+      "description": "As a user, I want to see when others are typing and who is online.",
+      "acceptanceCriteria": [
+        "When user is typing, publish typing event to chat's Redis channel (debounced, 3s TTL)",
+        "Show 'X is typing...' indicator below message list",
+        "Online presence: heartbeat every 30s to Redis sorted set",
+        "Green dot on avatar for online users in chat member list",
+        "Presence expires after 60s without heartbeat",
+        "Typecheck passes"
+      ],
+      "priority": 27,
+      "passes": false,
+      "notes": "Typing indicators are ephemeral - not persisted to database."
+    },
+    {
+      "id": "US-028",
+      "title": "Read receipts API and UI",
+      "description": "As a user, I want to see who has read my messages.",
+      "acceptanceCriteria": [
+        "When user views a chat, POST /chats/:id/read with last_message_id to update read position",
+        "Batch insert read receipts for all messages between old and new position",
+        "On message, show read status icon: gray circle (unread), partial green (some read), green check (all read)",
+        "Click read status icon to see list of who read / who hasn't",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 28,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-029",
+      "title": "Emoji reactions on messages",
+      "description": "As a user, I want to react to messages with emojis.",
+      "acceptanceCriteria": [
+        "Hover over message shows quick reaction picker (5 frequent emojis + expand button)",
+        "Click emoji to toggle reaction on/off",
+        "POST /messages/:id/reactions to add, DELETE to remove",
+        "Reactions displayed below message with count and list of reactors on hover",
+        "Reactions do NOT trigger notifications",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 29,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-030",
+      "title": "Message threading (replies)",
+      "description": "As a user, I want to reply to a specific message to create a thread.",
+      "acceptanceCriteria": [
+        "Hover action: Reply button on each message",
+        "POST /chats/:chatId/messages with {thread_id: parentMessageId} creates threaded reply",
+        "Thread replies shown inline with 'N replies' indicator on parent message",
+        "Click 'N replies' to open thread panel on right side",
+        "Thread panel shows parent message + all replies in chronological order",
+        "Thread replies only notify thread participants, not full chat",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 30,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-031",
+      "title": "@mention autocomplete",
+      "description": "As a user, I want to @mention people in messages with autocomplete.",
+      "acceptanceCriteria": [
+        "Typing '@' in message input triggers autocomplete dropdown",
+        "Dropdown shows matching chat members filtered by typed text",
+        "Selecting a user inserts @DisplayName as a styled mention node",
+        "Mentioned users stored in message content JSON",
+        "POST /chats/:id/messages with mentions triggers notification for mentioned users",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 31,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-032",
+      "title": "Pin and favorite messages",
+      "description": "As a user, I want to pin messages for the group and favorite messages for myself.",
+      "acceptanceCriteria": [
+        "Message hover menu: Pin and Favorite options",
+        "POST /chats/:id/pins/:messageId pins message (visible to all members)",
+        "POST /messages/:id/favorite adds to personal favorites",
+        "Pinned messages accessible via Pins tab in chat header tabs",
+        "Favorites accessible via a dedicated Favorites section in sidebar",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 32,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-033",
+      "title": "Edit and recall messages",
+      "description": "As a user, I want to edit sent messages within 24h and recall (unsend) them.",
+      "acceptanceCriteria": [
+        "Message hover menu: Edit (own messages only, within 24h, max 20 edits)",
+        "PATCH /messages/:id updates content, sets edited_at timestamp",
+        "Edited messages show 'Edited' label",
+        "Message hover menu: Recall (own messages within 24h; group owner can recall any)",
+        "DELETE /messages/:id sets recalled_at; message displays 'This message was recalled'",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 33,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-034",
+      "title": "Forward messages",
+      "description": "As a user, I want to forward messages to other chats.",
+      "acceptanceCriteria": [
+        "Message hover menu: Forward option",
+        "Opens modal to select destination chat(s) with search",
+        "POST /messages/:id/forward with {chat_ids} creates forwarded message copies",
+        "Forwarded message shows 'Forwarded from [chat]' attribution",
+        "Multi-select mode: select multiple messages, then 'Combine and Forward' as a bundle",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 34,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-035",
+      "title": "Chat management - mute, done, labels",
+      "description": "As a user, I want to mute chats, mark them done, and add labels.",
+      "acceptanceCriteria": [
+        "Right-click chat in sidebar: Mute, Mark as Done, Pin to Top, Add Label",
+        "PATCH /chat-members/:chatId/me with {muted, label, done}",
+        "Muted chats show muted icon, no push notifications",
+        "Done chats removed from active list but searchable; reopen on new message",
+        "Pin to top: pinned chats appear above others in chat list",
+        "Labels: custom text label shown as colored tag on chat row",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 35,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-036",
+      "title": "Chat tabs - auto-generated and custom",
+      "description": "As a user, I want tabs at the top of chats for quick access to shared content.",
+      "acceptanceCriteria": [
+        "Chat header shows tabs: Chat (default), Docs, Files, Pins (auto-generated when content is shared)",
+        "Custom tabs: click '+' to add tab with name + URL (max 20 per chat)",
+        "Clicking Docs tab shows all docs shared in chat",
+        "Clicking Files tab shows all files/attachments shared",
+        "Clicking Pins tab shows all pinned messages",
+        "Tabs can be reordered by drag-and-drop; custom tabs can be deleted",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 36,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-037",
+      "title": "Group chat settings and admin panel",
+      "description": "As a group admin, I want to manage group settings and members.",
+      "acceptanceCriteria": [
+        "Click info button in chat header to open right panel with: member list, group settings",
+        "Member list: searchable, shows role badges (owner/admin/member)",
+        "Owner can: add/remove admins, remove members, change group name/avatar, toggle public/private",
+        "Admin can: add/remove members, pin messages",
+        "Settings: who can send messages (all/admins only), who can add members, history visible to new members (yes/no)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 37,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-038",
+      "title": "Code block messages",
+      "description": "As a user, I want to send code blocks with syntax highlighting.",
+      "acceptanceCriteria": [
+        "Keyboard shortcut Cmd+Option+C inserts code block in message input",
+        "Code block has language selector dropdown (JavaScript, Python, TypeScript, Go, Rust, Java, C++, etc.)",
+        "Syntax highlighting using highlight.js or Prism in rendered messages",
+        "Copy button on rendered code blocks",
+        "Markdown triple-backtick syntax also creates code blocks",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 38,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-039",
+      "title": "Group announcements",
+      "description": "As a group admin, I want to post announcements visible to all members.",
+      "acceptanceCriteria": [
+        "Announcements tab in chat tabs shows all announcements",
+        "POST /chats/:id/announcements creates announcement (admin/owner only)",
+        "Announcement appears as a banner at top of chat view",
+        "New members see existing announcements",
+        "Admin can edit or delete announcements",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 39,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-040",
+      "title": "Notification system - in-app notifications",
+      "description": "As a user, I want to receive notifications for mentions, DMs, and important events.",
+      "acceptanceCriteria": [
+        "Create notifications table: id, user_id, type (enum), title, body, entity_type, entity_id, read_at, created_at",
+        "Generate notifications for: DM received, @mentioned, thread reply, task assigned, approval pending",
+        "GET /notifications returns paginated notifications (newest first)",
+        "PATCH /notifications/:id/read marks as read",
+        "POST /notifications/read-all marks all as read",
+        "Notification bell icon in nav rail with unread count badge",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 40,
+      "passes": false,
+      "notes": "Push notifications (browser, mobile) are a follow-up story."
+    },
+    {
+      "id": "US-041",
+      "title": "Buzz urgent notification API",
+      "description": "As a user, I want to send urgent Buzz notifications on my messages.",
+      "acceptanceCriteria": [
+        "Create buzz_notifications table: id, message_id, sender_id, recipient_id, type (enum: in_app/sms/phone), status (enum: pending/delivered/read), created_at, delivered_at, read_at",
+        "POST /messages/:id/buzz with {recipient_id, type} creates buzz",
+        "Only message sender can buzz their own messages",
+        "In-app buzz: creates high-priority notification with visual indicator",
+        "Rate limit: max 3 buzzes per message, 10 per hour per user",
+        "Buzz marked as read when recipient views the original message",
+        "Typecheck passes"
+      ],
+      "priority": 41,
+      "passes": false,
+      "notes": "SMS and phone call delivery require Twilio integration - implement in-app tier first, add Twilio later."
+    },
+    {
+      "id": "US-042",
+      "title": "Buzz UI - send and receive",
+      "description": "As a user, I want to see Buzz options on messages and receive urgent notifications.",
+      "acceptanceCriteria": [
+        "Message hover menu: Buzz option (only on own messages)",
+        "Buzz dialog: select recipients, choose tier (in-app only for now)",
+        "Buzzed messages show red urgent icon",
+        "Recipients see full-screen buzz overlay that must be dismissed",
+        "Buzz overlay shows message content and 'View in chat' button",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 42,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-043",
+      "title": "Topic groups - create and manage topics",
+      "description": "As a user, I want to organize group discussions into topics.",
+      "acceptanceCriteria": [
+        "Create topics table: id, chat_id, title, creator_id, status (open/closed), created_at",
+        "Create topic_subscriptions table: topic_id, user_id",
+        "POST /chats/:id/topics creates topic with title and initial message",
+        "GET /chats/:id/topics returns all topics (open first, then closed)",
+        "Messages in topic groups must reference a topic_id",
+        "Topic view: header with topic title, messages under that topic, reply input",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 43,
+      "passes": false,
+      "notes": "Topic groups are chat_type=topic_group. Regular group messages go through threads; topic groups force all messages into topics."
+    },
+    {
+      "id": "US-044",
+      "title": "Topic groups - subscribe, close, reopen",
+      "description": "As a user, I want to subscribe to topics and close/reopen them.",
+      "acceptanceCriteria": [
+        "Subscribe button on each topic; subscribed topics appear in 'Subscribed' filter tab",
+        "Auto-subscribe on: create topic, reply to topic, get @mentioned in topic",
+        "Close topic: creator or group owner can close (no new replies, existing visible)",
+        "Reopen topic: creator or group owner can reopen a closed topic",
+        "Subscribed tab shows all topics user is subscribed to across all topic groups",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 44,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-045",
+      "title": "Calendar event schema",
+      "description": "As a developer, I need calendar database tables.",
+      "acceptanceCriteria": [
+        "Create calendar_events table: id, org_id, title, description, start_time, end_time, timezone, location, recurrence_rule, creator_id, meeting_id, room_id, settings (jsonb), created_at, updated_at",
+        "Create event_attendees table: event_id, user_id, rsvp (enum: pending/yes/no/maybe), notified_at",
+        "Create meeting_rooms table: id, org_id, name, capacity, equipment (jsonb), location, floor",
+        "Create calendars table: id, org_id, owner_id, type (enum: personal/public/all_staff/shared), name, color",
+        "Create calendar_subscriptions table: calendar_id, user_id",
+        "Migration runs successfully",
+        "Typecheck passes"
+      ],
+      "priority": 45,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-046",
+      "title": "Calendar events CRUD API",
+      "description": "As a user, I want to create, read, update, and delete calendar events.",
+      "acceptanceCriteria": [
+        "POST /events creates event with {title, start_time, end_time, timezone, attendee_ids, room_id?, recurrence_rule?}",
+        "GET /events?start=&end= returns events in date range for current user (own + subscribed calendars)",
+        "GET /events/:id returns full event with attendees and RSVP status",
+        "PATCH /events/:id updates event details",
+        "DELETE /events/:id soft-deletes event",
+        "Auto-notify attendees on create/update via notification system",
+        "Typecheck passes"
+      ],
+      "priority": 46,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-047",
+      "title": "Calendar RSVP and availability API",
+      "description": "As a user, I want to RSVP to events and check availability.",
+      "acceptanceCriteria": [
+        "POST /events/:id/rsvp with {response: yes|no|maybe} updates attendee RSVP",
+        "GET /availability?user_ids=&start=&end= returns free/busy slots for multiple users",
+        "Availability computed from existing events where user RSVP'd yes or pending",
+        "Working hours respected - slots outside working hours marked as unavailable",
+        "Typecheck passes"
+      ],
+      "priority": 47,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-048",
+      "title": "Calendar UI - monthly view",
+      "description": "As a user, I want a monthly calendar view to see my events.",
+      "acceptanceCriteria": [
+        "Calendar page (/app/calendar) shows monthly grid view",
+        "Events displayed as colored blocks on their dates",
+        "Click a date to create a new event (pre-filled date)",
+        "Click an event to view details in a popover",
+        "Navigation: previous/next month, today button",
+        "Mini calendar in left panel for quick date navigation",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 48,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-049",
+      "title": "Calendar event creation dialog",
+      "description": "As a user, I want a dialog to create events with attendees and room booking.",
+      "acceptanceCriteria": [
+        "Event creation dialog with: title, date/time pickers, timezone selector, description, location",
+        "Attendee picker: search org members, add multiple attendees",
+        "Room booking: show available rooms for selected time slot, select one",
+        "Recurrence selector: none, daily, weekly, monthly, yearly, custom",
+        "Add video meeting toggle (generates meeting link placeholder)",
+        "Save creates event and shows success toast",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 49,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-050",
+      "title": "Document schema and permissions",
+      "description": "As a developer, I need document tables with permission model.",
+      "acceptanceCriteria": [
+        "Create documents table: id, org_id, title, type (enum: doc/sheet/slide/mindnote/board), yjs_doc_id (varchar unique), owner_id, template_id, settings (jsonb), created_at, updated_at, deleted_at",
+        "Create document_permissions table: id, document_id, principal_id, principal_type (enum: user/department/org), role (enum: viewer/editor/manager/owner)",
+        "Create document_versions table: id, document_id, name, snapshot_blob (bytea), created_by, created_at",
+        "Create document_comments table: id, document_id, block_id, user_id, content, resolved (bool), thread_id (self-ref), created_at",
+        "Migration runs successfully",
+        "Typecheck passes"
+      ],
+      "priority": 50,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-051",
+      "title": "Hocuspocus collaboration server setup",
+      "description": "As a developer, I need the Yjs+Hocuspocus server for real-time document collaboration.",
+      "acceptanceCriteria": [
+        "Add Hocuspocus server as apps/collab in the monorepo",
+        "Configure with PostgreSQL extension for Yjs document persistence",
+        "Auth hook: validate session token, check document permissions",
+        "onConnect: load Yjs doc from DB or create new",
+        "onStoreDocument: persist Yjs binary state to documents table",
+        "Awareness (cursor positions, user info) broadcasts to all editors",
+        "Add to docker-compose.yml on port 1234",
+        "Typecheck passes"
+      ],
+      "priority": 51,
+      "passes": false,
+      "notes": "Hocuspocus handles WebSocket connections for document editing. Separate from the chat WebSocket."
+    },
+    {
+      "id": "US-052",
+      "title": "Document CRUD API",
+      "description": "As a user, I want to create, list, and manage documents.",
+      "acceptanceCriteria": [
+        "POST /documents creates document with {title, type}; generates yjs_doc_id; creator gets owner permission",
+        "GET /documents returns user's documents (owned + shared) with pagination",
+        "GET /documents/:id returns document metadata + permissions",
+        "PATCH /documents/:id updates title, settings",
+        "DELETE /documents/:id soft-deletes",
+        "POST /documents/:id/permissions adds permission entry; PATCH updates; DELETE removes",
+        "Typecheck passes"
+      ],
+      "priority": 52,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-053",
+      "title": "Block editor - TipTap with basic blocks",
+      "description": "As a user, I want a block-based document editor with core block types.",
+      "acceptanceCriteria": [
+        "Docs page (/app/docs/:id) renders TipTap editor connected to Hocuspocus via Yjs",
+        "Supported blocks: paragraph, heading (H1-H6), bullet list, numbered list, todo/checkbox, blockquote, horizontal rule, code block (with language selector)",
+        "Slash (/) command menu: type '/' to see block type options, fuzzy search",
+        "Floating toolbar on text selection: bold, italic, underline, strikethrough, code, link",
+        "Drag handle on block hover for reordering",
+        "Auto-save indicator in header",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 53,
+      "passes": false,
+      "notes": "Use @tiptap/extension-collaboration and @tiptap/extension-collaboration-cursor for Yjs integration."
+    },
+    {
+      "id": "US-054",
+      "title": "Block editor - advanced blocks",
+      "description": "As a user, I want advanced block types like callouts, tables, images, and embeds.",
+      "acceptanceCriteria": [
+        "Add block types: callout (info/warning/success/error with colored sidebar), table (resizable columns, add/remove rows/columns), image (upload + URL), file attachment, divider, toggle/collapsible",
+        "Callout blocks have icon + background color based on type",
+        "Tables support basic cell editing and tab navigation",
+        "Image upload to S3 with drag-and-drop and paste support",
+        "All new blocks available via slash (/) menu",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 54,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-055",
+      "title": "Document collaboration - cursors and presence",
+      "description": "As a user, I want to see other editors' cursors and presence in real-time.",
+      "acceptanceCriteria": [
+        "Other editors' cursors visible with colored caret and name label",
+        "Each editor gets a unique color",
+        "Avatar list in document header shows who is currently viewing/editing",
+        "Cursor positions update in real-time as others type",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 55,
+      "passes": false,
+      "notes": "Uses Hocuspocus awareness protocol."
+    },
+    {
+      "id": "US-056",
+      "title": "Document comments",
+      "description": "As a user, I want to comment on specific text in documents.",
+      "acceptanceCriteria": [
+        "Select text and click comment icon in floating toolbar to add a comment",
+        "Comment anchored to the selected text range (highlighted)",
+        "Comments panel on right side shows all comments with threads",
+        "Reply to comments in threaded format",
+        "Resolve/reopen comments",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 56,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-057",
+      "title": "Document sharing dialog",
+      "description": "As a user, I want to share documents with specific people and set permissions.",
+      "acceptanceCriteria": [
+        "Share button in document header opens sharing dialog",
+        "Search for users/departments by name",
+        "Set permission level per recipient: Viewer, Editor, Manager",
+        "Copy link button with permission level for link access",
+        "Show current collaborators with their permission levels",
+        "Remove collaborator button",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 57,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-058",
+      "title": "Document version management",
+      "description": "As a user, I want to create named versions and restore previous versions.",
+      "acceptanceCriteria": [
+        "Version history button in document header",
+        "POST /documents/:id/versions creates named snapshot (saves current Yjs state)",
+        "GET /documents/:id/versions lists all versions with name, creator, timestamp",
+        "Click a version to preview its content (read-only view)",
+        "Restore button replaces current content with version's snapshot",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 58,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-059",
+      "title": "Documents list page",
+      "description": "As a user, I want a page listing all my documents with create/search.",
+      "acceptanceCriteria": [
+        "Docs hub page (/app/docs) shows grid of document cards",
+        "Each card: title, type icon, last edited time, owner avatar",
+        "Create new button with type selector: Doc, Sheet, Slide, MindNote, Board",
+        "Search bar to filter documents by title",
+        "Filter by: owned by me, shared with me, all",
+        "Sort by: last modified, created date, title",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 59,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-060",
+      "title": "Wiki space schema and API",
+      "description": "As a developer, I need wiki space and page tables and CRUD APIs.",
+      "acceptanceCriteria": [
+        "Create wiki_spaces table: id, org_id, name, description, icon, type (enum: private/public), settings (jsonb), created_at",
+        "Create wiki_space_members table: space_id, user_id, role (enum: admin/editor/viewer)",
+        "Create wiki_pages table: id, space_id, document_id (fk), parent_page_id (self-ref), position, created_by, created_at",
+        "POST /wiki/spaces creates space; GET returns user's spaces",
+        "POST /wiki/spaces/:id/pages creates page (auto-creates linked document)",
+        "GET /wiki/spaces/:id/pages returns page tree",
+        "PATCH /wiki/pages/:id to move or reorder pages",
+        "Typecheck passes"
+      ],
+      "priority": 60,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-061",
+      "title": "Wiki UI - space list and page tree navigation",
+      "description": "As a user, I want to browse wiki spaces and navigate page trees.",
+      "acceptanceCriteria": [
+        "Wiki page (/app/wiki) shows space cards: name, description, member count",
+        "Click space to enter it; left sidebar shows page tree (expandable/collapsible)",
+        "Click a page to load its document in the center panel (using the Doc editor)",
+        "Breadcrumb navigation at top showing space > parent > current page",
+        "Create page button in sidebar (as child of selected page or at root)",
+        "Drag-and-drop pages in tree to reorder or reparent",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 61,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-062",
+      "title": "Base schema - tables, fields, records, views",
+      "description": "As a developer, I need the Base (database) tables.",
+      "acceptanceCriteria": [
+        "Create bases table: id, org_id, name, icon, owner_id, created_at, updated_at",
+        "Create base_tables table: id, base_id, name, position, created_at",
+        "Create base_fields table: id, table_id, name, type (varchar - 25+ types), config (jsonb), position",
+        "Create base_records table: id, table_id, data (jsonb), created_by, created_at, updated_at",
+        "Create base_views table: id, table_id, type (enum: grid/kanban/calendar/gantt/gallery/form), name, config (jsonb), position",
+        "Migration runs successfully",
+        "Typecheck passes"
+      ],
+      "priority": 62,
+      "passes": false,
+      "notes": "Records use JSONB data column keyed by field_id. This allows flexible schema per table."
+    },
+    {
+      "id": "US-063",
+      "title": "Base CRUD API - tables, fields, records",
+      "description": "As a user, I want to create and manage Base tables, fields, and records.",
+      "acceptanceCriteria": [
+        "POST /bases creates base with {name}; GET /bases lists user's bases",
+        "POST /bases/:id/tables creates table; GET returns tables list",
+        "POST /tables/:id/fields creates field with {name, type, config}",
+        "PATCH /fields/:id updates field; DELETE removes field",
+        "POST /tables/:id/records creates record with {data: {field_id: value}}",
+        "GET /tables/:id/records returns records with pagination, filtering, sorting",
+        "PATCH /records/:id updates record data; DELETE soft-deletes",
+        "Typecheck passes"
+      ],
+      "priority": 63,
+      "passes": false,
+      "notes": "Filtering syntax: {field_id: {op: 'eq|gt|lt|contains|in', value: ...}}"
+    },
+    {
+      "id": "US-064",
+      "title": "Base UI - Grid view",
+      "description": "As a user, I want a spreadsheet-like grid view for Base tables.",
+      "acceptanceCriteria": [
+        "Base page (/app/base/:id) shows table tabs at top, view tabs below",
+        "Grid view: rows are records, columns are fields",
+        "Click cell to edit inline; different editors per field type (text input, dropdown for select, date picker, etc.)",
+        "Add row button at bottom; add field button at right",
+        "Column headers show field name and type icon; click to rename or change type",
+        "Row selection with checkbox column",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 64,
+      "passes": false,
+      "notes": "Use a virtualized table component for performance with many records."
+    },
+    {
+      "id": "US-065",
+      "title": "Base - Kanban view",
+      "description": "As a user, I want a Kanban board view for Base tables.",
+      "acceptanceCriteria": [
+        "Kanban view: columns grouped by a single-select or person field",
+        "Records shown as cards in columns",
+        "Drag-and-drop cards between columns to update the grouping field value",
+        "Card shows configurable field values (title + 2-3 fields)",
+        "Click card to open record detail panel on right",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 65,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-066",
+      "title": "Base - View filtering, sorting, and grouping",
+      "description": "As a user, I want to filter, sort, and group records in any view.",
+      "acceptanceCriteria": [
+        "Filter bar: add conditions (field, operator, value); multiple conditions with AND/OR",
+        "Sort: add sort rules (field, asc/desc); multiple sort levels",
+        "Group: group by a field to create sections with subtotals",
+        "View config saved per view (shared with all users who have access)",
+        "Filter/sort/group UI consistent across grid, kanban, calendar views",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 66,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-067",
+      "title": "Base - Form view",
+      "description": "As a user, I want to create a form that submits responses as records.",
+      "acceptanceCriteria": [
+        "Form view renders table fields as a fillable form",
+        "Shareable form URL accessible without login (configurable)",
+        "Submissions create new records in the table",
+        "Form settings: required fields, description text, submit button label",
+        "Success message shown on submission",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 67,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-068",
+      "title": "Base - Automations engine",
+      "description": "As a developer, I need the automation trigger/action execution engine.",
+      "acceptanceCriteria": [
+        "Create base_automations table: id, base_id, name, trigger (jsonb), actions (jsonb[]), enabled, type (enum: automation/workflow), created_at",
+        "Create automation_runs table: id, automation_id, trigger_event (jsonb), status (enum: success/failed), error, started_at, completed_at",
+        "BullMQ worker processes automation runs",
+        "Supported triggers: record_created, record_updated, record_matches_condition, scheduled, button_clicked, webhook_received",
+        "Supported actions: update_record, create_record, send_message (to chat), http_request",
+        "Typecheck passes"
+      ],
+      "priority": 68,
+      "passes": false,
+      "notes": "Automations run as background jobs. Keep execution within 30s timeout."
+    },
+    {
+      "id": "US-069",
+      "title": "Base - Automation builder UI",
+      "description": "As a user, I want to create automations with a visual trigger-action builder.",
+      "acceptanceCriteria": [
+        "Automations tab in Base shows list of automations with enabled/disabled toggle",
+        "Create automation: select trigger type, configure trigger, add action steps",
+        "Each step shows trigger/action type with config form",
+        "Test run button to execute once with sample data",
+        "Automation run history with status and error details",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 69,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-070",
+      "title": "Base - Dashboard with charts",
+      "description": "As a user, I want to create dashboards with charts from Base data.",
+      "acceptanceCriteria": [
+        "Create base_dashboards table: id, base_id, name, layout (jsonb), created_at",
+        "Dashboard builder: drag-and-drop chart blocks on a canvas",
+        "Chart types: bar, column, line, pie, metrics block (single number)",
+        "Each chart configured with: data source (table), x-axis field, y-axis aggregation (count/sum/avg/min/max), grouping",
+        "Charts update in real-time as data changes",
+        "Resize chart blocks by dragging corners",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 70,
+      "passes": false,
+      "notes": "Use Recharts or Chart.js for chart rendering."
+    },
+    {
+      "id": "US-071",
+      "title": "Task schema and CRUD API",
+      "description": "As a developer, I need task management tables and APIs.",
+      "acceptanceCriteria": [
+        "Create tasks table: id, org_id, title, description, status (enum: todo/in_progress/done), priority (enum: none/low/medium/high/urgent), assignee_ids (uuid[]), creator_id, due_date, start_date, parent_task_id (self-ref), custom_fields (jsonb), recurrence_rule, completed_at, created_at, updated_at",
+        "Create task_lists table: id, org_id, name, owner_id, settings (jsonb), created_at",
+        "Create task_list_items table: task_list_id, task_id, position",
+        "Create task_dependencies table: task_id, depends_on_task_id, type (enum: fs/ss/ff/sf)",
+        "Create task_comments table: id, task_id, user_id, content, created_at",
+        "POST/GET/PATCH/DELETE /tasks with filtering by status, assignee, due_date, list",
+        "POST /tasks from message: accepts {message_id} to create task from chat message",
+        "Typecheck passes"
+      ],
+      "priority": 71,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-072",
+      "title": "Tasks UI - list and kanban views",
+      "description": "As a user, I want to see my tasks in list and kanban views.",
+      "acceptanceCriteria": [
+        "Tasks page (/app/tasks) with two view toggles: List and Kanban",
+        "List view: sortable table with title, status, priority, assignee, due date columns",
+        "Kanban view: columns by status (Todo, In Progress, Done); drag cards between columns",
+        "Click task to open detail panel on right with all fields, comments, subtasks",
+        "Create task button opens inline form with title, assignee, due date, priority",
+        "My Tasks tab shows only tasks assigned to current user",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 72,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-073",
+      "title": "Tasks - subtasks and dependencies",
+      "description": "As a user, I want to add subtasks and set task dependencies.",
+      "acceptanceCriteria": [
+        "Task detail panel: Add subtask button creates child task",
+        "Subtasks displayed as indented list under parent; up to 5 nesting levels",
+        "Checkbox to complete subtask inline",
+        "Dependencies tab: add dependency (select task, type: finish-to-start default)",
+        "Blocked tasks show 'Blocked by [task]' indicator",
+        "Completing all subtasks does NOT auto-complete parent (matches Lark behavior)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 73,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-074",
+      "title": "Tasks - Gantt chart view",
+      "description": "As a user, I want a Gantt chart to visualize task timelines and dependencies.",
+      "acceptanceCriteria": [
+        "Gantt view toggle in Tasks page",
+        "Tasks displayed as horizontal bars by start_date to due_date",
+        "Dependency arrows between connected tasks",
+        "Drag bar edges to change dates",
+        "Milestones shown as diamond markers",
+        "Zoom levels: day, week, month",
+        "Critical path highlighted in red",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 74,
+      "passes": false,
+      "notes": "Can use an open source Gantt library (frappe-gantt, dhtmlxGantt) or build custom with SVG."
+    },
+    {
+      "id": "US-075",
+      "title": "Task creation from chat message",
+      "description": "As a user, I want to convert a chat message into a task with one click.",
+      "acceptanceCriteria": [
+        "Message hover menu: 'Create Task' option",
+        "Opens task creation dialog pre-filled with message text as title/description",
+        "Select assignee and due date",
+        "Created task links back to original message",
+        "Task appears in assignee's My Tasks list",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 75,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-076",
+      "title": "Approval workflow schema and API",
+      "description": "As a developer, I need approval workflow tables and APIs.",
+      "acceptanceCriteria": [
+        "Create approval_templates table: id, org_id, name, form_schema (jsonb), workflow (jsonb), category, created_at",
+        "Create approval_requests table: id, template_id, requester_id, form_data (jsonb), status (enum: pending/approved/rejected/cancelled), created_at",
+        "Create approval_steps table: id, request_id, step_index, approver_ids (uuid[]), type (enum: sequential/parallel), status (enum: pending/approved/rejected), decided_by, decided_at, comment",
+        "POST /approvals/templates creates template with form schema and workflow steps",
+        "POST /approvals/requests submits new request against a template",
+        "POST /approvals/requests/:id/steps/:stepId/decide with {decision: approve|reject, comment?}",
+        "GET /approvals/requests?status=pending returns user's pending approvals (as requester or approver)",
+        "Typecheck passes"
+      ],
+      "priority": 76,
+      "passes": false,
+      "notes": "Workflow JSON defines steps: [{approver_type: 'user|role|department', approver_id, type: 'sequential|parallel'}]"
+    },
+    {
+      "id": "US-077",
+      "title": "Approval workflow UI - submit and review",
+      "description": "As a user, I want to submit approval requests and review pending approvals.",
+      "acceptanceCriteria": [
+        "Approvals page (/app/approvals) with tabs: My Requests, Pending Review, Completed",
+        "Submit request: select template, fill form fields, submit",
+        "Pending review: list of requests awaiting current user's decision",
+        "Click request to see form data, workflow progress, approve/reject buttons with comment",
+        "Status timeline showing each step's status and decisions",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 77,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-078",
+      "title": "Approval in-chat cards",
+      "description": "As a user, I want to approve/reject requests directly from chat.",
+      "acceptanceCriteria": [
+        "When approval request is submitted, send interactive message card to approver's DM",
+        "Card shows: request type, requester name, key form fields, Approve/Reject buttons",
+        "Clicking Approve/Reject in card sends API call and updates card to show decision",
+        "Notification sent to requester when decision is made",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 78,
+      "passes": false,
+      "notes": "This is a key Lark differentiator - approvals without leaving chat."
+    },
+    {
+      "id": "US-079",
+      "title": "OKR schema and CRUD API",
+      "description": "As a developer, I need OKR tables and APIs.",
+      "acceptanceCriteria": [
+        "Create okr_cycles table: id, org_id, name, start_date, end_date, status (enum: creating/aligning/following_up/reviewing), created_at",
+        "Create objectives table: id, cycle_id, owner_id, title, description, parent_objective_id, visibility (enum: everyone/leaders/team), status (enum: draft/active/completed), created_at",
+        "Create key_results table: id, objective_id, title, target_value (numeric), current_value (numeric), weight (numeric), score (numeric 0-1), unit, created_at",
+        "Create okr_checkins table: id, key_result_id, user_id, value (numeric), notes, created_at",
+        "Create okr_alignments table: objective_id, aligned_to_objective_id, confirmed (bool)",
+        "CRUD APIs for all entities with proper auth checks",
+        "Typecheck passes"
+      ],
+      "priority": 79,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-080",
+      "title": "OKR UI - create, track, and align objectives",
+      "description": "As a user, I want to create OKRs, track progress, and align with team objectives.",
+      "acceptanceCriteria": [
+        "OKR page (/app/okr) shows current cycle with user's objectives",
+        "Create objective with title, key results (target + unit), and parent alignment",
+        "Each KR shows progress bar (current/target), score (0-1), and weight",
+        "Check-in button: update KR current value with notes",
+        "Alignment view: tree visualization showing objective hierarchy",
+        "Score auto-calculated as weighted average of KR scores",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 80,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-081",
+      "title": "Attendance schema and clock-in API",
+      "description": "As a developer, I need attendance tracking tables and clock-in endpoints.",
+      "acceptanceCriteria": [
+        "Create attendance_groups, attendance_locations, clock_records, shifts, shift_assignments tables per PRD spec",
+        "Create leave_types, leave_balances, leave_requests, overtime_records tables per PRD spec",
+        "POST /attendance/clock with {type: clock_in|clock_out, method: gps|wifi|manual, location?}",
+        "GPS clock-in validates user coordinates are within configured location radius",
+        "GET /attendance/my-records?month= returns user's clock records for a month",
+        "GET /attendance/stats?month= returns summary (days present, late, absent, leave, overtime)",
+        "Typecheck passes"
+      ],
+      "priority": 81,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-082",
+      "title": "Attendance UI - clock in/out and dashboard",
+      "description": "As a user, I want to clock in/out and see my attendance dashboard.",
+      "acceptanceCriteria": [
+        "Attendance widget on Workplace dashboard: Clock In / Clock Out button with current time",
+        "GPS verification: show map with user location and allowed radius",
+        "Monthly attendance calendar view: green (present), red (absent), yellow (late), blue (leave)",
+        "Statistics summary: days present, late count, leave used, overtime hours",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 82,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-083",
+      "title": "Leave management - request and balance",
+      "description": "As a user, I want to request leave and track my balance.",
+      "acceptanceCriteria": [
+        "Leave request form: select leave type, start/end date-time, reason",
+        "Submitting creates an approval request (integrates with Approval Workflows module)",
+        "Leave balance display: shows balance per leave type (accrued - used = remaining)",
+        "Calendar shows approved leave days",
+        "Admin can configure leave types and accrual rules",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 83,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-084",
+      "title": "Email schema and basic client API",
+      "description": "As a developer, I need email tables and basic send/receive APIs.",
+      "acceptanceCriteria": [
+        "Create mailboxes, email_messages, email_domains, mailing_lists tables per PRD spec",
+        "POST /email/send accepts {to, cc?, subject, body_html, attachments?}",
+        "GET /email/messages?folder=inbox returns emails in folder with pagination",
+        "GET /email/messages/:id returns full email with body",
+        "PATCH /email/messages/:id for marking read, flagging, moving to folder",
+        "DELETE /email/messages/:id moves to trash",
+        "Typecheck passes"
+      ],
+      "priority": 84,
+      "passes": false,
+      "notes": "V1 uses transactional email API (Postmark/SendGrid) for sending. Full SMTP server is V2."
+    },
+    {
+      "id": "US-085",
+      "title": "Email client UI",
+      "description": "As a user, I want a basic email client within OpenLark.",
+      "acceptanceCriteria": [
+        "Email page (/app/email) with three-column layout: folder list, email list, email view",
+        "Folders: Inbox, Sent, Drafts, Archive, Trash",
+        "Email list: subject, sender, date, unread indicator",
+        "Email view: renders HTML body, shows attachments, reply/forward buttons",
+        "Compose button opens compose dialog with to, cc, subject, rich text body",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 85,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-086",
+      "title": "Global search - Cmd+K search bar",
+      "description": "As a user, I want a global search that searches across all modules.",
+      "acceptanceCriteria": [
+        "Cmd+K / Ctrl+K opens search modal overlay",
+        "Search input with category tabs: All, Messages, Docs, Events, Contacts, Tasks, Email",
+        "Results show: icon, title, snippet, source module, timestamp",
+        "Click result navigates to the item",
+        "Recent searches shown when search is empty",
+        "Results respect permissions (only show what user can access)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 86,
+      "passes": false,
+      "notes": "Initial implementation uses PostgreSQL full-text search. Meilisearch migration is a follow-up."
+    },
+    {
+      "id": "US-087",
+      "title": "Translation service integration",
+      "description": "As a developer, I need a translation service for cross-module translation.",
+      "acceptanceCriteria": [
+        "Create translation service with pluggable backend (LibreTranslate, DeepL, Google Translate)",
+        "POST /translate accepts {text, source_lang?, target_lang}",
+        "Auto-detect source language when not specified",
+        "Create translation_preferences table: user_id, auto_translate_enabled, target_language",
+        "GET/PATCH /users/me/translation-preferences",
+        "Rate limit: 100 translations per user per hour",
+        "Typecheck passes"
+      ],
+      "priority": 87,
+      "passes": false,
+      "notes": "Default to LibreTranslate (self-hosted, free). Add cloud providers as optional backends."
+    },
+    {
+      "id": "US-088",
+      "title": "Chat message translation UI",
+      "description": "As a user, I want to translate chat messages with one click.",
+      "acceptanceCriteria": [
+        "Translate button on each message (visible on hover or in ... menu)",
+        "Click to translate message content to user's preferred language",
+        "Translated text shown below original with 'Translated from [language]' label",
+        "Auto-translate toggle in settings: when enabled, all incoming messages auto-translated",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 88,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-089",
+      "title": "Video meeting - LiveKit integration and join flow",
+      "description": "As a developer, I need LiveKit integrated for video meetings.",
+      "acceptanceCriteria": [
+        "Add LiveKit server to docker-compose.yml",
+        "Create meetings table: id, org_id, title, host_id, type, status, room_id, settings (jsonb), started_at, ended_at",
+        "Create meeting_participants table: meeting_id, user_id, role, joined_at, left_at",
+        "POST /meetings creates meeting and LiveKit room; returns join token",
+        "GET /meetings/:id/join generates LiveKit access token for current user",
+        "Meeting page (/app/meeting/:id) connects to LiveKit room",
+        "Typecheck passes"
+      ],
+      "priority": 89,
+      "passes": false,
+      "notes": "Use @livekit/components-react for the meeting UI components."
+    },
+    {
+      "id": "US-090",
+      "title": "Video meeting UI - grid view and controls",
+      "description": "As a user, I want a video meeting interface with grid view and controls.",
+      "acceptanceCriteria": [
+        "Meeting page shows video grid of participants",
+        "Bottom toolbar: mute/unmute mic, enable/disable camera, screen share, chat, leave",
+        "Gallery view (grid of tiles) and speaker view (active speaker large, others small)",
+        "Participant list panel showing who is in the meeting",
+        "Meeting title and duration timer in header",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 90,
+      "passes": false,
+      "notes": "Use LiveKit React components. Focus on core meeting experience."
+    },
+    {
+      "id": "US-091",
+      "title": "Video meeting - screen sharing",
+      "description": "As a user, I want to share my screen during a meeting.",
+      "acceptanceCriteria": [
+        "Screen share button in meeting toolbar",
+        "Browser share picker: entire screen, application window, or browser tab",
+        "Shared screen displayed as main view for all participants",
+        "Presenter indicator shown on the sharer",
+        "Stop sharing button to end screen share",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 91,
+      "passes": false,
+      "notes": "Uses LiveKit's built-in screen share track."
+    },
+    {
+      "id": "US-092",
+      "title": "Start meeting from chat",
+      "description": "As a user, I want to start a video call directly from a chat.",
+      "acceptanceCriteria": [
+        "Video call button in chat header (both DM and group)",
+        "Click creates a meeting with chat members as participants",
+        "System message posted in chat with 'Meeting started' and join link",
+        "Meeting group chat auto-created with all participants",
+        "Other chat members see 'Join meeting' button in the system message",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 92,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-093",
+      "title": "Meeting recording and Minutes schema",
+      "description": "As a developer, I need meeting recording storage and Minutes tables.",
+      "acceptanceCriteria": [
+        "Create meeting_recordings table: id, meeting_id, storage_url, duration, size, transcription_status (enum: pending/processing/ready/failed), created_at",
+        "Create minutes table: id, meeting_id, recording_id, transcript (jsonb), summary (jsonb), chapters (jsonb), action_items (jsonb), language, status, created_at",
+        "Create minutes_comments table: id, minutes_id, user_id, paragraph_index, content, created_at",
+        "LiveKit recording webhook: on recording complete, save URL to meeting_recordings, queue transcription job",
+        "Typecheck passes"
+      ],
+      "priority": 93,
+      "passes": false,
+      "notes": "LiveKit Egress handles recording. Transcription is a BullMQ background job."
+    },
+    {
+      "id": "US-094",
+      "title": "AI meeting transcription and summary",
+      "description": "As a user, I want AI-generated transcription and summary of my meetings.",
+      "acceptanceCriteria": [
+        "BullMQ job processes recording: download audio, run Whisper ASR, generate transcript with speaker labels and timestamps",
+        "After transcription, run LLM (configurable: OpenAI, Anthropic, Ollama) to generate: summary, action items, chapters",
+        "Store results in minutes table",
+        "Notification sent to meeting participants when minutes are ready",
+        "Typecheck passes"
+      ],
+      "priority": 94,
+      "passes": false,
+      "notes": "Use openai-whisper or faster-whisper for transcription. LLM for summarization."
+    },
+    {
+      "id": "US-095",
+      "title": "Minutes viewer UI",
+      "description": "As a user, I want to view meeting minutes with transcript, summary, and playback.",
+      "acceptanceCriteria": [
+        "Minutes page (/app/minutes/:id) shows: video/audio player, transcript, AI summary tabs",
+        "Transcript: timestamped paragraphs with speaker labels; click paragraph to seek player to that time",
+        "Summary tab: key points, action items (with 'Create Task' button), smart chapters",
+        "Playback controls: speed adjustment (0.5x-2x), silence skipping toggle",
+        "Comment on specific transcript paragraphs",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 95,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-096",
+      "title": "Forms module - schema and builder API",
+      "description": "As a developer, I need the Forms module tables and APIs.",
+      "acceptanceCriteria": [
+        "Create forms table: id, org_id, base_id, table_id, title, description, settings (jsonb), theme (jsonb), creator_id, created_at",
+        "Create form_questions table: id, form_id, type (enum: text/single_select/multi_choice/rating/nps/location/date/person/file/number), config (jsonb), position, required (bool), display_condition (jsonb)",
+        "Create form_responses table: id, form_id, respondent_id, answers (jsonb), submitted_at",
+        "POST /forms creates form; GET /forms lists user's forms",
+        "POST /forms/:id/responses submits response (validates required fields, conditions, limits)",
+        "GET /forms/:id/responses returns responses with pagination",
+        "Typecheck passes"
+      ],
+      "priority": 96,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-097",
+      "title": "Forms builder and response UI",
+      "description": "As a user, I want to build forms and view responses.",
+      "acceptanceCriteria": [
+        "Form builder (/app/forms/:id/edit): drag-and-drop question ordering, add question with type picker",
+        "Question config: title, description, required toggle, options (for select types)",
+        "Conditional display: set conditions based on previous answers",
+        "Preview mode: see form as respondent would",
+        "Share: copy link, generate QR code",
+        "Responses tab: table of all responses; click to expand individual response",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 97,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-098",
+      "title": "Admin console - organization settings and user management",
+      "description": "As an admin, I want a console to manage organization settings and users.",
+      "acceptanceCriteria": [
+        "Admin page (/app/admin) accessible only to users with admin role",
+        "Organization tab: edit name, logo, domain, industry",
+        "Members tab: list all members with search, role badges; invite, deactivate, change role",
+        "Departments tab: visual tree of departments; add/rename/move/delete departments; assign members",
+        "Roles tab: create custom admin roles with scoped permissions (checkboxes for each module)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 98,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-099",
+      "title": "Admin console - security settings",
+      "description": "As an admin, I want to configure security policies for the organization.",
+      "acceptanceCriteria": [
+        "Security tab in admin console",
+        "Password policy: min length, require uppercase/number/special, expiry days",
+        "Two-factor authentication: require for all members toggle",
+        "External communication: toggle whether members can message external users",
+        "Session timeout: configurable idle timeout",
+        "All security settings saved to organization.settings JSONB",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 99,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-100",
+      "title": "Audit logging",
+      "description": "As an admin, I want audit logs of all important actions.",
+      "acceptanceCriteria": [
+        "Create audit_logs table: id, org_id, actor_id, action (varchar), entity_type, entity_id, diff (jsonb), ip, user_agent, created_at",
+        "Middleware logs all state-changing API calls automatically",
+        "Admin console: Audit Logs tab with searchable, filterable log viewer",
+        "Filter by: actor, action type, entity type, date range",
+        "Export to CSV",
+        "Logs retained for 180+ days",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 100,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-101",
+      "title": "Workplace dashboard",
+      "description": "As a user, I want a customizable home dashboard as my landing page.",
+      "acceptanceCriteria": [
+        "Workplace page (/app) serves as the home dashboard",
+        "Default widgets: Recent chats, Upcoming events, My tasks, Recent docs",
+        "App launcher grid showing all available modules with icons",
+        "Quick actions: New chat, New doc, New event, New task",
+        "Customizable layout: admin can configure default widgets per department",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 101,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-102",
+      "title": "Open Platform - App registration and OAuth",
+      "description": "As a developer, I want to register apps and use OAuth to access OpenLark APIs.",
+      "acceptanceCriteria": [
+        "Create apps table: id, org_id, name, description, app_id (unique), app_secret_hash, redirect_uris (text[]), scopes (text[]), bot_enabled (bool), webhook_url, created_at",
+        "Create event_subscriptions table: app_id, event_type, callback_url, status, created_at",
+        "Developer console page (/app/admin/developers) to create and manage apps",
+        "OAuth 2.0 authorization code flow: /auth/oauth/authorize, /auth/oauth/token",
+        "Generate app_id and app_secret on app creation",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 102,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-103",
+      "title": "Open Platform - Webhook event delivery",
+      "description": "As a developer, I want to receive webhook events when things happen in OpenLark.",
+      "acceptanceCriteria": [
+        "Create webhook_deliveries table: id, subscription_id, event_type, payload (jsonb), status (enum: pending/delivered/failed), attempts, last_attempt_at",
+        "When subscribed events occur (message sent, member joined, approval submitted), queue webhook delivery via BullMQ",
+        "Delivery: POST to callback_url with JSON payload and signature header",
+        "Retry with exponential backoff: 1s, 5s, 30s, 5m, 30m (max 5 attempts)",
+        "Webhook delivery logs visible in developer console",
+        "Typecheck passes"
+      ],
+      "priority": 103,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-104",
+      "title": "Open Platform - Bot messaging API",
+      "description": "As a developer, I want my bot to send messages and interactive cards to chats.",
+      "acceptanceCriteria": [
+        "POST /api/v1/messages/send accepts {chat_id, content} with app_access_token auth",
+        "Support message types: text, rich_text, interactive card (JSON)",
+        "Interactive card JSON format: header, content blocks (text, image, divider), action buttons",
+        "Card action callback: when user clicks button, POST to app's webhook_url with action payload",
+        "POST /api/v1/messages/update to update a previously sent card",
+        "Typecheck passes"
+      ],
+      "priority": 104,
+      "passes": false,
+      "notes": "This enables bots to send Lark-style interactive message cards."
+    },
+    {
+      "id": "US-105",
+      "title": "Notification bot (webhook bot) for group chats",
+      "description": "As a user, I want to create simple webhook bots for sending notifications to groups.",
+      "acceptanceCriteria": [
+        "Group settings: 'Add Notification Bot' creates a webhook URL",
+        "POST to webhook URL with {text} or {card} sends message to the group as the bot",
+        "No authentication needed on webhook URL (URL is the secret)",
+        "Bot messages show bot name and icon",
+        "Webhook URL can be regenerated (invalidates old URL)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 105,
+      "passes": false,
+      "notes": "Simple one-way notification bots - no event receiving."
+    },
+    {
+      "id": "US-106",
+      "title": "Sheets - basic spreadsheet editor",
+      "description": "As a user, I want a collaborative spreadsheet with cells, formulas, and formatting.",
+      "acceptanceCriteria": [
+        "Sheet editor (/app/docs/:id for type=sheet) renders a grid of cells",
+        "Click cell to edit; Tab/Enter to navigate between cells",
+        "Formula bar at top shows selected cell's formula or value",
+        "Basic formulas work: =SUM, =AVERAGE, =COUNT, =IF, =VLOOKUP (via HyperFormula)",
+        "Cell formatting toolbar: font size, bold, italic, text color, background color, borders, alignment, number format",
+        "Real-time collaboration via Yjs (cell edits sync to other users)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 106,
+      "passes": false,
+      "notes": "Use HyperFormula for formula calculation engine. Custom grid rendering with virtualization."
+    },
+    {
+      "id": "US-107",
+      "title": "Slides - basic presentation editor",
+      "description": "As a user, I want to create presentations with text, images, and shapes.",
+      "acceptanceCriteria": [
+        "Slides editor (/app/docs/:id for type=slide) shows slide canvas with thumbnail sidebar",
+        "Add/delete/reorder slides in thumbnail sidebar",
+        "Slide canvas: add text boxes, images (upload), basic shapes (rectangle, circle, arrow)",
+        "Select and resize/move elements with handles",
+        "Presenter view: full-screen slide show with next/previous navigation",
+        "Real-time collaboration via Yjs",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 107,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-108",
+      "title": "MindNotes - outline and mind map editor",
+      "description": "As a user, I want to create mind maps with outline and visual views.",
+      "acceptanceCriteria": [
+        "MindNotes editor (/app/docs/:id for type=mindnote) with two view toggles: Outline, Mind Map",
+        "Outline view: indented hierarchical text list; Enter for sibling, Tab for child, Delete to remove",
+        "Mind map view: visual tree diagram with nodes and branches",
+        "Toggle between views preserves all content",
+        "Node formatting: bold, italic, color",
+        "Collapse/expand branches in both views",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 108,
+      "passes": false,
+      "notes": "Use a library like react-flow or custom SVG rendering for mind map view."
+    },
+    {
+      "id": "US-109",
+      "title": "Board - collaborative whiteboard",
+      "description": "As a user, I want a whiteboard for diagrams and visual collaboration.",
+      "acceptanceCriteria": [
+        "Board editor (/app/docs/:id for type=board) shows infinite canvas",
+        "Tools: select, rectangle, circle, line/arrow, sticky note, text, freeform draw",
+        "Drag to create shapes; resize handles on selection",
+        "Connectors snap to shape anchor points",
+        "Zoom (scroll) and pan (drag canvas)",
+        "Real-time collaboration via Yjs (see others' cursors and edits)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 109,
+      "passes": false,
+      "notes": "Can use tldraw (open source) as the whiteboard engine."
+    },
+    {
+      "id": "US-110",
+      "title": "AI features - smart compose and document AI",
+      "description": "As a user, I want AI writing assistance in messages and documents.",
+      "acceptanceCriteria": [
+        "Create ai_jobs table: id, type, input (jsonb), output (jsonb), status, model, cost_tokens, created_at",
+        "AI action menu in docs: select text, click AI button to get options (rewrite, summarize, expand, adjust tone)",
+        "POST /ai/complete accepts {prompt, context} and returns AI-generated text",
+        "Pluggable LLM backend via config: OpenAI, Anthropic, Ollama (local)",
+        "AI usage tracked per user for quota management",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 110,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-111",
+      "title": "Docker Compose production deployment",
+      "description": "As a developer, I want to deploy the full stack with docker compose up.",
+      "acceptanceCriteria": [
+        "docker-compose.prod.yml with all services: web, api, collab (hocuspocus), livekit, redis, postgres, minio, worker",
+        "Multi-stage Dockerfiles for web and api (small production images)",
+        "Environment variable configuration via .env.example with all required vars documented",
+        "Health check endpoints on all services",
+        "Nginx reverse proxy config for routing (web on /, api on /api, collab on /collab, livekit on /livekit)",
+        "docker compose -f docker-compose.prod.yml up starts everything",
+        "Typecheck passes"
+      ],
+      "priority": 111,
+      "passes": false,
+      "notes": "This is the 'deploy in 10 minutes' goal from the PRD."
+    },
+    {
+      "id": "US-112",
+      "title": "SSO - SAML 2.0 integration",
+      "description": "As an admin, I want to configure SAML 2.0 SSO for my organization.",
+      "acceptanceCriteria": [
+        "Create sso_configs table: org_id, provider, metadata_url, entity_id, certificate, created_at",
+        "Admin console: SSO tab with SAML configuration form (metadata URL or manual entry)",
+        "SP-initiated flow: /auth/saml/login redirects to IdP",
+        "IdP-initiated flow: /auth/saml/callback processes SAML response",
+        "Auto-create or link user on successful SAML auth",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 112,
+      "passes": false,
+      "notes": "Use passport-saml or saml2-js library."
+    },
+    {
+      "id": "US-113",
+      "title": "Base - Calendar and Gantt views",
+      "description": "As a user, I want Calendar and Gantt views for Base tables.",
+      "acceptanceCriteria": [
+        "Calendar view: records displayed on calendar by a date field; drag events to change dates",
+        "Gantt view: records displayed as timeline bars by start/end date fields; drag to reschedule",
+        "Gantt: dependency arrows between linked records",
+        "Both views configurable: select which date fields to use",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 113,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-114",
+      "title": "Base - Gallery view",
+      "description": "As a user, I want a Gallery view showing records as visual cards.",
+      "acceptanceCriteria": [
+        "Gallery view: records displayed as cards in a grid layout",
+        "Card shows cover image (from attachment field) + configured fields",
+        "Click card to open record detail panel",
+        "Configure which fields appear on cards",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 114,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-115",
+      "title": "Export messages to document",
+      "description": "As a user, I want to export chat messages to a document.",
+      "acceptanceCriteria": [
+        "Message hover menu or multi-select: 'Export to Doc' option",
+        "Select messages (up to 100) and export creates a new Lark Doc",
+        "Doc contains: sender name, timestamp, message content for each message",
+        "Voice messages converted to text; videos shown as '[Video]' placeholder",
+        "Doc title: '[Chat name] Export [date]'",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 115,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-116",
+      "title": "Scheduled messages",
+      "description": "As a user, I want to compose a message now and have it sent later.",
+      "acceptanceCriteria": [
+        "Send button dropdown: 'Schedule for later' option",
+        "Date/time picker for scheduled delivery time",
+        "Scheduled messages stored with scheduled_for timestamp",
+        "BullMQ delayed job sends message at scheduled time",
+        "View/edit/cancel scheduled messages before they send",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 116,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-117",
+      "title": "File upload service with S3",
+      "description": "As a developer, I need a file upload service storing files in S3/MinIO.",
+      "acceptanceCriteria": [
+        "POST /files/upload accepts multipart file upload",
+        "Stores file in S3 bucket with unique key (org_id/year/month/uuid.ext)",
+        "Returns file metadata: id, url, filename, size, content_type",
+        "Validates file size (max 100MB default, configurable), content type",
+        "GET /files/:id returns signed download URL",
+        "MinIO in docker-compose for local development",
+        "Typecheck passes"
+      ],
+      "priority": 117,
+      "passes": false,
+      "notes": "Used by: message attachments, document images, avatars, email attachments, form file uploads."
+    },
+    {
+      "id": "US-118",
+      "title": "User status and working hours",
+      "description": "As a user, I want to set my status and configure working hours.",
+      "acceptanceCriteria": [
+        "Status setter: dropdown in user menu or Cmd+Shift+Y shortcut",
+        "Status options: custom text + emoji, or presets (In a meeting, On vacation, Working remotely)",
+        "Status visible on user avatar in chat and contacts",
+        "Working hours: configure in profile settings (start time, end time, timezone)",
+        "When scheduling with someone outside their working hours, show warning",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 118,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-119",
+      "title": "Dark mode and theme system",
+      "description": "As a user, I want to switch between light and dark mode.",
+      "acceptanceCriteria": [
+        "Theme toggle in user settings: Light, Dark, System (auto-detect)",
+        "All components render correctly in both themes",
+        "CSS custom properties for theme colors",
+        "Theme preference persisted in user settings",
+        "Org admin can set custom accent color",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 119,
+      "passes": false,
+      "notes": "Use Tailwind CSS dark mode with class strategy."
+    },
+    {
+      "id": "US-120",
+      "title": "Keyboard shortcuts system",
+      "description": "As a user, I want keyboard shortcuts for common actions.",
+      "acceptanceCriteria": [
+        "Global shortcuts: Cmd+K (search), Cmd+D (mark chat done), Cmd+Shift+Y (status)",
+        "Chat shortcuts: Cmd+N (new chat), Cmd+Shift+A (screenshot - show toast 'not available in web')",
+        "Document shortcuts: Cmd+B/I/U (formatting), / (slash commands)",
+        "Keyboard shortcut help dialog: Cmd+/ shows all available shortcuts",
+        "Shortcuts registered via a central hotkey manager (no conflicts)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 120,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}
