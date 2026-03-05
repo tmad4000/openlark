@@ -11,3 +11,4 @@
 [2026-03-05 03:07] US-003 — Core entity schemas - User and Organization — PASS
 [2026-03-05 03:10] US-004 — Department and membership schemas — PASS
 [2026-03-05 03:12] US-005 — Session and API key schemas — PASS
+[2026-03-05 03:18] US-006 — Auth API - Registration endpoint — PASS

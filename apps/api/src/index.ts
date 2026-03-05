@@ -1,5 +1,6 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import { authRoutes } from "./routes/auth";
 
 const fastify = Fastify({
   logger: true,
@@ -8,6 +9,9 @@ const fastify = Fastify({
 await fastify.register(cors, {
   origin: true,
 });
+
+// Register routes
+await fastify.register(authRoutes);
 
 fastify.get("/", async () => {
   return { status: "ok", name: "OpenLark API" };

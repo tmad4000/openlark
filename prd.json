@@ -93,8 +93,8 @@
         "Typecheck passes"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": "Auto-create a personal organization for the user on registration."
+      "passes": true,
+      "notes": "Created apps/api/src/routes/auth.ts with POST /auth/register endpoint. Added bcrypt dependency for password hashing (12 rounds). Validates email format with regex and password min length (8 chars). Returns 409 for duplicate email. Auto-creates personal organization on registration. Creates session with 30-day expiry, returns user object (excluding password_hash) and session token. Token is 32 random bytes hex-encoded, stored as SHA-256 hash. Typecheck passes."
     },
     {
       "id": "US-007",
