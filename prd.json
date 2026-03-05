@@ -109,8 +109,8 @@
         "Typecheck passes"
       ],
       "priority": 7,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented login endpoint with bcrypt password verification. Uses same session token generation (32 bytes random, SHA-256 hashed for storage) as registration."
     },
     {
       "id": "US-008",

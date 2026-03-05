@@ -18,6 +18,11 @@ interface RegisterBody {
   display_name: string;
 }
 
+interface LoginBody {
+  email: string;
+  password: string;
+}
+
 export async function authRoutes(fastify: FastifyInstance) {
   fastify.post<{ Body: RegisterBody }>("/auth/register", async (request, reply) => {
     const { email, password, display_name } = request.body;
@@ -110,6 +115,83 @@ export async function authRoutes(fastify: FastifyInstance) {
 
     return reply.status(201).send({
       user,
+      token,
+    });
+  });
+
+  // Login endpoint
+  fastify.post<{ Body: LoginBody }>("/auth/login", async (request, reply) => {
+    const { email, password } = request.body;
+
+    // Validate input presence
+    if (!email || !password) {
+      return reply.status(401).send({
+        error: "Invalid email or password",
+      });
+    }
+
+    // Find user by email
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, email.toLowerCase()))
+      .limit(1);
+
+    // User not found - return generic error to prevent email enumeration
+    if (!user) {
+      return reply.status(401).send({
+        error: "Invalid email or password",
+      });
+    }
+
+    // User has no password (e.g., OAuth-only account)
+    if (!user.passwordHash) {
+      return reply.status(401).send({
+        error: "Invalid email or password",
+      });
+    }
+
+    // Verify password
+    const passwordValid = await bcrypt.compare(password, user.passwordHash);
+    if (!passwordValid) {
+      return reply.status(401).send({
+        error: "Invalid email or password",
+      });
+    }
+
+    // Generate session token (32 bytes = 64 hex chars)
+    const token = crypto.randomBytes(32).toString("hex");
+    const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+
+    // Calculate expiry date
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + SESSION_EXPIRY_DAYS);
+
+    // Create session record
+    await db.insert(sessions).values({
+      userId: user.id,
+      tokenHash,
+      ip: request.ip,
+      deviceInfo: {
+        userAgent: request.headers["user-agent"],
+      },
+      expiresAt,
+    });
+
+    // Return user (without password hash) and token
+    return reply.status(200).send({
+      user: {
+        id: user.id,
+        email: user.email,
+        displayName: user.displayName,
+        avatarUrl: user.avatarUrl,
+        timezone: user.timezone,
+        locale: user.locale,
+        status: user.status,
+        orgId: user.orgId,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+      },
       token,
     });
   });
