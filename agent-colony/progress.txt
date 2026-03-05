@@ -340,3 +340,108 @@ Session management for FR-1.10, bug fixes, and test improvements:
 - 2FA/TOTP implementation (FR-1.3)
 
 ---
+
+## 2026-03-05 - Iteration 6 - REVIEW
+
+### Code quality observations
+
+**What looks good:**
+- Auth module maintains clean architecture consistency: routes → service → schema separation
+- Security patterns are correctly applied:
+  - bcrypt with 12 rounds (industry standard)
+  - JWT tokens with session validation (double-check prevents token reuse after logout)
+  - Sensitive fields (`passwordHash`, `totpSecret`) stripped from all API responses
+  - Session ownership verification before revocation (`auth.service.ts:317-333`)
+  - Rate limiting on auth endpoints (10 req/min production, 1000 test)
+- Session management (FR-1.10) is properly implemented:
+  - `GET /auth/sessions` lists sessions with `isCurrent` flag
+  - `DELETE /auth/sessions/:id` prevents revoking current session (use /logout instead)
+  - Filters out expired sessions before returning
+- Test coverage is good: 26 passing unit tests, 12 integration tests (skipped when no DB)
+- Build, lint, and tests all pass cleanly
+- Commit messages follow conventional commits (`feat(auth):`, `docs:`)
+
+**Areas needing attention (not blockers):**
+
+1. **config.ts:19** - `JWT_SECRET` still has a default value (`dev-secret-change-in-production`). This is a security risk for production deployments. Should throw at startup if `NODE_ENV=production` and secret matches the default.
+
+2. **auth.service.ts:122** - Login query searches for users "across all orgs". Comment acknowledges this ("for now"). For true multi-tenant isolation, login should require org context (via domain, subdomain, or explicit org selection). Currently: email collisions across orgs would cause issues.
+
+3. **next lint deprecation** - `apps/web` still shows the "next lint is deprecated" warning. Cosmetic but worth addressing eventually.
+
+### Commit history review
+- 8 commits total on branch
+- Most recent 5 commits since infrastructure setup:
+  - `97de279 docs: update progress log for iteration 5`
+  - `1b5d0a6 feat(auth): add session management endpoints (FR-1.10)`
+  - `8247bbf feat(auth): extract middleware and add rate limiting`
+  - `e98c68c feat(auth): implement Auth & Identity module foundation`
+  - `5624a12 feat: complete monorepo infrastructure setup`
+- Commits are atomic and well-scoped
+- No WIP commits, fixup commits, or messy rebases
+- Consistent conventional commit format
+
+### Plan assessment
+
+**T-002 (in-progress):** +1 vote added. Quality remains solid. 2/6 subtasks fully done, subtask 4 partially complete (session management done, magic link + 2FA remain). Clear path forward.
+
+**T-003 (open):** +1 vote added. Ready to begin. Auth foundation is stable enough. Recommend starting with subtask 1 (Chat/Message/ChatMember schema and routes) before WebSocket work.
+
+**T-023 (open):** +1 vote added. Net votes now +2/-1. Frontend shell can begin with auth screens since `/auth/*` routes are stable. Keep scope minimal.
+
+### Nudges left
+
+1. **T-002**: JWT_SECRET production validation needed before public deployment
+2. **T-002**: Multi-tenant login context is a known limitation - document or create follow-up task
+3. **T-003**: Follow established module structure (index.ts, routes.ts, service.ts, schemas.ts)
+4. **T-003**: Reuse `authenticate` middleware from `modules/auth/middleware.ts`
+
+### Tech debt items
+
+| Priority | Item | Location |
+|----------|------|----------|
+| Medium | JWT_SECRET default should fail in production | `config.ts:19` |
+| Medium | Login needs org context for true multi-tenant | `auth.service.ts:122` |
+| Low | `next lint` deprecation warning | `apps/web` |
+| Low | No web app tests yet | `apps/web/src/__tests__/` (empty) |
+
+### Reinforced patterns
+
+From progress log that held true this iteration:
+- ✅ Module structure (`index.ts`, `routes.ts`, `service.ts`, `schemas.ts`) - consistent
+- ✅ Test pattern (unit tests always run, integration tests skip when `SKIP_DB_TESTS=true`) - working
+- ✅ Fastify plugin pattern for routes - clean and composable
+- ✅ Auth middleware reuse - `authenticate` from `modules/auth/middleware.ts` used across endpoints
+- ✅ Rate limit pattern (sub-scope isolation, `statusCode: 429` in errorResponseBuilder) - working correctly
+
+---
+
+## 2026-03-05 - Iteration 7 - SIMPLIFY
+
+### Reuse findings
+- **`formatZodError` in auth.routes.ts:9-18**: Generic validation error formatter needed by all modules → Extracted to `apps/api/src/utils/validation.ts`
+
+### Quality findings
+- No code quality issues found. Module structure is consistent and clean.
+
+### Efficiency findings
+- **`GET /auth/me` sequential DB calls**: Two independent queries (`getUserById`, `getOrganizationById`) were sequential → Parallelized with `Promise.all`
+- **Session expiration filter in JS**: `getUserSessions` fetched all sessions then filtered expired ones in JavaScript → Moved to DB query using `gt(sessions.expiresAt, now)`
+
+### Deferred to tasks
+- None — all findings were small enough to fix in this iteration
+
+### Skipped
+- **Extract `stripSensitiveFields` helper**: Pattern `{ passwordHash: _, totpSecret: __, ...safeUser } = user` appears 3× in auth.service.ts. Skipped because it's only used in one file and extracting would be overengineering for 3 usages.
+- **Use shared `OrgRole` constants from packages/shared**: Would require DB schema to import from shared package, creating circular dependency concerns. The enum values are simple strings that rarely change.
+
+### Reinforced patterns
+- ✅ Module structure (`index.ts`, `routes.ts`, `service.ts`, `schemas.ts`) — consistent across auth module
+- ✅ Test pattern (unit tests always run, integration tests skip when `SKIP_DB_TESTS=true`) — working correctly
+- ✅ Fastify plugin pattern for routes — clean and composable
+- ✅ Rate limit sub-scope isolation — properly isolates rate limiting to specific routes
+
+### New pattern established
+- **API utils location**: `apps/api/src/utils/` for shared API utilities (validation.ts is the first)
+
+---
