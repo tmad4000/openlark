@@ -32,8 +32,8 @@
         "Typecheck passes"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Use drizzle-orm with postgres-js driver. Connection pooling built in."
+      "passes": true,
+      "notes": "Added drizzle-orm 0.45.1, postgres 3.4.8, drizzle-kit 0.31.9. Created drizzle.config.ts with DATABASE_URL env var. Created src/db/index.ts with postgres-js connection pool (max 10 connections, 20s idle timeout). Added docker-compose.yml with postgres:16 and redis:7 services (openlark-postgres on 5432, openlark-redis on 6379). Added .env.example with DATABASE_URL template. Typecheck passes."
     },
     {
       "id": "US-003",
