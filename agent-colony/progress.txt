@@ -515,3 +515,87 @@ Messenger module foundation - Chat, Message, ChatMember entities and CRUD API ro
 - No typing indicators or presence (subtask 4 of T-003)
 
 ---
+
+## 2026-03-05 - Iteration 9 - REVIEW
+
+### Code quality observations
+
+**What looks good:**
+- Messenger module follows the established architecture pattern exactly: routes → service → schema separation
+- Reuses `authenticate` middleware from `modules/auth/middleware.ts` — no duplication
+- Reuses `formatZodError` from `utils/validation.ts` — DRY principle applied
+- Database schema is well-designed:
+  - 7 tables with proper foreign keys, indexes, and relations
+  - Soft deletes via `leftAt` for chat members (not `deletedAt` — appropriate for membership)
+  - Composite unique indexes prevent duplicate reactions, read receipts, pins, favorites
+  - Composite index `messages_chat_created_idx` optimizes timeline queries
+- Business logic is correctly implemented:
+  - Edit window (24h) and max edits (20) enforced in `editMessage()`
+  - Recall permissions correctly check sender OR owner/admin role
+  - DM deduplication via `findExistingDm()` prevents duplicate DMs
+  - Member role hierarchy enforced (admin can't demote owner, admin can't kick admin)
+- Test coverage is appropriate: 42 unit tests covering validation schemas and auth requirements
+- All 79 tests pass, build succeeds, lint passes
+
+**Areas needing attention (not blockers):**
+
+1. **messenger.routes.ts:565-571**: `POST /chats/:chatId/pins` uses inline `as { messageId: string }` casting instead of a Zod schema. All other endpoints use Zod schemas consistently. Minor inconsistency.
+
+2. **messenger.service.ts:443-466**: `getMessages()` pagination makes two DB queries when using `before` or `after` cursor — first to fetch the cursor message's `createdAt`, then to query messages. Could optimize with composite cursor (createdAt + id) to eliminate the extra query. Not blocking but worth noting for high-scale usage.
+
+3. **No messenger integration tests**: Unit tests cover validation and auth requirements, but no integration tests verify actual DB operations. Auth module has `auth.integration.test.ts` with 11 tests covering full flows. Messenger should have similar coverage before WebSocket work begins.
+
+4. **config.ts:19**: JWT_SECRET default value (`dev-secret-change-in-production`) still present. Previous reviews flagged this. Production servers should fail to start if using default secret. Priority: medium.
+
+5. **auth.service.ts:122**: Login query still searches "across all orgs". Comment acknowledges this. For true multi-tenant isolation, login should require org context. Documented limitation.
+
+### Commit history review
+- 13 commits total on branch
+- Most recent 3 commits since last review:
+  - `6cb74ae docs: update progress log for iteration 8 (messenger T-003)`
+  - `0dc7650 feat(messenger): implement Chat, Message, ChatMember entities and API (T-003 subtask 1)`
+  - `9815fc4 docs: update progress log for iteration 7 (simplify)`
+- Commits are atomic and well-scoped
+- Conventional commit format consistently applied
+- Clean history, no fixup commits
+
+### Plan assessment
+
+**T-002 (in-progress):** +1 vote. Quality remains solid. 2/6 subtasks fully complete, subtask 4 partially complete (session management done). Remaining work (magic link, 2FA, RLS, departments, API keys) can be deferred since auth foundation is stable enough for other modules.
+
+**T-003 (in-progress):** +1 vote. Subtask 1 complete with high quality. Module structure, middleware reuse, and test patterns all correctly followed. Added 3 comments with specific nudges for future work:
+  - Optimize cursor pagination query
+  - Use Zod schema for pin endpoint
+  - Add integration tests before WebSocket work
+
+**T-023 (open):** Net votes now +2/-1. Frontend shell can begin since backend API routes are stable. Recommend starting with auth screens (`/login`, `/register`) and messenger list view.
+
+### Nudges left
+
+1. **T-003**: Consider composite cursor (createdAt+id) for `getMessages()` pagination to eliminate extra DB query (`messenger.service.ts:443-466`)
+2. **T-003**: Use Zod schema for `POST /chats/:chatId/pins` instead of inline casting (`messenger.routes.ts:565-571`)
+3. **T-003**: Add integration tests for messenger module before WebSocket work (similar to `auth.integration.test.ts`)
+4. **T-002**: JWT_SECRET default value should fail in production (`config.ts:19`) — carried from previous reviews
+
+### Tech debt items
+
+| Priority | Item | Location |
+|----------|------|----------|
+| Medium | JWT_SECRET default should fail in production | `config.ts:19` |
+| Medium | No messenger integration tests | `apps/api/src/__tests__/` |
+| Low | Login needs org context for true multi-tenant | `auth.service.ts:122` |
+| Low | Pin endpoint uses inline casting instead of Zod | `messenger.routes.ts:565` |
+| Low | Pagination cursor query could be optimized | `messenger.service.ts:448-458` |
+| Low | `next lint` deprecation warning | `apps/web` |
+
+### Reinforced patterns
+
+From progress log that held true this iteration:
+- ✅ Module structure (`index.ts`, `routes.ts`, `service.ts`, `schemas.ts`) — messenger module follows pattern exactly
+- ✅ Auth middleware reuse from `modules/auth/middleware.ts` — worked perfectly
+- ✅ Test pattern (unit tests always run, integration tests skip when `SKIP_DB_TESTS=true`) — applied correctly
+- ✅ Fastify plugin pattern for routes — clean and composable
+- ✅ `formatZodError` utility from `utils/validation.ts` — reused across modules
+- ✅ Rate limit pattern — isolated correctly in auth module
+
+---
