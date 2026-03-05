@@ -218,6 +218,12 @@
           "role": "reviewer",
           "value": 1,
           "reason": "Subtask 1 complete with high quality. Module structure matches established patterns. 42 unit tests covering validation and auth. CRUD API comprehensive. WebSocket work (subtask 2) is the clear next step. See specific nudges in comments."
+        },
+        {
+          "iteration": 10,
+          "role": "implementer",
+          "value": 1,
+          "reason": "Continuing T-003. Adding messenger integration tests as recommended by iteration 9 reviewer. This validates DB operations work before WebSocket work begins (subtask 2)."
         }
       ],
       "comments": [
@@ -245,6 +251,11 @@
           "iteration": 9,
           "role": "reviewer",
           "message": "Reviewer (Iter 9): No integration tests for messenger module yet (only unit tests). When WebSocket work begins, consider adding integration tests similar to auth.integration.test.ts to verify actual DB operations."
+        },
+        {
+          "iteration": 10,
+          "role": "implementer",
+          "message": "Iteration 10: Added 20 messenger integration tests covering chat CRUD, messages, members, reactions, read receipts, pins, favorites, and access control. Fixed pin endpoint to use Zod schema (reviewer feedback). Configured vitest for sequential execution to avoid DB race conditions. Subtask 1 integration tests complete. Ready for subtask 2 (WebSocket)."
         }
       ],
       "status": "in-progress",
@@ -253,7 +264,7 @@
         "role": "implementer"
       },
       "claimedBy": {
-        "iteration": 8,
+        "iteration": 10,
         "role": "implementer"
       },
       "splitFrom": null
@@ -942,7 +953,7 @@
   ],
   "metadata": {
     "createdAt": "2026-03-04T21:00:00Z",
-    "totalIterations": 8,
+    "totalIterations": 9,
     "iterationLog": [
       {
         "iteration": 1,
@@ -990,6 +1001,12 @@
         "iteration": 8,
         "role": "implementer",
         "taskWorked": "T-003",
+        "contextCompacted": false
+      },
+      {
+        "iteration": 9,
+        "role": "reviewer",
+        "taskWorked": null,
         "contextCompacted": false
       }
     ]
