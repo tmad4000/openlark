@@ -5,17 +5,7 @@ import { registerSchema, loginSchema } from "./auth.schemas.js";
 import { authenticate } from "./middleware.js";
 import { ZodError } from "zod";
 import { config } from "../../config.js";
-
-function formatZodError(error: ZodError) {
-  return {
-    code: "VALIDATION_ERROR",
-    message: "Validation failed",
-    details: error.errors.map((e) => ({
-      field: e.path.join("."),
-      message: e.message,
-    })),
-  };
-}
+import { formatZodError } from "../../utils/validation.js";
 
 export async function authRoutes(app: FastifyInstance) {
   // Register rate-limited routes (register, login) in a sub-scope
@@ -95,8 +85,10 @@ export async function authRoutes(app: FastifyInstance) {
 
   // GET /auth/me - Get current user
   app.get("/me", { preHandler: authenticate }, async (req, reply) => {
-    const user = await authService.getUserById(req.user!.id);
-    const organization = await authService.getOrganizationById(req.user!.orgId);
+    const [user, organization] = await Promise.all([
+      authService.getUserById(req.user!.id),
+      authService.getOrganizationById(req.user!.orgId),
+    ]);
 
     if (!user || !organization) {
       return reply.status(404).send({
