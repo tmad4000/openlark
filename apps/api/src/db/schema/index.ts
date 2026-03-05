@@ -2,3 +2,5 @@
 export * from "./organizations";
 export * from "./users";
 export * from "./departments";
+export * from "./sessions";
+export * from "./api-keys";

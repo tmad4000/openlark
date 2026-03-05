@@ -15,6 +15,13 @@
       "when": 1772705388749,
       "tag": "0001_yellow_blink",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1772705508589,
+      "tag": "0002_lean_lenny_balinger",
+      "breakpoints": true
     }
   ]
 }
