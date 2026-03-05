@@ -62,8 +62,8 @@
         "Typecheck passes"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "parent_id enables tree structure for nested departments."
+      "passes": true,
+      "notes": "Created departments table with uuid pk, name, parent_id (self-referencing fk), org_id (fk), timestamps. Created department_members table with composite pk (department_id, user_id), role enum (head/member), created_at. Added indexes on org_id and parent_id. Migration 0001_yellow_blink.sql generated and applied successfully. Typecheck passes."
     },
     {
       "id": "US-005",
