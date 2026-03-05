@@ -47,8 +47,8 @@
         "Typecheck passes"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "All tables use uuid primary keys. Soft deletes via deleted_at timestamp."
+      "passes": true,
+      "notes": "Created organizations table with uuid pk, name, domain (unique), logo_url, industry, plan enum (starter/pro/enterprise), settings jsonb, timestamps. Created users table with uuid pk, email (unique), phone, password_hash, display_name, avatar_url, timezone, locale, status enum (active/away/busy/offline), working_hours_start/end, org_id fk, timestamps, deleted_at for soft deletes. Added users_org_id_idx index. Migration 0000_swift_absorbing_man.sql generated and applied successfully. Typecheck passes."
     },
     {
       "id": "US-004",

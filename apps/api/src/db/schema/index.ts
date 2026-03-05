@@ -1,4 +1,3 @@
-// Schema exports will be added here as tables are created
-// This file serves as the entry point for all schema definitions
-
-export {};
+// Schema exports - all table definitions and types
+export * from "./organizations";
+export * from "./users";
