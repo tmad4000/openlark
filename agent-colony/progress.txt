@@ -445,3 +445,73 @@ From progress log that held true this iteration:
 - **API utils location**: `apps/api/src/utils/` for shared API utilities (validation.ts is the first)
 
 ---
+
+## 2026-03-05 - Iteration 8 - T-003 (Messenger subtask 1)
+
+### What was implemented
+Messenger module foundation - Chat, Message, ChatMember entities and CRUD API routes:
+
+1. **Database schema** (`apps/api/src/db/schema/messenger.ts`):
+   - `chats` table: id, orgId, type (dm|group|topic_group|supergroup|meeting), name, avatarUrl, isPublic, maxMembers, settingsJson
+   - `chatMembers` table: chatId, userId, role (owner|admin|member), joinedAt, muted, label, lastReadMessageId, leftAt
+   - `messages` table: chatId, senderId, type (text|rich_text|code|voice|card|system), contentJson, threadId, replyToId, editedAt, editCount, recalledAt, scheduledFor
+   - `messageReactions`: messageId, userId, emoji
+   - `messageReadReceipts`: messageId, userId, readAt
+   - `pins`: chatId, messageId, pinnedBy
+   - `favorites`: userId, messageId
+   - Proper indexes, relations, and type exports
+
+2. **Messenger service** (`apps/api/src/modules/messenger/messenger.service.ts`):
+   - Chat CRUD: createChat (FR-2.1), getUserChats, getChatById, updateChat, deleteChat
+   - DM deduplication: findExistingDm prevents duplicate DM creation
+   - Member management: addMember, updateMember, removeMember with role-based permissions
+   - Message operations: sendMessage (FR-2.2), getMessages (cursor-based pagination), editMessage (FR-2.11, 24h window, max 20 edits), recallMessage (FR-2.12)
+   - Reactions: addReaction, removeReaction (FR-2.7)
+   - Read receipts: markAsRead, getReadReceipts (FR-2.8)
+   - Pins: pinMessage, unpinMessage (FR-2.13)
+   - Favorites: favoriteMessage, unfavoriteMessage (FR-2.14)
+
+3. **Messenger routes** (`apps/api/src/modules/messenger/messenger.routes.ts`):
+   - All routes require authentication via `authenticate` middleware
+   - Chat endpoints: GET /chats, POST /chats, GET /chats/:chatId, PATCH /chats/:chatId, DELETE /chats/:chatId
+   - Member endpoints: GET /chats/:chatId/members, POST /chats/:chatId/members, PATCH /chats/:chatId/members/:userId, DELETE /chats/:chatId/members/:userId
+   - Message endpoints: GET /chats/:chatId/messages, POST /chats/:chatId/messages, GET /messages/:messageId, PATCH /messages/:messageId, DELETE /messages/:messageId
+   - Reaction endpoints: POST /messages/:messageId/reactions, DELETE /messages/:messageId/reactions/:emoji, GET /messages/:messageId/reactions
+   - Read receipt endpoints: POST /messages/:messageId/read, GET /messages/:messageId/read-receipts
+   - Pin endpoints: GET /chats/:chatId/pins, POST /chats/:chatId/pins, DELETE /chats/:chatId/pins/:messageId
+   - Favorite endpoints: GET /favorites, POST /messages/:messageId/favorite, DELETE /messages/:messageId/favorite
+
+4. **Validation schemas** (`apps/api/src/modules/messenger/messenger.schemas.ts`):
+   - createChatSchema: validates chat creation with DM constraint (exactly 1 member)
+   - sendMessageSchema: text or JSON content, thread/reply references, scheduled messages
+   - paginationSchema: cursor-based pagination with limit coercion
+
+### Files changed
+- `apps/api/src/app.ts` - Register messenger routes
+- `apps/api/src/db/schema/index.ts` - Export messenger schema
+- `apps/api/src/db/schema/messenger.ts` - New (7 tables, relations, types)
+- `apps/api/src/modules/messenger/index.ts` - New (module exports)
+- `apps/api/src/modules/messenger/messenger.routes.ts` - New (18 endpoints)
+- `apps/api/src/modules/messenger/messenger.service.ts` - New (MessengerService class)
+- `apps/api/src/modules/messenger/messenger.schemas.ts` - New (Zod validation schemas)
+- `apps/api/src/__tests__/messenger.test.ts` - New (42 unit tests)
+
+### Tests added
+- **35 schema validation tests**: createChatSchema (7), updateChatSchema (3), sendMessageSchema (7), editMessageSchema (3), reactionSchema (4), paginationSchema (4), addMemberSchema (3), updateMemberSchema (4)
+- **7 auth requirement tests**: verifies all messenger endpoints return 401 without authentication
+
+### Plan deviations
+- None — followed established module structure exactly
+
+### Learnings for future iterations
+- **Reinforced pattern**: Module structure (index.ts, routes.ts, service.ts, schemas.ts) scales cleanly to new modules
+- **Reinforced pattern**: Auth middleware reuse from modules/auth/middleware.ts worked perfectly
+- **Reinforced pattern**: formatZodError utility from utils/validation.ts reused in new routes
+- **New discovery**: DM deduplication requires GROUP BY + HAVING in Drizzle (see findExistingDm)
+- **Self-reflection**: 42 tests feels right for this scope — validation tests catch schema bugs early, auth tests ensure no route bypasses auth
+
+### Tech debt created
+- No WebSocket implementation yet (subtask 2 of T-003) — messages are currently HTTP-only
+- No typing indicators or presence (subtask 4 of T-003)
+
+---

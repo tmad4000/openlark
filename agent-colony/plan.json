@@ -99,6 +99,24 @@
           "role": "implementer",
           "value": 1,
           "reason": "Continuing T-002 subtask 3 (RLS). Will also address reviewer feedback: extract authenticate middleware and add rate limiting. Auth foundation must be solid before other modules."
+        },
+        {
+          "iteration": 5,
+          "role": "implementer",
+          "value": 1,
+          "reason": "Iteration 5: Fixed rate limiting bug (status code 500→429). Schema/index.ts import path fixed for drizzle-kit compatibility. Continuing T-002 subtask 3 (RLS) or subtask 4 (magic link, 2FA)."
+        },
+        {
+          "iteration": 6,
+          "role": "reviewer",
+          "value": 1,
+          "reason": "Code quality remains solid. Session management (FR-1.10) properly implemented with ownership verification. Patterns from progress log (bcrypt, JWT+session, sensitive field stripping) consistently applied. 2/6 subtasks done, 1 partially complete. Clear path forward for remaining work (magic link, 2FA, RLS, departments, API keys). Test coverage good (26 passing unit tests)."
+        },
+        {
+          "iteration": 8,
+          "role": "implementer",
+          "value": 1,
+          "reason": "Auth foundation solid. Session management complete. Magic link/2FA/departments can be added incrementally. Not blocking T-003."
         }
       ],
       "comments": [
@@ -116,6 +134,21 @@
           "iteration": 4,
           "role": "implementer",
           "message": "Iteration 4: Extracted authenticate middleware to modules/auth/middleware.ts for reuse by other modules. Added requireAdmin and requirePrimaryAdmin middleware. Added rate limiting (10 req/min) to login/register endpoints using @fastify/rate-limit. Fixed TypeScript strict mode errors in auth.service.ts."
+        },
+        {
+          "iteration": 5,
+          "role": "implementer",
+          "message": "Iteration 5: Added session management (FR-1.10) - GET /auth/sessions and DELETE /auth/sessions/:id. Fixed rate limiting status code (429). Fixed drizzle-kit schema import compatibility. Subtask 4 partially complete (sessions done, magic link + 2FA remain)."
+        },
+        {
+          "iteration": 6,
+          "role": "reviewer",
+          "message": "Reviewer (Iter 6): config.ts:19 still has JWT_SECRET default value. This is a real security concern - production servers should FAIL to start without a real secret. Suggest: if NODE_ENV=production and JWT_SECRET matches the default, throw an error at startup. Low-priority but worth addressing before public deployment."
+        },
+        {
+          "iteration": 6,
+          "role": "reviewer",
+          "message": "Reviewer (Iter 6): auth.service.ts:122 - login query finds users 'across all orgs'. Comment says 'for now'. This is correct for single-org/demo deployments but will need org context (domain-based routing?) for true multi-tenant. Document this as a known limitation or create a follow-up task if FR-1.6 (org domain verification) is planned before public launch."
         }
       ],
       "status": "in-progress",
@@ -124,7 +157,7 @@
         "role": "implementer"
       },
       "claimedBy": {
-        "iteration": 4,
+        "iteration": 5,
         "role": "implementer"
       },
       "splitFrom": null
@@ -136,7 +169,7 @@
       "subtasks": [
         {
           "description": "Create Chat, Message, ChatMember entities and API routes",
-          "done": false
+          "done": true
         },
         {
           "description": "Implement WebSocket server with Redis pub/sub for real-time delivery",
@@ -161,15 +194,41 @@
           "role": "reviewer",
           "value": 1,
           "reason": "Ready to start once T-002 is further along. Messenger depends on auth but can begin schema/routing work in parallel with T-002 subtask 3+."
+        },
+        {
+          "iteration": 6,
+          "role": "reviewer",
+          "value": 1,
+          "reason": "Auth foundation (T-002) now has session management, rate limiting, and extracted middleware. T-003 can begin schema design and CRUD routes for Chat, Message, ChatMember. Real-time WebSocket work should follow once HTTP routes are tested. Recommend starting with subtask 1 (entities + routes)."
+        },
+        {
+          "iteration": 8,
+          "role": "implementer",
+          "value": 1,
+          "reason": "Ready to start. Auth middleware reusable. Will validate auth patterns work across modules. Starting with subtask 1 (schema + CRUD routes)."
         }
       ],
-      "comments": [],
-      "status": "open",
+      "comments": [
+        {
+          "iteration": 6,
+          "role": "reviewer",
+          "message": "Reviewer (Iter 6): When starting T-003, follow the module structure established in T-002: modules/messenger/index.ts, messenger.routes.ts, messenger.service.ts, messenger.schemas.ts. Reuse the authenticate middleware from modules/auth/middleware.ts. Use the same test pattern: unit tests always run, integration tests skip when SKIP_DB_TESTS=true."
+        },
+        {
+          "iteration": 8,
+          "role": "implementer",
+          "message": "Iteration 8: Implemented subtask 1 (Chat, Message, ChatMember entities and API routes). Created db/schema/messenger.ts with Chat, ChatMember, Message, MessageReaction, MessageReadReceipt, Pin, Favorite tables. Created modules/messenger/ with routes, service, schemas. Added 42 unit tests covering schema validation and auth requirements. All routes require authentication via existing middleware. WebSocket work (subtask 2) remains for future iteration."
+        }
+      ],
+      "status": "in-progress",
       "createdBy": {
         "iteration": 0,
         "role": "implementer"
       },
-      "claimedBy": null,
+      "claimedBy": {
+        "iteration": 8,
+        "role": "implementer"
+      },
       "splitFrom": null
     },
     {
@@ -830,6 +889,12 @@
           "role": "implementer",
           "value": -1,
           "reason": "Frontend shell depends on auth routes existing first. No point building navigation to non-existent features."
+        },
+        {
+          "iteration": 6,
+          "role": "reviewer",
+          "value": 1,
+          "reason": "Auth endpoints are stable (/auth/register, /auth/login, /auth/logout, /auth/me, /auth/sessions). Frontend shell can begin with auth screens (login, register) connected to these routes. Still agree: keep scope minimal until more backend modules exist."
         }
       ],
       "comments": [
@@ -850,7 +915,7 @@
   ],
   "metadata": {
     "createdAt": "2026-03-04T21:00:00Z",
-    "totalIterations": 3,
+    "totalIterations": 7,
     "iterationLog": [
       {
         "iteration": 1,
@@ -867,6 +932,30 @@
       {
         "iteration": 3,
         "role": "reviewer",
+        "taskWorked": null,
+        "contextCompacted": false
+      },
+      {
+        "iteration": 4,
+        "role": "implementer",
+        "taskWorked": "T-002",
+        "contextCompacted": false
+      },
+      {
+        "iteration": 5,
+        "role": "implementer",
+        "taskWorked": "T-002",
+        "contextCompacted": false
+      },
+      {
+        "iteration": 6,
+        "role": "reviewer",
+        "taskWorked": null,
+        "contextCompacted": false
+      },
+      {
+        "iteration": 7,
+        "role": "simplifier",
         "taskWorked": null,
         "contextCompacted": false
       }
