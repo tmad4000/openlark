@@ -4,3 +4,4 @@
 // NOTE: Using .ts extension for drizzle-kit compatibility (it uses CJS loader)
 // Runtime TypeScript resolves .js extension correctly via moduleResolution
 export * from "./auth";
+export * from "./messenger";

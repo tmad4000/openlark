@@ -3,6 +3,7 @@ import cors from "@fastify/cors";
 import sensible from "@fastify/sensible";
 import { config } from "./config.js";
 import { authRoutes } from "./modules/auth/index.js";
+import { messengerRoutes } from "./modules/messenger/index.js";
 
 export async function buildApp() {
   const app = Fastify({
@@ -34,9 +35,8 @@ export async function buildApp() {
       // Auth module
       api.register(authRoutes, { prefix: "/auth" });
 
-      // Future module routes:
-      // api.register(messengerRoutes, { prefix: '/messenger' });
-      // etc.
+      // Messenger module
+      api.register(messengerRoutes, { prefix: "/messenger" });
     },
     { prefix: "/api/v1" }
   );
