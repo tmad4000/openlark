@@ -87,6 +87,26 @@ Started: Wed Mar  4 13:58:43 MST 2026
 - Use as `preHandler`: `{ preHandler: authenticate }`
 - `req.user` available after authenticate (typed via module declaration)
 
+### Integration Test Pattern (Iteration 10)
+- Integration tests in `src/__tests__/<module>.integration.test.ts`
+- Use `describe.skipIf(SKIP_DB_TESTS)` to skip when DB not available
+- Clean up tables in `beforeEach` respecting foreign key order:
+  ```ts
+  // Messenger tables first (they reference auth tables)
+  await db.delete(favorites);
+  await db.delete(pins);
+  await db.delete(messages);
+  await db.delete(chatMembers);
+  await db.delete(chats);
+  // Then auth tables
+  await db.delete(sessions);
+  await db.delete(users);
+  await db.delete(organizations);
+  ```
+- Helper functions for creating test users (register → get token/userId)
+- vitest.config.ts must have `fileParallelism: false` and single fork pool
+  to prevent database race conditions between test files
+
 ---
 
 ## 2026-03-05 - Iteration 1 - T-001
@@ -597,5 +617,71 @@ From progress log that held true this iteration:
 - ✅ Fastify plugin pattern for routes — clean and composable
 - ✅ `formatZodError` utility from `utils/validation.ts` — reused across modules
 - ✅ Rate limit pattern — isolated correctly in auth module
+
+---
+
+## 2026-03-05 - Iteration 10 - T-003 (integration tests)
+
+### What was implemented
+Messenger integration tests following reviewer feedback from iteration 9:
+
+1. **Integration tests** (`apps/api/src/__tests__/messenger.integration.test.ts`):
+   - 20 tests covering full messenger API flows with database
+   - Chat CRUD: create group, create DM, DM deduplication, list, update, delete
+   - Messages: send, paginate (cursor-based), edit with constraints, recall
+   - Members: add, remove, leave, permission checks (admin-only operations)
+   - Reactions: add, remove, list
+   - Read receipts: mark as read, get receipts
+   - Pins: pin/unpin (admin-only), list pinned
+   - Favorites: favorite/unfavorite (personal), list favorites
+   - Access control: non-members blocked from viewing/sending messages
+
+2. **Fixed pin endpoint validation** (`messenger.routes.ts:563-588`):
+   - Changed from inline `as { messageId: string }` casting to proper Zod schema
+   - Added `pinMessageSchema` to `messenger.schemas.ts`
+   - Addresses reviewer feedback from iteration 9
+
+3. **Fixed vitest configuration** (`apps/api/vitest.config.ts`):
+   - Added `fileParallelism: false` to prevent parallel test file execution
+   - Added `pool: "forks"` with `singleFork: true` for sequential test execution
+   - Fixes database race conditions between auth and messenger integration tests
+
+4. **Updated auth integration tests** (`auth.integration.test.ts`):
+   - Added messenger table cleanup in `beforeEach` (favorites, pins, etc.)
+   - Respects foreign key constraints (messenger tables cleaned before auth tables)
+
+### Files changed
+- `apps/api/src/__tests__/messenger.integration.test.ts` - New (20 tests)
+- `apps/api/src/__tests__/auth.integration.test.ts` - Updated cleanup order
+- `apps/api/src/modules/messenger/messenger.routes.ts` - Fixed pin endpoint
+- `apps/api/src/modules/messenger/messenger.schemas.ts` - Added pinMessageSchema
+- `apps/api/vitest.config.ts` - Sequential test execution
+
+### Tests added
+- **20 integration tests** for messenger module verifying actual database operations:
+  - 6 chat CRUD tests
+  - 5 message operation tests
+  - 3 member operation tests
+  - 2 reaction/read receipt tests
+  - 2 pin/favorite tests
+  - 2 access control tests
+
+### Plan deviations
+- None — followed reviewer's recommendation to add integration tests before WebSocket work
+
+### Learnings for future iterations
+- **New pattern**: Integration tests need table cleanup in foreign key dependency order (messenger tables → auth tables)
+- **Gotcha**: Vitest runs test files in parallel by default. For integration tests sharing database state, set `fileParallelism: false` and use single fork pool
+- **Reinforced pattern**: Use Zod schemas consistently across all endpoints (not inline casting)
+- **Reinforced pattern**: `describe.skipIf(SKIP_DB_TESTS)` pattern works reliably for optional DB tests
+- **Self-reflection**: Reviewer feedback about integration tests was valuable — caught table cleanup order issues that would have caused flaky tests
+
+### Tech debt addressed
+- ✅ Pin endpoint now uses Zod schema (was inline casting)
+- ✅ Messenger module has integration tests (was only unit tests)
+
+### Tech debt remaining
+- `config.ts:19`: JWT_SECRET default should fail in production
+- No WebSocket implementation yet (T-003 subtask 2)
 
 ---
