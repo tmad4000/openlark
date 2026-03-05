@@ -1,3 +1,62 @@
 # Agent Colony Progress Log
 Started: Wed Mar  4 13:58:43 MST 2026
 ---
+
+## Codebase Patterns
+
+### Monorepo Structure
+- Root: Turborepo with pnpm workspaces
+- Apps: `apps/web` (Next.js 15), `apps/api` (Fastify)
+- Packages: `packages/shared` (types, utilities)
+- Each package has its own package.json, tsconfig.json, vitest.config.ts
+
+### TypeScript Configuration
+- Base config: `tsconfig.base.json` with strict mode
+- Apps/packages extend base and set their own `outDir`, `rootDir`
+
+### Testing
+- Vitest for all packages
+- API tests: Use `app.inject()` for HTTP testing without starting server
+- Tests in `src/__tests__/` directory
+- Use `passWithNoTests: true` in vitest.config for packages that may not have tests yet
+
+### ESLint
+- Root `eslint.config.js` uses `typescript-eslint` flat config
+- Pattern: `tseslint.config()` wrapper with ignores first, then js.configs.recommended, then tseslint.configs.recommended
+
+### Scripts
+- `pnpm dev` / `pnpm build` / `pnpm test` / `pnpm lint` - via turbo
+- `pnpm docker:up` / `pnpm docker:down` - Docker services
+- `pnpm db:migrate` / `pnpm db:seed` - Database operations
+
+---
+
+## 2026-03-05 - Iteration 1 - T-001
+
+### What was implemented
+Fixed critical issues preventing `pnpm test` and `pnpm lint` from passing:
+
+1. **ESLint config**: Updated to use `typescript-eslint` flat config for proper TypeScript parsing
+2. **Root package.json**: Added `"type": "module"` to eliminate module type warnings
+3. **Web vitest config**: Added `apps/web/vitest.config.ts` with `passWithNoTests: true`
+4. **Web devDependencies**: Added `@vitejs/plugin-react` and `jsdom` for React testing support
+
+### Files changed
+- `eslint.config.js` - Rewrote using typescript-eslint
+- `package.json` - Added type:module, typescript-eslint, @eslint/js deps
+- `apps/web/package.json` - Added @vitejs/plugin-react, jsdom devDeps
+- `apps/web/vitest.config.ts` - New file for web package test config
+
+### Tests added
+No new tests added (this was infrastructure fix). Existing tests (12 total) now pass.
+
+### Plan deviations
+None - the original structure was correct, just needed tooling fixes.
+
+### Learnings for future iterations
+- **New discovery**: ESLint flat config requires explicit TypeScript support via typescript-eslint
+- **New discovery**: Vitest exits with code 1 when no tests found unless `passWithNoTests: true` is set
+- **Reinforced pattern**: Use `app.inject()` in Fastify tests for HTTP testing
+- **Self-reflection**: The monorepo foundation was already well-built; issues were only in tooling configuration. Future iterations can build on this solid base.
+
+---

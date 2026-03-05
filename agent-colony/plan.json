@@ -8,16 +8,41 @@
       "title": "Set up monorepo, dev tooling, and Docker Compose infrastructure",
       "description": "Initialize Turborepo monorepo with packages: web (Next.js 15), api (Fastify), shared (types/utils). Set up TypeScript strict mode, ESLint, Prettier. Create Docker Compose with postgres:16, redis:7, minio, meilisearch containers. Add health checks, .env.example, and dev scripts. This is the foundation everything else builds on.",
       "subtasks": [
-        { "description": "Initialize Turborepo with web, api, and shared packages", "done": false },
-        { "description": "Configure TypeScript strict mode, ESLint, Prettier across all packages", "done": false },
-        { "description": "Create Docker Compose with postgres, redis, minio, meilisearch", "done": false },
-        { "description": "Add dev scripts (dev, build, lint, test) and .env.example", "done": false }
+        {
+          "description": "Initialize Turborepo with web, api, and shared packages",
+          "done": true
+        },
+        {
+          "description": "Configure TypeScript strict mode, ESLint, Prettier across all packages",
+          "done": true
+        },
+        {
+          "description": "Create Docker Compose with postgres, redis, minio, meilisearch",
+          "done": true
+        },
+        {
+          "description": "Add dev scripts (dev, build, lint, test) and .env.example",
+          "done": true
+        }
       ],
-      "votes": [],
+      "votes": [
+        {
+          "iteration": 1,
+          "role": "implementer",
+          "value": 1,
+          "reason": "Foundation task - nothing can start without monorepo, tooling, and infrastructure. Must be first."
+        }
+      ],
       "comments": [],
-      "status": "open",
-      "createdBy": { "iteration": 0, "role": "implementer" },
-      "claimedBy": null,
+      "status": "done",
+      "createdBy": {
+        "iteration": 0,
+        "role": "implementer"
+      },
+      "claimedBy": {
+        "iteration": 1,
+        "role": "implementer"
+      },
       "splitFrom": null
     },
     {
@@ -25,17 +50,45 @@
       "title": "Implement Auth & Identity module with multi-tenant foundation",
       "description": "Build the foundational auth system: User, Organization, Department, Session entities. Email+password registration/login with bcrypt. JWT session tokens. Multi-tenant isolation with org_id on all tables + row-level security. Magic link login. 2FA (TOTP). User profiles. API key management. Department hierarchy. This must be solid before any other module starts. See Module 1 in goal.md (FR-1.1 through FR-1.15).",
       "subtasks": [
-        { "description": "Create PostgreSQL schema for User, Organization, Department, Session, APIKey", "done": false },
-        { "description": "Implement registration, login, logout with bcrypt + JWT", "done": false },
-        { "description": "Add row-level security and org_id tenant isolation", "done": false },
-        { "description": "Implement magic link, 2FA/TOTP, session management", "done": false },
-        { "description": "Build department hierarchy CRUD and user invitation flows", "done": false },
-        { "description": "Add API key management and OAuth 2.0 authorization code flow", "done": false }
+        {
+          "description": "Create PostgreSQL schema for User, Organization, Department, Session, APIKey",
+          "done": false
+        },
+        {
+          "description": "Implement registration, login, logout with bcrypt + JWT",
+          "done": false
+        },
+        {
+          "description": "Add row-level security and org_id tenant isolation",
+          "done": false
+        },
+        {
+          "description": "Implement magic link, 2FA/TOTP, session management",
+          "done": false
+        },
+        {
+          "description": "Build department hierarchy CRUD and user invitation flows",
+          "done": false
+        },
+        {
+          "description": "Add API key management and OAuth 2.0 authorization code flow",
+          "done": false
+        }
       ],
-      "votes": [],
+      "votes": [
+        {
+          "iteration": 1,
+          "role": "implementer",
+          "value": 1,
+          "reason": "Second priority after T-001. All modules depend on auth, multi-tenant isolation, and user entities."
+        }
+      ],
       "comments": [],
       "status": "open",
-      "createdBy": { "iteration": 0, "role": "implementer" },
+      "createdBy": {
+        "iteration": 0,
+        "role": "implementer"
+      },
       "claimedBy": null,
       "splitFrom": null
     },
@@ -44,16 +97,34 @@
       "title": "Build Messenger with real-time WebSocket delivery",
       "description": "Core messaging: 1:1 DMs, group chats, topic groups. Message types: text with rich formatting, code blocks, voice messages. Real-time delivery via WebSocket + Redis pub/sub. Threads, replies, forwarding. Edit/recall within 24h. Reactions, read receipts, typing indicators, presence. Pins, favorites, chat tabs. Message search. See Module 2 in goal.md (FR-2.1 through FR-2.32).",
       "subtasks": [
-        { "description": "Create Chat, Message, ChatMember entities and API routes", "done": false },
-        { "description": "Implement WebSocket server with Redis pub/sub for real-time delivery", "done": false },
-        { "description": "Build rich text messages, threads, replies, forwarding", "done": false },
-        { "description": "Add reactions, read receipts, typing indicators, presence", "done": false },
-        { "description": "Implement pins, favorites, chat tabs, announcements", "done": false }
+        {
+          "description": "Create Chat, Message, ChatMember entities and API routes",
+          "done": false
+        },
+        {
+          "description": "Implement WebSocket server with Redis pub/sub for real-time delivery",
+          "done": false
+        },
+        {
+          "description": "Build rich text messages, threads, replies, forwarding",
+          "done": false
+        },
+        {
+          "description": "Add reactions, read receipts, typing indicators, presence",
+          "done": false
+        },
+        {
+          "description": "Implement pins, favorites, chat tabs, announcements",
+          "done": false
+        }
       ],
       "votes": [],
       "comments": [],
       "status": "open",
-      "createdBy": { "iteration": 0, "role": "implementer" },
+      "createdBy": {
+        "iteration": 0,
+        "role": "implementer"
+      },
       "claimedBy": null,
       "splitFrom": null
     },
@@ -62,15 +133,30 @@
       "title": "Build Calendar module with event scheduling and room booking",
       "description": "Calendar events with title, time, timezone, attendees. RFC 5545 recurring events. RSVP. Meeting room booking with capacity/equipment search. Availability finder across attendees. Working hours, conflict detection. Shared and public calendars. Auto-create meeting chat. Drag-and-drop rescheduling. iCal import/export. See Module 6 in goal.md (FR-6.1 through FR-6.15).",
       "subtasks": [
-        { "description": "Create CalendarEvent, EventAttendee, MeetingRoom, Calendar entities", "done": false },
-        { "description": "Implement event CRUD with recurrence rules and RSVP", "done": false },
-        { "description": "Build room booking and availability search", "done": false },
-        { "description": "Add shared calendars, iCal import/export, drag-and-drop UI", "done": false }
+        {
+          "description": "Create CalendarEvent, EventAttendee, MeetingRoom, Calendar entities",
+          "done": false
+        },
+        {
+          "description": "Implement event CRUD with recurrence rules and RSVP",
+          "done": false
+        },
+        {
+          "description": "Build room booking and availability search",
+          "done": false
+        },
+        {
+          "description": "Add shared calendars, iCal import/export, drag-and-drop UI",
+          "done": false
+        }
       ],
       "votes": [],
       "comments": [],
       "status": "open",
-      "createdBy": { "iteration": 0, "role": "implementer" },
+      "createdBy": {
+        "iteration": 0,
+        "role": "implementer"
+      },
       "claimedBy": null,
       "splitFrom": null
     },
@@ -79,16 +165,34 @@
       "title": "Build Docs collaborative block editor with Yjs + Hocuspocus",
       "description": "Block-based document editor using TipTap v3 + Yjs for real-time CRDT collaboration. 30+ block types: headings, lists, todos, code, tables, callouts, equations, etc. Slash commands, floating toolbar, drag handles. Real-time cursors for up to 150 editors. Auto-save via Hocuspocus. Four permission levels. Version management. Comments anchored to text. Synced blocks. Templates. Import/export (.docx, .md, .pdf). See Module 7 in goal.md (FR-7.1 through FR-7.21).",
       "subtasks": [
-        { "description": "Set up Hocuspocus server with Yjs persistence to PostgreSQL", "done": false },
-        { "description": "Build TipTap editor with core block types (headings, lists, code, tables)", "done": false },
-        { "description": "Add slash commands, floating toolbar, drag handles", "done": false },
-        { "description": "Implement document permissions, sharing, version management", "done": false },
-        { "description": "Add comments, synced blocks, templates, import/export", "done": false }
+        {
+          "description": "Set up Hocuspocus server with Yjs persistence to PostgreSQL",
+          "done": false
+        },
+        {
+          "description": "Build TipTap editor with core block types (headings, lists, code, tables)",
+          "done": false
+        },
+        {
+          "description": "Add slash commands, floating toolbar, drag handles",
+          "done": false
+        },
+        {
+          "description": "Implement document permissions, sharing, version management",
+          "done": false
+        },
+        {
+          "description": "Add comments, synced blocks, templates, import/export",
+          "done": false
+        }
       ],
       "votes": [],
       "comments": [],
       "status": "open",
-      "createdBy": { "iteration": 0, "role": "implementer" },
+      "createdBy": {
+        "iteration": 0,
+        "role": "implementer"
+      },
       "claimedBy": null,
       "splitFrom": null
     },
@@ -97,15 +201,30 @@
       "title": "Build Wiki knowledge base with hierarchical spaces",
       "description": "Wiki spaces (private/public) with three roles (admin, editor, viewer). Hierarchical page tree with unlimited depth. Pages are documents (Doc, Sheet, Slide, MindNote). Left sidebar navigation, breadcrumbs. Move pages between spaces. Search within/across spaces. Bookmarks. Permission inheritance from parent pages. See Module 11 in goal.md (FR-11.1 through FR-11.12).",
       "subtasks": [
-        { "description": "Create WikiSpace, WikiSpaceMember, WikiPage entities", "done": false },
-        { "description": "Implement space CRUD with roles and page tree management", "done": false },
-        { "description": "Build sidebar navigation, breadcrumbs, page search", "done": false },
-        { "description": "Add permission inheritance and bookmark functionality", "done": false }
+        {
+          "description": "Create WikiSpace, WikiSpaceMember, WikiPage entities",
+          "done": false
+        },
+        {
+          "description": "Implement space CRUD with roles and page tree management",
+          "done": false
+        },
+        {
+          "description": "Build sidebar navigation, breadcrumbs, page search",
+          "done": false
+        },
+        {
+          "description": "Add permission inheritance and bookmark functionality",
+          "done": false
+        }
       ],
       "votes": [],
       "comments": [],
       "status": "open",
-      "createdBy": { "iteration": 0, "role": "implementer" },
+      "createdBy": {
+        "iteration": 0,
+        "role": "implementer"
+      },
       "claimedBy": null,
       "splitFrom": null
     },
@@ -114,16 +233,34 @@
       "title": "Build Sheets collaborative spreadsheet with HyperFormula",
       "description": "Grid-based spreadsheet with Yjs collaboration. 500+ Excel-compatible formulas via HyperFormula. Cell formatting, conditional formatting, data validation. Pivot tables. Charts (bar, line, pie, etc.) embeddable in Docs. Filter views, freeze rows/columns. Multi-sheet workbooks. Import/export .xlsx/.csv. Protected ranges. See Module 8 in goal.md (FR-8.1 through FR-8.14).",
       "subtasks": [
-        { "description": "Build spreadsheet grid renderer with cell editing", "done": false },
-        { "description": "Integrate HyperFormula for formula evaluation", "done": false },
-        { "description": "Add Yjs collaboration with cell-level conflict resolution", "done": false },
-        { "description": "Implement formatting, charts, pivot tables, filter views", "done": false },
-        { "description": "Add import/export for xlsx and csv", "done": false }
+        {
+          "description": "Build spreadsheet grid renderer with cell editing",
+          "done": false
+        },
+        {
+          "description": "Integrate HyperFormula for formula evaluation",
+          "done": false
+        },
+        {
+          "description": "Add Yjs collaboration with cell-level conflict resolution",
+          "done": false
+        },
+        {
+          "description": "Implement formatting, charts, pivot tables, filter views",
+          "done": false
+        },
+        {
+          "description": "Add import/export for xlsx and csv",
+          "done": false
+        }
       ],
       "votes": [],
       "comments": [],
       "status": "open",
-      "createdBy": { "iteration": 0, "role": "implementer" },
+      "createdBy": {
+        "iteration": 0,
+        "role": "implementer"
+      },
       "claimedBy": null,
       "splitFrom": null
     },
@@ -132,17 +269,38 @@
       "title": "Build Base no-code database with views and automations",
       "description": "Airtable-like relational database. 25+ field types (text, number, select, date, person, link, formula, lookup, etc.). 6 view types: grid, kanban, calendar, gantt, gallery, form. Filtering, sorting, grouping. Record detail panel. Linked records between tables. 14 automation triggers with action chains. Canvas-based workflow builder. Dashboard builder with charts. See Module 12 in goal.md (FR-12.1 through FR-12.25).",
       "subtasks": [
-        { "description": "Create Base, BaseTable, BaseField, BaseRecord entities", "done": false },
-        { "description": "Implement 25+ field types with validation", "done": false },
-        { "description": "Build grid view with filtering, sorting, grouping", "done": false },
-        { "description": "Add kanban, calendar, gantt, gallery, form views", "done": false },
-        { "description": "Implement automations engine with triggers and actions", "done": false },
-        { "description": "Build dashboard builder with chart types", "done": false }
+        {
+          "description": "Create Base, BaseTable, BaseField, BaseRecord entities",
+          "done": false
+        },
+        {
+          "description": "Implement 25+ field types with validation",
+          "done": false
+        },
+        {
+          "description": "Build grid view with filtering, sorting, grouping",
+          "done": false
+        },
+        {
+          "description": "Add kanban, calendar, gantt, gallery, form views",
+          "done": false
+        },
+        {
+          "description": "Implement automations engine with triggers and actions",
+          "done": false
+        },
+        {
+          "description": "Build dashboard builder with chart types",
+          "done": false
+        }
       ],
       "votes": [],
       "comments": [],
       "status": "open",
-      "createdBy": { "iteration": 0, "role": "implementer" },
+      "createdBy": {
+        "iteration": 0,
+        "role": "implementer"
+      },
       "claimedBy": null,
       "splitFrom": null
     },
@@ -151,16 +309,34 @@
       "title": "Build Video Meetings with LiveKit WebRTC",
       "description": "Video/audio conferencing using LiveKit SFU. Instant and scheduled meetings. Join via link (no account for guests). Gallery/speaker layouts. Virtual backgrounds. Screen sharing + Magic Share (co-edit docs). Breakout rooms. In-meeting chat, polls. Multi-language subtitles. Cloud recording. Meeting lobby, host controls. Auto-create meeting group chat. See Module 4 in goal.md (FR-4.1 through FR-4.16).",
       "subtasks": [
-        { "description": "Integrate LiveKit server and client SDK", "done": false },
-        { "description": "Build meeting creation, joining, and lobby UI", "done": false },
-        { "description": "Implement video layouts, screen sharing, virtual backgrounds", "done": false },
-        { "description": "Add breakout rooms, polls, in-meeting chat", "done": false },
-        { "description": "Implement cloud recording and meeting group chat creation", "done": false }
+        {
+          "description": "Integrate LiveKit server and client SDK",
+          "done": false
+        },
+        {
+          "description": "Build meeting creation, joining, and lobby UI",
+          "done": false
+        },
+        {
+          "description": "Implement video layouts, screen sharing, virtual backgrounds",
+          "done": false
+        },
+        {
+          "description": "Add breakout rooms, polls, in-meeting chat",
+          "done": false
+        },
+        {
+          "description": "Implement cloud recording and meeting group chat creation",
+          "done": false
+        }
       ],
       "votes": [],
       "comments": [],
       "status": "open",
-      "createdBy": { "iteration": 0, "role": "implementer" },
+      "createdBy": {
+        "iteration": 0,
+        "role": "implementer"
+      },
       "claimedBy": null,
       "splitFrom": null
     },
@@ -169,15 +345,30 @@
       "title": "Build Lark Minutes with AI transcription and summarization",
       "description": "Auto-generate transcripts from meeting recordings via Whisper ASR. Speaker diarization. AI-generated summaries: key points, action items, smart chapters. Searchable transcripts. Smart playback (speed, silence skip, click-to-jump). Comments on paragraphs. Translation. Extract action items as Tasks. Share/embed in Docs. See Module 5 in goal.md (FR-5.1 through FR-5.10).",
       "subtasks": [
-        { "description": "Set up Whisper ASR pipeline for meeting recordings", "done": false },
-        { "description": "Implement speaker diarization and transcript generation", "done": false },
-        { "description": "Build AI summary generation (key points, action items, chapters)", "done": false },
-        { "description": "Create smart playback UI with transcript navigation", "done": false }
+        {
+          "description": "Set up Whisper ASR pipeline for meeting recordings",
+          "done": false
+        },
+        {
+          "description": "Implement speaker diarization and transcript generation",
+          "done": false
+        },
+        {
+          "description": "Build AI summary generation (key points, action items, chapters)",
+          "done": false
+        },
+        {
+          "description": "Create smart playback UI with transcript navigation",
+          "done": false
+        }
       ],
       "votes": [],
       "comments": [],
       "status": "open",
-      "createdBy": { "iteration": 0, "role": "implementer" },
+      "createdBy": {
+        "iteration": 0,
+        "role": "implementer"
+      },
       "claimedBy": null,
       "splitFrom": null
     },
@@ -186,15 +377,30 @@
       "title": "Build Tasks & Project Management with list/kanban/gantt views",
       "description": "Task creation from 6 entry points (app, chat, docs, email, calendar, base). Multi-owner assignment. Subtasks (5 nesting levels). Custom fields. Recurring tasks. Three views: list, kanban, gantt. Gantt with dependency arrows (4 types), milestones, critical path. Task notifications and comments with @mentions. Link tasks to calendar/docs/base. 'My Tasks' dashboard. See Module 15 in goal.md (FR-15.1 through FR-15.11).",
       "subtasks": [
-        { "description": "Create Task, TaskList, TaskDependency entities and API", "done": false },
-        { "description": "Build list and kanban views with drag-and-drop", "done": false },
-        { "description": "Implement gantt chart with dependencies and critical path", "done": false },
-        { "description": "Add cross-module task creation and My Tasks dashboard", "done": false }
+        {
+          "description": "Create Task, TaskList, TaskDependency entities and API",
+          "done": false
+        },
+        {
+          "description": "Build list and kanban views with drag-and-drop",
+          "done": false
+        },
+        {
+          "description": "Implement gantt chart with dependencies and critical path",
+          "done": false
+        },
+        {
+          "description": "Add cross-module task creation and My Tasks dashboard",
+          "done": false
+        }
       ],
       "votes": [],
       "comments": [],
       "status": "open",
-      "createdBy": { "iteration": 0, "role": "implementer" },
+      "createdBy": {
+        "iteration": 0,
+        "role": "implementer"
+      },
       "claimedBy": null,
       "splitFrom": null
     },
@@ -203,15 +409,30 @@
       "title": "Build Approval Workflows with multi-step routing",
       "description": "Form builder for approval types (leave, reimbursement, procurement, custom). Multi-step flows with configurable reviewers. Conditional routing based on form values. Parallel and sequential approval modes. Auto-escalation on timeout. In-chat approval cards (approve/reject from Messenger). Full audit trail. Dashboard. Template library. See Module 17 in goal.md (FR-17.1 through FR-17.11).",
       "subtasks": [
-        { "description": "Create ApprovalTemplate, ApprovalRequest, ApprovalStep entities", "done": false },
-        { "description": "Build form builder and multi-step workflow designer", "done": false },
-        { "description": "Implement conditional routing and parallel/sequential modes", "done": false },
-        { "description": "Add in-chat approval cards and approval dashboard", "done": false }
+        {
+          "description": "Create ApprovalTemplate, ApprovalRequest, ApprovalStep entities",
+          "done": false
+        },
+        {
+          "description": "Build form builder and multi-step workflow designer",
+          "done": false
+        },
+        {
+          "description": "Implement conditional routing and parallel/sequential modes",
+          "done": false
+        },
+        {
+          "description": "Add in-chat approval cards and approval dashboard",
+          "done": false
+        }
       ],
       "votes": [],
       "comments": [],
       "status": "open",
-      "createdBy": { "iteration": 0, "role": "implementer" },
+      "createdBy": {
+        "iteration": 0,
+        "role": "implementer"
+      },
       "claimedBy": null,
       "splitFrom": null
     },
@@ -220,15 +441,30 @@
       "title": "Build OKR tracking with alignment and scoring",
       "description": "OKR cycles with configurable periods. Objectives with Key Results (target, current, weight, score). Alignment tree with minimap. Leader confirmation for aligned objectives. Regular check-ins on KRs. Auto-scoring (0.6-0.7 = good). OKR on user profiles. Insert in Docs with bi-directional sync. Manager dashboard. Version history. See Module 16 in goal.md (FR-16.1 through FR-16.12).",
       "subtasks": [
-        { "description": "Create OKRCycle, Objective, KeyResult, OKRCheckin entities", "done": false },
-        { "description": "Build OKR creation, check-in, and scoring UI", "done": false },
-        { "description": "Implement alignment tree with leader confirmation", "done": false },
-        { "description": "Add manager dashboard and Docs embedding", "done": false }
+        {
+          "description": "Create OKRCycle, Objective, KeyResult, OKRCheckin entities",
+          "done": false
+        },
+        {
+          "description": "Build OKR creation, check-in, and scoring UI",
+          "done": false
+        },
+        {
+          "description": "Implement alignment tree with leader confirmation",
+          "done": false
+        },
+        {
+          "description": "Add manager dashboard and Docs embedding",
+          "done": false
+        }
       ],
       "votes": [],
       "comments": [],
       "status": "open",
-      "createdBy": { "iteration": 0, "role": "implementer" },
+      "createdBy": {
+        "iteration": 0,
+        "role": "implementer"
+      },
       "claimedBy": null,
       "splitFrom": null
     },
@@ -237,15 +473,30 @@
       "title": "Build Attendance & HR with clock-in and leave management",
       "description": "GPS and Wi-Fi clock-in with location verification. Three shift types (fixed, flex, imported). Attendance groups with configurable rules. Leave types with accrual rules and balance tracking. Leave requests integrated with Approval Workflows. Overtime calculation (3 methods) with pay/time-off compensation. Four admin roles. Statistics dashboards. See Module 18 in goal.md (FR-18.1 through FR-18.15).",
       "subtasks": [
-        { "description": "Create attendance entities (groups, locations, clock records, shifts)", "done": false },
-        { "description": "Implement GPS/Wi-Fi clock-in verification", "done": false },
-        { "description": "Build leave management with accrual, balance, and approval integration", "done": false },
-        { "description": "Add overtime calculation and attendance dashboards", "done": false }
+        {
+          "description": "Create attendance entities (groups, locations, clock records, shifts)",
+          "done": false
+        },
+        {
+          "description": "Implement GPS/Wi-Fi clock-in verification",
+          "done": false
+        },
+        {
+          "description": "Build leave management with accrual, balance, and approval integration",
+          "done": false
+        },
+        {
+          "description": "Add overtime calculation and attendance dashboards",
+          "done": false
+        }
       ],
       "votes": [],
       "comments": [],
       "status": "open",
-      "createdBy": { "iteration": 0, "role": "implementer" },
+      "createdBy": {
+        "iteration": 0,
+        "role": "implementer"
+      },
       "claimedBy": null,
       "splitFrom": null
     },
@@ -254,15 +505,30 @@
       "title": "Build Email module with custom domains and IMAP/SMTP",
       "description": "Send/receive email with rich text. Thread-based views. Custom domain setup (DNS verification, MX, DKIM/SPF/DMARC). Mailbox provisioning. Mailing lists. Folder management. Search with operators. IMAP/SMTP access with app-specific passwords. Third-party email linking (Gmail, Outlook). Email-to-Task conversion. Signatures. See Module 19 in goal.md (FR-19.1 through FR-19.12).",
       "subtasks": [
-        { "description": "Set up Haraka SMTP server or transactional email integration", "done": false },
-        { "description": "Create Mailbox, EmailMessage, EmailDomain entities", "done": false },
-        { "description": "Build email composition, threading, and folder UI", "done": false },
-        { "description": "Implement custom domain verification and IMAP access", "done": false }
+        {
+          "description": "Set up Haraka SMTP server or transactional email integration",
+          "done": false
+        },
+        {
+          "description": "Create Mailbox, EmailMessage, EmailDomain entities",
+          "done": false
+        },
+        {
+          "description": "Build email composition, threading, and folder UI",
+          "done": false
+        },
+        {
+          "description": "Implement custom domain verification and IMAP access",
+          "done": false
+        }
       ],
       "votes": [],
       "comments": [],
       "status": "open",
-      "createdBy": { "iteration": 0, "role": "implementer" },
+      "createdBy": {
+        "iteration": 0,
+        "role": "implementer"
+      },
       "claimedBy": null,
       "splitFrom": null
     },
@@ -271,14 +537,26 @@
       "title": "Build Board whiteboard with collaborative canvas",
       "description": "Infinite canvas whiteboard with pan, zoom, minimap. Elements: shapes, connectors, sticky notes, text, images, sections, tables. Freeform drawing. Mind maps on board. Auto-routing connectors. Templates gallery. Comments on elements. Real-time collaboration with cursors. Export PNG/SVG/PDF. Embed in Docs. See Module 13 in goal.md (FR-13.1 through FR-13.10).",
       "subtasks": [
-        { "description": "Build canvas engine with pan, zoom, element rendering", "done": false },
-        { "description": "Implement shapes, connectors, sticky notes, drawing tools", "done": false },
-        { "description": "Add real-time collaboration and export", "done": false }
+        {
+          "description": "Build canvas engine with pan, zoom, element rendering",
+          "done": false
+        },
+        {
+          "description": "Implement shapes, connectors, sticky notes, drawing tools",
+          "done": false
+        },
+        {
+          "description": "Add real-time collaboration and export",
+          "done": false
+        }
       ],
       "votes": [],
       "comments": [],
       "status": "open",
-      "createdBy": { "iteration": 0, "role": "implementer" },
+      "createdBy": {
+        "iteration": 0,
+        "role": "implementer"
+      },
       "claimedBy": null,
       "splitFrom": null
     },
@@ -287,15 +565,30 @@
       "title": "Build Forms with conditional logic and Base integration",
       "description": "12+ question types (text, select, rating, NPS, location, file upload, etc.). Conditional display logic. List and step display modes. Form settings (anonymous, scheduling, limits). Custom themes. Distribution via link/QR/messenger. Responses auto-saved to linked Base table. Auto-generated analytics dashboard. Inline polls in Docs and chats. See Module 14 in goal.md (FR-14.1 through FR-14.9).",
       "subtasks": [
-        { "description": "Create Form, FormQuestion, FormResponse entities", "done": false },
-        { "description": "Build form designer with question types and conditional logic", "done": false },
-        { "description": "Implement form distribution, response collection, and Base sync", "done": false },
-        { "description": "Add analytics dashboard and inline polls", "done": false }
+        {
+          "description": "Create Form, FormQuestion, FormResponse entities",
+          "done": false
+        },
+        {
+          "description": "Build form designer with question types and conditional logic",
+          "done": false
+        },
+        {
+          "description": "Implement form distribution, response collection, and Base sync",
+          "done": false
+        },
+        {
+          "description": "Add analytics dashboard and inline polls",
+          "done": false
+        }
       ],
       "votes": [],
       "comments": [],
       "status": "open",
-      "createdBy": { "iteration": 0, "role": "implementer" },
+      "createdBy": {
+        "iteration": 0,
+        "role": "implementer"
+      },
       "claimedBy": null,
       "splitFrom": null
     },
@@ -304,15 +597,30 @@
       "title": "Build Slides and MindNotes collaborative editors",
       "description": "Slides: drag-and-drop slide editor with text, images, shapes, charts. Master layouts. Presenter view with notes. Live link presentation. PPTX import/export. Transitions/animations. MindNotes: dual view (outline + mind map). Four tree layouts. Keyboard-driven editing. Node formatting. Collapse/expand. Export to image/PDF/OPML. Both use Yjs collaboration. See Modules 9-10 in goal.md.",
       "subtasks": [
-        { "description": "Build slide editor with element placement and master layouts", "done": false },
-        { "description": "Implement presenter view and live link presentation", "done": false },
-        { "description": "Build mind map renderer with outline toggle", "done": false },
-        { "description": "Add PPTX import/export and OPML export", "done": false }
+        {
+          "description": "Build slide editor with element placement and master layouts",
+          "done": false
+        },
+        {
+          "description": "Implement presenter view and live link presentation",
+          "done": false
+        },
+        {
+          "description": "Build mind map renderer with outline toggle",
+          "done": false
+        },
+        {
+          "description": "Add PPTX import/export and OPML export",
+          "done": false
+        }
       ],
       "votes": [],
       "comments": [],
       "status": "open",
-      "createdBy": { "iteration": 0, "role": "implementer" },
+      "createdBy": {
+        "iteration": 0,
+        "role": "implementer"
+      },
       "claimedBy": null,
       "splitFrom": null
     },
@@ -321,15 +629,30 @@
       "title": "Build Admin Console and Workplace dashboard",
       "description": "Admin Console: org settings, department management, user management, custom admin roles, SSO/SCIM config, 2FA enforcement, audit logs (180+ days), DLP pattern matching, watermark protection, external communication controls, storage monitoring, room management, app management. Workplace: customizable dashboard with app shortcuts, widgets, role-based layouts. See Module 23 in goal.md (FR-23.1 through FR-23.19).",
       "subtasks": [
-        { "description": "Build admin console with org/user/department management", "done": false },
-        { "description": "Implement audit logging, security policies, DLP", "done": false },
-        { "description": "Build customizable Workplace dashboard with widgets", "done": false },
-        { "description": "Add app management and role-based layouts", "done": false }
+        {
+          "description": "Build admin console with org/user/department management",
+          "done": false
+        },
+        {
+          "description": "Implement audit logging, security policies, DLP",
+          "done": false
+        },
+        {
+          "description": "Build customizable Workplace dashboard with widgets",
+          "done": false
+        },
+        {
+          "description": "Add app management and role-based layouts",
+          "done": false
+        }
       ],
       "votes": [],
       "comments": [],
       "status": "open",
-      "createdBy": { "iteration": 0, "role": "implementer" },
+      "createdBy": {
+        "iteration": 0,
+        "role": "implementer"
+      },
       "claimedBy": null,
       "splitFrom": null
     },
@@ -338,15 +661,30 @@
       "title": "Build Global Search with cross-module indexing",
       "description": "Cmd+K global search across contacts, messages, docs, events, emails, tasks. Category filtering. Advanced operators (from:, to:, in:, filetype:, date ranges, exact phrase). Real-time indexing (searchable within seconds). Permission-aware results. Context snippets. In-page search. Search suggestions and history. Use Meilisearch or PostgreSQL FTS. See Module 20 in goal.md (FR-20.1 through FR-20.8).",
       "subtasks": [
-        { "description": "Set up Meilisearch indexes for all content types", "done": false },
-        { "description": "Build indexing pipeline that syncs content in real-time", "done": false },
-        { "description": "Implement Cmd+K search UI with category filters", "done": false },
-        { "description": "Add advanced operators and permission-aware filtering", "done": false }
+        {
+          "description": "Set up Meilisearch indexes for all content types",
+          "done": false
+        },
+        {
+          "description": "Build indexing pipeline that syncs content in real-time",
+          "done": false
+        },
+        {
+          "description": "Implement Cmd+K search UI with category filters",
+          "done": false
+        },
+        {
+          "description": "Add advanced operators and permission-aware filtering",
+          "done": false
+        }
       ],
       "votes": [],
       "comments": [],
       "status": "open",
-      "createdBy": { "iteration": 0, "role": "implementer" },
+      "createdBy": {
+        "iteration": 0,
+        "role": "implementer"
+      },
       "claimedBy": null,
       "splitFrom": null
     },
@@ -355,15 +693,30 @@
       "title": "Build Open Platform with REST APIs, webhooks, and bot SDK",
       "description": "App registration with App ID + Secret and scopes. Three app forms: Bot, Web App, Gadget. OAuth 2.0 flows. Three token types (app, tenant, user). REST API coverage across all modules. Event subscriptions with webhook delivery (retry + logs). WebSocket event streaming. Interactive message cards (buttons, dropdowns, forms). Card builder tool. Rate limiting. Node.js Bot SDK. API documentation with playground. See Module 24 in goal.md (FR-24.1 through FR-24.14).",
       "subtasks": [
-        { "description": "Build app registration and OAuth token management", "done": false },
-        { "description": "Implement event subscription and webhook delivery system", "done": false },
-        { "description": "Create interactive message card framework", "done": false },
-        { "description": "Build Bot SDK and API documentation playground", "done": false }
+        {
+          "description": "Build app registration and OAuth token management",
+          "done": false
+        },
+        {
+          "description": "Implement event subscription and webhook delivery system",
+          "done": false
+        },
+        {
+          "description": "Create interactive message card framework",
+          "done": false
+        },
+        {
+          "description": "Build Bot SDK and API documentation playground",
+          "done": false
+        }
       ],
       "votes": [],
       "comments": [],
       "status": "open",
-      "createdBy": { "iteration": 0, "role": "implementer" },
+      "createdBy": {
+        "iteration": 0,
+        "role": "implementer"
+      },
       "claimedBy": null,
       "splitFrom": null
     },
@@ -372,15 +725,30 @@
       "title": "Build Buzz, Translation, and AI features as cross-cutting services",
       "description": "Buzz: urgent notification escalation (in-app, SMS, phone call via Twilio). Rate limiting. Translation: 100+ source languages, 18 targets. Auto-translate toggle. Message, doc, email, meeting subtitle translation. Pluggable backend (DeepL/Google/LibreTranslate). AI Features: Whisper transcription, meeting summaries, smart compose, doc summarization, AI writing assistant, smart scheduling. Pluggable LLM backend (OpenAI/Anthropic/Ollama). Usage quotas. See Modules 3, 21, 22 in goal.md.",
       "subtasks": [
-        { "description": "Implement Buzz notification system with multi-channel delivery", "done": false },
-        { "description": "Build translation service with pluggable backend", "done": false },
-        { "description": "Implement AI writing assistant and smart compose", "done": false },
-        { "description": "Add pluggable LLM backend with usage quotas", "done": false }
+        {
+          "description": "Implement Buzz notification system with multi-channel delivery",
+          "done": false
+        },
+        {
+          "description": "Build translation service with pluggable backend",
+          "done": false
+        },
+        {
+          "description": "Implement AI writing assistant and smart compose",
+          "done": false
+        },
+        {
+          "description": "Add pluggable LLM backend with usage quotas",
+          "done": false
+        }
       ],
       "votes": [],
       "comments": [],
       "status": "open",
-      "createdBy": { "iteration": 0, "role": "implementer" },
+      "createdBy": {
+        "iteration": 0,
+        "role": "implementer"
+      },
       "claimedBy": null,
       "splitFrom": null
     },
@@ -389,15 +757,37 @@
       "title": "Build frontend shell with three-panel layout and navigation",
       "description": "Three-panel desktop layout matching Lark: left sidebar (navigation rail + content list), center panel (active content), right panel (contextual info). Navigation rail with icons for all modules. Responsive breakpoints. Light/dark theme with system detection. Custom org branding (logo, accent color). Keyboard shortcuts (Cmd+K search, etc.). PWA support. This connects all module UIs into a unified app experience.",
       "subtasks": [
-        { "description": "Build three-panel layout shell with resizable panels", "done": false },
-        { "description": "Implement navigation rail with module routing", "done": false },
-        { "description": "Add light/dark theme with Tailwind + Radix", "done": false },
-        { "description": "Implement keyboard shortcuts and PWA manifest", "done": false }
+        {
+          "description": "Build three-panel layout shell with resizable panels",
+          "done": false
+        },
+        {
+          "description": "Implement navigation rail with module routing",
+          "done": false
+        },
+        {
+          "description": "Add light/dark theme with Tailwind + Radix",
+          "done": false
+        },
+        {
+          "description": "Implement keyboard shortcuts and PWA manifest",
+          "done": false
+        }
       ],
-      "votes": [],
+      "votes": [
+        {
+          "iteration": 1,
+          "role": "implementer",
+          "value": 1,
+          "reason": "Should be done early (after T-001) so module UIs have a shell to live in. Could parallelize with T-002."
+        }
+      ],
       "comments": [],
       "status": "open",
-      "createdBy": { "iteration": 0, "role": "implementer" },
+      "createdBy": {
+        "iteration": 0,
+        "role": "implementer"
+      },
       "claimedBy": null,
       "splitFrom": null
     }
