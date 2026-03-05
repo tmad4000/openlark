@@ -161,8 +161,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 10,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created /login page following same patterns as registration page. Form includes email and password fields with client-side validation. On submit, calls POST /api/auth/login via Next.js API proxy. On success, stores session token in cookie and redirects to /app. On error, displays error message in red alert box. Includes link to /register for new users. Typecheck passes. Page verified rendering at localhost:3000/login with correct elements."
     },
     {
       "id": "US-011",
