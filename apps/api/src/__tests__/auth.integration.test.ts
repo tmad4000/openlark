@@ -14,7 +14,18 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import { buildApp } from "../app.js";
 import type { FastifyInstance } from "fastify";
 import { db } from "../db/index.js";
-import { users, organizations, sessions } from "../db/schema/index.js";
+import {
+  users,
+  organizations,
+  sessions,
+  chats,
+  chatMembers,
+  messages,
+  messageReactions,
+  messageReadReceipts,
+  pins,
+  favorites,
+} from "../db/schema/index.js";
 
 const SKIP_DB_TESTS = process.env.SKIP_DB_TESTS === "true";
 
@@ -33,6 +44,15 @@ describe.skipIf(SKIP_DB_TESTS)("Auth API - Integration", () => {
 
   beforeEach(async () => {
     // Clean up test data before each test (order matters due to foreign keys)
+    // Messenger tables first (they reference auth tables)
+    await db.delete(favorites);
+    await db.delete(pins);
+    await db.delete(messageReadReceipts);
+    await db.delete(messageReactions);
+    await db.delete(messages);
+    await db.delete(chatMembers);
+    await db.delete(chats);
+    // Then auth tables
     await db.delete(sessions);
     await db.delete(users);
     await db.delete(organizations);

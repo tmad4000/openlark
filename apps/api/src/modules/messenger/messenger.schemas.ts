@@ -99,3 +99,10 @@ export const paginationSchema = z.object({
 });
 
 export type PaginationInput = z.infer<typeof paginationSchema>;
+
+// Pin message schema
+export const pinMessageSchema = z.object({
+  messageId: z.string().uuid(),
+});
+
+export type PinMessageInput = z.infer<typeof pinMessageSchema>;

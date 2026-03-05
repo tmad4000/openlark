@@ -10,6 +10,7 @@ import {
   editMessageSchema,
   reactionSchema,
   paginationSchema,
+  pinMessageSchema,
 } from "./messenger.schemas.js";
 import { authenticate } from "../auth/middleware.js";
 import { formatZodError } from "../../utils/validation.js";
@@ -562,28 +563,28 @@ export async function messengerRoutes(app: FastifyInstance) {
   app.post<{ Params: { chatId: string } }>(
     "/chats/:chatId/pins",
     async (req, reply) => {
-      const { messageId } = req.body as { messageId: string };
-      if (!messageId) {
-        return reply.status(400).send({
-          code: "VALIDATION_ERROR",
-          message: "messageId is required",
-        });
+      try {
+        const input = pinMessageSchema.parse(req.body);
+        const pinned = await messengerService.pinMessage(
+          req.params.chatId,
+          input.messageId,
+          req.user!.id
+        );
+
+        if (!pinned) {
+          return reply.status(403).send({
+            code: "FORBIDDEN",
+            message: "You do not have permission to pin messages",
+          });
+        }
+
+        return reply.status(201).send({ data: { success: true } });
+      } catch (error) {
+        if (error instanceof ZodError) {
+          return reply.status(400).send(formatZodError(error));
+        }
+        throw error;
       }
-
-      const pinned = await messengerService.pinMessage(
-        req.params.chatId,
-        messageId,
-        req.user!.id
-      );
-
-      if (!pinned) {
-        return reply.status(403).send({
-          code: "FORBIDDEN",
-          message: "You do not have permission to pin messages",
-        });
-      }
-
-      return reply.status(201).send({ data: { success: true } });
     }
   );
 
