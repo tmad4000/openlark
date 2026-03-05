@@ -2,6 +2,7 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import sensible from "@fastify/sensible";
 import { config } from "./config.js";
+import { authRoutes } from "./modules/auth/index.js";
 
 export async function buildApp() {
   const app = Fastify({
@@ -30,8 +31,10 @@ export async function buildApp() {
     async (api) => {
       api.get("/ping", async () => ({ pong: true }));
 
-      // Module routes will be registered here:
-      // api.register(authRoutes, { prefix: '/auth' });
+      // Auth module
+      api.register(authRoutes, { prefix: "/auth" });
+
+      // Future module routes:
       // api.register(messengerRoutes, { prefix: '/messenger' });
       // etc.
     },

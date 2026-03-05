@@ -28,6 +28,27 @@ Started: Wed Mar  4 13:58:43 MST 2026
 - `pnpm dev` / `pnpm build` / `pnpm test` / `pnpm lint` - via turbo
 - `pnpm docker:up` / `pnpm docker:down` - Docker services
 - `pnpm db:migrate` / `pnpm db:seed` - Database operations
+- `SKIP_DB_TESTS=true pnpm test` - Skip integration tests requiring DB
+
+### Module Structure (Iteration 2)
+- Modules live in `apps/api/src/modules/<module-name>/`
+- Each module has: `index.ts` (exports), `<name>.routes.ts`, `<name>.service.ts`, `<name>.schemas.ts`
+- Routes use Fastify plugin pattern: `async function routes(app: FastifyInstance) { ... }`
+- Schemas use Zod for validation
+- Services contain business logic and database operations
+
+### Auth Patterns (Iteration 2)
+- JWT tokens in Authorization header: `Bearer <token>`
+- Session stored in DB with token hash (not raw token)
+- User password hashed with bcrypt (12 rounds)
+- Sensitive fields (passwordHash, totpSecret) stripped from API responses
+
+### Database Schema (Iteration 2)
+- Drizzle ORM with PostgreSQL
+- Schema files in `apps/api/src/db/schema/`
+- All tables have: `id` (uuid), `createdAt`, `updatedAt`
+- Multi-tenant: all user-facing tables have `org_id`
+- Soft deletes: `deletedAt` timestamp, filter with `isNull(table.deletedAt)`
 
 ---
 
@@ -58,5 +79,59 @@ None - the original structure was correct, just needed tooling fixes.
 - **New discovery**: Vitest exits with code 1 when no tests found unless `passWithNoTests: true` is set
 - **Reinforced pattern**: Use `app.inject()` in Fastify tests for HTTP testing
 - **Self-reflection**: The monorepo foundation was already well-built; issues were only in tooling configuration. Future iterations can build on this solid base.
+
+---
+
+## 2026-03-05 - Iteration 2 - T-002
+
+### What was implemented
+Auth & Identity module foundation (subtasks 1-2 of T-002):
+
+1. **Database schema** (`apps/api/src/db/schema/auth.ts`):
+   - Organizations, Users, Departments, DepartmentMembers, Sessions, APIKeys, MagicLinks tables
+   - Enums: user_status, org_role, plan_type
+   - Relations defined for Drizzle ORM
+   - Proper indexes on org_id, foreign keys
+
+2. **Auth service** (`apps/api/src/modules/auth/auth.service.ts`):
+   - Password hashing with bcrypt (12 rounds)
+   - JWT generation and verification
+   - Session management (create, revoke, validate)
+   - Register flow: creates org + user as primary_admin
+   - Login flow: validates credentials, creates session
+
+3. **Auth routes** (`apps/api/src/modules/auth/auth.routes.ts`):
+   - POST /auth/register - Create org + user
+   - POST /auth/login - Authenticate and get token
+   - POST /auth/logout - Revoke session (auth required)
+   - GET /auth/me - Get current user (auth required)
+   - Auth middleware validates JWT and session
+
+4. **Validation schemas** (`apps/api/src/modules/auth/auth.schemas.ts`):
+   - Password requirements: min 8 chars, uppercase, lowercase, number
+   - Email validation
+
+### Files changed
+- `apps/api/src/app.ts` - Register auth routes
+- `apps/api/src/db/schema/index.ts` - Export auth schema
+- `apps/api/src/db/schema/auth.ts` - New (schema definitions)
+- `apps/api/src/modules/auth/*.ts` - New (module files)
+- `apps/api/src/__tests__/auth.test.ts` - New (unit tests)
+- `apps/api/src/__tests__/auth.integration.test.ts` - New (integration tests)
+
+### Tests added
+- **14 unit tests** for validation and auth guards (run without DB)
+- **6 integration tests** for full auth flows (skipped when `SKIP_DB_TESTS=true`)
+
+### Plan deviations
+- Subtasks 3-6 (RLS, magic link, 2FA, departments, API keys) deferred to future iterations
+- Integration tests use SKIP_DB_TESTS env var since Docker wasn't available
+
+### Learnings for future iterations
+- **New pattern**: Module structure with index.ts, routes, service, schemas
+- **New pattern**: Separate unit tests (validation) from integration tests (DB operations)
+- **New pattern**: Use `describe.skipIf()` for conditional test suites
+- **Reinforced pattern**: `app.inject()` for Fastify HTTP testing
+- **Self-reflection**: Breaking T-002 into smaller iterations was necessary - the task has 6 subtasks. Completed 2/6 this iteration.
 
 ---

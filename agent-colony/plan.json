@@ -52,11 +52,11 @@
       "subtasks": [
         {
           "description": "Create PostgreSQL schema for User, Organization, Department, Session, APIKey",
-          "done": false
+          "done": true
         },
         {
           "description": "Implement registration, login, logout with bcrypt + JWT",
-          "done": false
+          "done": true
         },
         {
           "description": "Add row-level security and org_id tenant isolation",
@@ -81,15 +81,24 @@
           "role": "implementer",
           "value": 1,
           "reason": "Second priority after T-001. All modules depend on auth, multi-tenant isolation, and user entities."
+        },
+        {
+          "iteration": 2,
+          "role": "implementer",
+          "value": 1,
+          "reason": "Auth is the clear next priority. All module dependencies require users and orgs. Infrastructure is solid. Dependencies installed."
         }
       ],
       "comments": [],
-      "status": "open",
+      "status": "in-progress",
       "createdBy": {
         "iteration": 0,
         "role": "implementer"
       },
-      "claimedBy": null,
+      "claimedBy": {
+        "iteration": 2,
+        "role": "implementer"
+      },
       "splitFrom": null
     },
     {
@@ -780,6 +789,12 @@
           "role": "implementer",
           "value": 1,
           "reason": "Should be done early (after T-001) so module UIs have a shell to live in. Could parallelize with T-002."
+        },
+        {
+          "iteration": 2,
+          "role": "implementer",
+          "value": -1,
+          "reason": "Frontend shell depends on auth routes existing first. No point building navigation to non-existent features."
         }
       ],
       "comments": [],
@@ -794,7 +809,14 @@
   ],
   "metadata": {
     "createdAt": "2026-03-04T21:00:00Z",
-    "totalIterations": 0,
-    "iterationLog": []
+    "totalIterations": 1,
+    "iterationLog": [
+      {
+        "iteration": 1,
+        "role": "implementer",
+        "taskWorked": "T-001",
+        "contextCompacted": false
+      }
+    ]
   }
 }
