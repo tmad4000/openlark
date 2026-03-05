@@ -3,7 +3,7 @@ import jwt from "jsonwebtoken";
 import { db } from "../../db/index.js";
 import { users, organizations, sessions } from "../../db/schema/index.js";
 import { config } from "../../config.js";
-import { eq, and, isNull } from "drizzle-orm";
+import { eq, and, isNull, gt } from "drizzle-orm";
 import type { User, Organization } from "../../db/schema/auth.js";
 import crypto from "crypto";
 
@@ -288,7 +288,8 @@ export class AuthService {
    * FR-1.10: Session management — view active sessions
    */
   async getUserSessions(userId: string) {
-    const userSessions = await db
+    const now = new Date();
+    return db
       .select({
         id: sessions.id,
         deviceInfo: sessions.deviceInfo,
@@ -300,14 +301,11 @@ export class AuthService {
       .where(
         and(
           eq(sessions.userId, userId),
-          isNull(sessions.revokedAt)
+          isNull(sessions.revokedAt),
+          gt(sessions.expiresAt, now)
         )
       )
       .orderBy(sessions.createdAt);
-
-    // Filter out expired sessions
-    const now = new Date();
-    return userSessions.filter((s) => s.expiresAt > now);
   }
 
   /**
