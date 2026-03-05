@@ -143,8 +143,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 9,
-      "passes": false,
-      "notes": "Use Tailwind CSS. Clean, minimal design."
+      "passes": true,
+      "notes": "Created /register page with Tailwind CSS v4. Set up Tailwind via @tailwindcss/postcss plugin with globals.css importing tailwindcss. Form includes display name, email, password, and confirm password fields. Client-side validation checks email format (regex), password length (min 8), and password match. API calls go through Next.js rewrites to proxy to localhost:3001. Shows API errors in red alert box. Redirects to /app on success. Added /app placeholder page. Also created postcss.config.mjs and updated next.config.js with API rewrites."
     },
     {
       "id": "US-010",

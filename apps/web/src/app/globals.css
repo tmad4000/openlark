@@ -1,0 +1,9 @@
+@import "tailwindcss";
+
+@theme {
+  /* OpenLark brand colors */
+  --color-primary: #1a73e8;
+  --color-primary-hover: #1557b0;
+  --color-error: #dc2626;
+  --color-error-bg: #fef2f2;
+}
