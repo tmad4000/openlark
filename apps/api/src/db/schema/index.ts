@@ -1,4 +1,6 @@
 // Schema barrel file — each module adds its tables here
 // This is the single import point for all Drizzle schema definitions
 
-export * from "./auth.js";
+// NOTE: Using .ts extension for drizzle-kit compatibility (it uses CJS loader)
+// Runtime TypeScript resolves .js extension correctly via moduleResolution
+export * from "./auth";

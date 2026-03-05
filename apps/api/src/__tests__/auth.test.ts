@@ -205,4 +205,50 @@ describe("Auth API", () => {
       expect(res.statusCode).toBe(401);
     });
   });
+
+  describe("GET /api/v1/auth/sessions - Auth Required", () => {
+    it("rejects access without auth token", async () => {
+      const res = await app.inject({
+        method: "GET",
+        url: "/api/v1/auth/sessions",
+      });
+
+      expect(res.statusCode).toBe(401);
+    });
+
+    it("rejects access with invalid token", async () => {
+      const res = await app.inject({
+        method: "GET",
+        url: "/api/v1/auth/sessions",
+        headers: {
+          authorization: "Bearer invalid-token",
+        },
+      });
+
+      expect(res.statusCode).toBe(401);
+    });
+  });
+
+  describe("DELETE /api/v1/auth/sessions/:id - Auth Required", () => {
+    it("rejects access without auth token", async () => {
+      const res = await app.inject({
+        method: "DELETE",
+        url: "/api/v1/auth/sessions/some-session-id",
+      });
+
+      expect(res.statusCode).toBe(401);
+    });
+
+    it("rejects access with invalid token", async () => {
+      const res = await app.inject({
+        method: "DELETE",
+        url: "/api/v1/auth/sessions/some-session-id",
+        headers: {
+          authorization: "Bearer invalid-token",
+        },
+      });
+
+      expect(res.statusCode).toBe(401);
+    });
+  });
 });

@@ -282,6 +282,63 @@ export class AuthService {
 
     return org || null;
   }
+
+  /**
+   * Get all active sessions for a user
+   * FR-1.10: Session management — view active sessions
+   */
+  async getUserSessions(userId: string) {
+    const userSessions = await db
+      .select({
+        id: sessions.id,
+        deviceInfo: sessions.deviceInfo,
+        ip: sessions.ip,
+        createdAt: sessions.createdAt,
+        expiresAt: sessions.expiresAt,
+      })
+      .from(sessions)
+      .where(
+        and(
+          eq(sessions.userId, userId),
+          isNull(sessions.revokedAt)
+        )
+      )
+      .orderBy(sessions.createdAt);
+
+    // Filter out expired sessions
+    const now = new Date();
+    return userSessions.filter((s) => s.expiresAt > now);
+  }
+
+  /**
+   * Revoke a specific session
+   * FR-1.10: Session management — revoke remotely
+   */
+  async revokeSession(sessionId: string, userId: string): Promise<boolean> {
+    // Verify the session belongs to the user
+    const [session] = await db
+      .select()
+      .from(sessions)
+      .where(
+        and(
+          eq(sessions.id, sessionId),
+          eq(sessions.userId, userId),
+          isNull(sessions.revokedAt)
+        )
+      )
+      .limit(1);
+
+    if (!session) {
+      return false;
+    }
+
+    await db
+      .update(sessions)
+      .set({ revokedAt: new Date() })
+      .where(eq(sessions.id, sessionId));
+
+    return true;
+  }
 }
 
 export const authService = new AuthService();

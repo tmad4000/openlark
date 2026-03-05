@@ -2,11 +2,11 @@
  * Auth Integration Tests
  *
  * These tests require a running PostgreSQL database.
- * They are skipped if DATABASE_URL is not configured or the database is unavailable.
+ * They are skipped if SKIP_DB_TESTS=true is set.
  *
  * To run:
  * 1. Start Docker: pnpm docker:up
- * 2. Run migrations: pnpm db:migrate
+ * 2. Run migrations: pnpm db:migrate (or drizzle-kit push)
  * 3. Run tests: pnpm test
  */
 
@@ -15,32 +15,13 @@ import { buildApp } from "../app.js";
 import type { FastifyInstance } from "fastify";
 import { db } from "../db/index.js";
 import { users, organizations, sessions } from "../db/schema/index.js";
-import { sql } from "drizzle-orm";
 
-// Check if database is available
-async function isDatabaseAvailable(): Promise<boolean> {
-  try {
-    await db.execute(sql`SELECT 1`);
-    return true;
-  } catch {
-    return false;
-  }
-}
+const SKIP_DB_TESTS = process.env.SKIP_DB_TESTS === "true";
 
-describe.skipIf(
-  process.env.SKIP_DB_TESTS === "true"
-)("Auth API - Integration", async () => {
+describe.skipIf(SKIP_DB_TESTS)("Auth API - Integration", () => {
   let app: FastifyInstance;
-  let dbAvailable = false;
 
   beforeAll(async () => {
-    dbAvailable = await isDatabaseAvailable();
-    if (!dbAvailable) {
-      console.log(
-        "⚠️  Skipping integration tests: Database not available"
-      );
-      return;
-    }
     app = await buildApp();
   });
 
@@ -51,14 +32,13 @@ describe.skipIf(
   });
 
   beforeEach(async () => {
-    if (!dbAvailable) return;
-    // Clean up test data before each test
+    // Clean up test data before each test (order matters due to foreign keys)
     await db.delete(sessions);
     await db.delete(users);
     await db.delete(organizations);
   });
 
-  describe.skipIf(!dbAvailable)("POST /api/v1/auth/register", () => {
+  describe("POST /api/v1/auth/register", () => {
     it("creates a new organization and user with valid data", async () => {
       const res = await app.inject({
         method: "POST",
@@ -82,7 +62,7 @@ describe.skipIf(
       expect(body.data.user.passwordHash).toBeUndefined();
     });
 
-    it("rejects duplicate email within same org", async () => {
+    it("allows same email in different organizations", async () => {
       // First registration
       await app.inject({
         method: "POST",
@@ -94,7 +74,7 @@ describe.skipIf(
         },
       });
 
-      // Try to register same email
+      // Try to register same email with different org
       const res = await app.inject({
         method: "POST",
         url: "/api/v1/auth/register",
@@ -111,7 +91,7 @@ describe.skipIf(
     });
   });
 
-  describe.skipIf(!dbAvailable)("POST /api/v1/auth/login", () => {
+  describe("POST /api/v1/auth/login", () => {
     it("logs in with valid credentials", async () => {
       // Register first
       await app.inject({
@@ -183,7 +163,7 @@ describe.skipIf(
     });
   });
 
-  describe.skipIf(!dbAvailable)("Auth flow", () => {
+  describe("Auth flow", () => {
     it("completes full register -> login -> me -> logout flow", async () => {
       // Register
       const regRes = await app.inject({
@@ -230,6 +210,198 @@ describe.skipIf(
         },
       });
       expect(postLogoutRes.statusCode).toBe(401);
+    });
+  });
+
+  describe("Session management (FR-1.10)", () => {
+    it("lists active sessions for the user", async () => {
+      // Register
+      const regRes = await app.inject({
+        method: "POST",
+        url: "/api/v1/auth/register",
+        payload: {
+          email: "sessions@test.com",
+          password: "SecurePass123!",
+          orgName: "Sessions Test Org",
+        },
+      });
+      const regBody = JSON.parse(regRes.body);
+      const token = regBody.data.token;
+
+      // Get sessions
+      const sessionsRes = await app.inject({
+        method: "GET",
+        url: "/api/v1/auth/sessions",
+        headers: {
+          authorization: `Bearer ${token}`,
+        },
+      });
+
+      expect(sessionsRes.statusCode).toBe(200);
+      const sessionsBody = JSON.parse(sessionsRes.body);
+      expect(sessionsBody.data.sessions).toHaveLength(1);
+      expect(sessionsBody.data.sessions[0].isCurrent).toBe(true);
+    });
+
+    it("shows multiple sessions when logged in from multiple devices", async () => {
+      // Register
+      const regRes = await app.inject({
+        method: "POST",
+        url: "/api/v1/auth/register",
+        payload: {
+          email: "multi@test.com",
+          password: "SecurePass123!",
+          orgName: "Multi Session Org",
+        },
+      });
+      expect(regRes.statusCode).toBe(201);
+      const regBody = JSON.parse(regRes.body);
+      const token1 = regBody.data.token;
+
+      // Login again (simulating another device)
+      await app.inject({
+        method: "POST",
+        url: "/api/v1/auth/login",
+        payload: {
+          email: "multi@test.com",
+          password: "SecurePass123!",
+        },
+      });
+
+      // Get sessions using first token
+      const sessionsRes = await app.inject({
+        method: "GET",
+        url: "/api/v1/auth/sessions",
+        headers: {
+          authorization: `Bearer ${token1}`,
+        },
+      });
+
+      expect(sessionsRes.statusCode).toBe(200);
+      const sessionsBody = JSON.parse(sessionsRes.body);
+      expect(sessionsBody.data.sessions).toHaveLength(2);
+
+      // Exactly one should be marked as current
+      const currentSessions = sessionsBody.data.sessions.filter(
+        (s: { isCurrent: boolean }) => s.isCurrent
+      );
+      expect(currentSessions).toHaveLength(1);
+    });
+
+    it("revokes another session but not current one", async () => {
+      // Register
+      const regRes = await app.inject({
+        method: "POST",
+        url: "/api/v1/auth/register",
+        payload: {
+          email: "revoke@test.com",
+          password: "SecurePass123!",
+          orgName: "Revoke Test Org",
+        },
+      });
+      expect(regRes.statusCode).toBe(201);
+      const regBody = JSON.parse(regRes.body);
+      const token1 = regBody.data.token;
+      const session1Id = regBody.data.session.id;
+
+      // Login again
+      const loginRes = await app.inject({
+        method: "POST",
+        url: "/api/v1/auth/login",
+        payload: {
+          email: "revoke@test.com",
+          password: "SecurePass123!",
+        },
+      });
+      const loginBody = JSON.parse(loginRes.body);
+      const token2 = loginBody.data.token;
+
+      // Revoke first session from second session
+      const revokeRes = await app.inject({
+        method: "DELETE",
+        url: `/api/v1/auth/sessions/${session1Id}`,
+        headers: {
+          authorization: `Bearer ${token2}`,
+        },
+      });
+      expect(revokeRes.statusCode).toBe(200);
+
+      // First session should no longer work
+      const meRes = await app.inject({
+        method: "GET",
+        url: "/api/v1/auth/me",
+        headers: {
+          authorization: `Bearer ${token1}`,
+        },
+      });
+      expect(meRes.statusCode).toBe(401);
+
+      // Second session should still work
+      const me2Res = await app.inject({
+        method: "GET",
+        url: "/api/v1/auth/me",
+        headers: {
+          authorization: `Bearer ${token2}`,
+        },
+      });
+      expect(me2Res.statusCode).toBe(200);
+    });
+
+    it("cannot revoke current session via DELETE endpoint", async () => {
+      // Register
+      const regRes = await app.inject({
+        method: "POST",
+        url: "/api/v1/auth/register",
+        payload: {
+          email: "current@test.com",
+          password: "SecurePass123!",
+          orgName: "Current Test Org",
+        },
+      });
+      expect(regRes.statusCode).toBe(201);
+      const regBody = JSON.parse(regRes.body);
+      const token = regBody.data.token;
+      const sessionId = regBody.data.session.id;
+
+      // Try to revoke current session
+      const revokeRes = await app.inject({
+        method: "DELETE",
+        url: `/api/v1/auth/sessions/${sessionId}`,
+        headers: {
+          authorization: `Bearer ${token}`,
+        },
+      });
+      expect(revokeRes.statusCode).toBe(400);
+      const revokeBody = JSON.parse(revokeRes.body);
+      expect(revokeBody.code).toBe("CANNOT_REVOKE_CURRENT");
+    });
+
+    it("returns 404 when revoking non-existent session", async () => {
+      // Register
+      const regRes = await app.inject({
+        method: "POST",
+        url: "/api/v1/auth/register",
+        payload: {
+          email: "notfound@test.com",
+          password: "SecurePass123!",
+          orgName: "Not Found Test Org",
+        },
+      });
+      expect(regRes.statusCode).toBe(201);
+      const regBody = JSON.parse(regRes.body);
+      const token = regBody.data.token;
+
+      // Try to revoke non-existent session
+      const revokeRes = await app.inject({
+        method: "DELETE",
+        url: "/api/v1/auth/sessions/00000000-0000-0000-0000-000000000000",
+        headers: {
+          authorization: `Bearer ${token}`,
+        },
+      });
+      expect(revokeRes.statusCode).toBe(404);
+      const revokeBody = JSON.parse(revokeRes.body);
+      expect(revokeBody.code).toBe("SESSION_NOT_FOUND");
     });
   });
 });

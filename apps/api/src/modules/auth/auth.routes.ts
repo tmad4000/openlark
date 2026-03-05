@@ -4,6 +4,7 @@ import { authService } from "./auth.service.js";
 import { registerSchema, loginSchema } from "./auth.schemas.js";
 import { authenticate } from "./middleware.js";
 import { ZodError } from "zod";
+import { config } from "../../config.js";
 
 function formatZodError(error: ZodError) {
   return {
@@ -20,12 +21,16 @@ export async function authRoutes(app: FastifyInstance) {
   // Register rate-limited routes (register, login) in a sub-scope
   // This keeps rate limiting isolated from authenticated routes
   await app.register(async (rateLimitedApp) => {
+    // Higher limit in test mode to avoid test interference
+    const isTest = config.NODE_ENV === "test";
     await rateLimitedApp.register(rateLimit, {
-      max: 10, // 10 requests per minute
+      max: isTest ? 1000 : 10, // 10 requests per minute in production, 1000 in test
       timeWindow: "1 minute",
-      errorResponseBuilder: () => ({
+      errorResponseBuilder: (_request, context) => ({
+        statusCode: 429,
+        error: "Too Many Requests",
         code: "RATE_LIMITED",
-        message: "Too many requests. Please try again later.",
+        message: `Too many requests. Please try again in ${context.after}.`,
       }),
     });
 
@@ -107,4 +112,50 @@ export async function authRoutes(app: FastifyInstance) {
       },
     });
   });
+
+  // GET /auth/sessions - List user's active sessions
+  // FR-1.10: Session management — view active sessions
+  app.get("/sessions", { preHandler: authenticate }, async (req, reply) => {
+    const sessions = await authService.getUserSessions(req.user!.id);
+
+    // Mark current session
+    const currentSessionId = req.user!.sessionId;
+    const sessionsWithCurrent = sessions.map((s) => ({
+      ...s,
+      isCurrent: s.id === currentSessionId,
+    }));
+
+    return reply.send({ data: { sessions: sessionsWithCurrent } });
+  });
+
+  // DELETE /auth/sessions/:id - Revoke a specific session
+  // FR-1.10: Session management — revoke remotely
+  app.delete<{ Params: { id: string } }>(
+    "/sessions/:id",
+    { preHandler: authenticate },
+    async (req, reply) => {
+      const sessionId = req.params.id;
+      const userId = req.user!.id;
+      const currentSessionId = req.user!.sessionId;
+
+      // Prevent revoking current session via this endpoint (use /logout instead)
+      if (sessionId === currentSessionId) {
+        return reply.status(400).send({
+          code: "CANNOT_REVOKE_CURRENT",
+          message: "Cannot revoke current session. Use logout instead.",
+        });
+      }
+
+      const revoked = await authService.revokeSession(sessionId, userId);
+
+      if (!revoked) {
+        return reply.status(404).send({
+          code: "SESSION_NOT_FOUND",
+          message: "Session not found or already revoked",
+        });
+      }
+
+      return reply.send({ data: { success: true } });
+    }
+  );
 }
