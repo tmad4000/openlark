@@ -87,16 +87,44 @@
           "role": "implementer",
           "value": 1,
           "reason": "Auth is the clear next priority. All module dependencies require users and orgs. Infrastructure is solid. Dependencies installed."
+        },
+        {
+          "iteration": 3,
+          "role": "reviewer",
+          "value": 1,
+          "reason": "Code quality is solid. Auth patterns are correct (bcrypt 12 rounds, JWT with session validation, sensitive field stripping). 2/6 subtasks done. RLS and remaining features (2FA, magic link, departments, API keys) can continue with same patterns."
+        },
+        {
+          "iteration": 4,
+          "role": "implementer",
+          "value": 1,
+          "reason": "Continuing T-002 subtask 3 (RLS). Will also address reviewer feedback: extract authenticate middleware and add rate limiting. Auth foundation must be solid before other modules."
         }
       ],
-      "comments": [],
+      "comments": [
+        {
+          "iteration": 3,
+          "role": "reviewer",
+          "message": "Reviewer note: The authenticate middleware in auth.routes.ts:32-67 should be extracted to a shared module (e.g., modules/auth/middleware.ts) since all protected routes across future modules will need it. Do this when implementing subtask 3 (RLS)."
+        },
+        {
+          "iteration": 3,
+          "role": "reviewer",
+          "message": "Reviewer note: Consider adding rate limiting to auth endpoints (login, register) before moving to T-003. FR-1.14 mentions password policies but rate limiting is implicit in any secure auth system. Could use @fastify/rate-limit."
+        },
+        {
+          "iteration": 4,
+          "role": "implementer",
+          "message": "Iteration 4: Extracted authenticate middleware to modules/auth/middleware.ts for reuse by other modules. Added requireAdmin and requirePrimaryAdmin middleware. Added rate limiting (10 req/min) to login/register endpoints using @fastify/rate-limit. Fixed TypeScript strict mode errors in auth.service.ts."
+        }
+      ],
       "status": "in-progress",
       "createdBy": {
         "iteration": 0,
         "role": "implementer"
       },
       "claimedBy": {
-        "iteration": 2,
+        "iteration": 4,
         "role": "implementer"
       },
       "splitFrom": null
@@ -127,7 +155,14 @@
           "done": false
         }
       ],
-      "votes": [],
+      "votes": [
+        {
+          "iteration": 3,
+          "role": "reviewer",
+          "value": 1,
+          "reason": "Ready to start once T-002 is further along. Messenger depends on auth but can begin schema/routing work in parallel with T-002 subtask 3+."
+        }
+      ],
       "comments": [],
       "status": "open",
       "createdBy": {
@@ -797,7 +832,13 @@
           "reason": "Frontend shell depends on auth routes existing first. No point building navigation to non-existent features."
         }
       ],
-      "comments": [],
+      "comments": [
+        {
+          "iteration": 3,
+          "role": "reviewer",
+          "message": "Reviewer note: The -1 vote is valid timing feedback, not a quality issue. Frontend shell can start once T-002 has the /auth/me endpoint working (done). Suggest small scope: just layout + auth screens first, expand as modules land."
+        }
+      ],
       "status": "open",
       "createdBy": {
         "iteration": 0,
@@ -809,12 +850,24 @@
   ],
   "metadata": {
     "createdAt": "2026-03-04T21:00:00Z",
-    "totalIterations": 1,
+    "totalIterations": 3,
     "iterationLog": [
       {
         "iteration": 1,
         "role": "implementer",
         "taskWorked": "T-001",
+        "contextCompacted": false
+      },
+      {
+        "iteration": 2,
+        "role": "implementer",
+        "taskWorked": "T-002",
+        "contextCompacted": false
+      },
+      {
+        "iteration": 3,
+        "role": "reviewer",
+        "taskWorked": null,
         "contextCompacted": false
       }
     ]

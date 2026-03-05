@@ -50,6 +50,24 @@ Started: Wed Mar  4 13:58:43 MST 2026
 - Multi-tenant: all user-facing tables have `org_id`
 - Soft deletes: `deletedAt` timestamp, filter with `isNull(table.deletedAt)`
 
+### Rate Limiting (Iteration 4)
+- Use `@fastify/rate-limit` for brute force protection
+- Pattern: Register in sub-scope to isolate from other routes
+  ```ts
+  await app.register(async (rateLimitedApp) => {
+    await rateLimitedApp.register(rateLimit, { max: 10, timeWindow: "1 minute" });
+    rateLimitedApp.post("/login", handler);
+  });
+  ```
+- Auth endpoints: 10 req/minute
+- Return `{ code: "RATE_LIMITED", message: "..." }` on 429
+
+### Middleware Pattern (Iteration 4)
+- Auth middleware in `modules/auth/middleware.ts`
+- Export: `authenticate`, `requireAdmin`, `requirePrimaryAdmin`
+- Use as `preHandler`: `{ preHandler: authenticate }`
+- `req.user` available after authenticate (typed via module declaration)
+
 ---
 
 ## 2026-03-05 - Iteration 1 - T-001
@@ -133,5 +151,113 @@ Auth & Identity module foundation (subtasks 1-2 of T-002):
 - **New pattern**: Use `describe.skipIf()` for conditional test suites
 - **Reinforced pattern**: `app.inject()` for Fastify HTTP testing
 - **Self-reflection**: Breaking T-002 into smaller iterations was necessary - the task has 6 subtasks. Completed 2/6 this iteration.
+
+---
+
+## 2026-03-05 - Iteration 3 - REVIEW
+
+### Code quality observations
+
+**What looks good:**
+- Auth module follows clean architecture: routes → service → schema separation
+- Security patterns are correct:
+  - bcrypt with 12 rounds (industry standard)
+  - JWT tokens with session validation (double-check prevents token reuse after logout)
+  - Sensitive fields (`passwordHash`, `totpSecret`) stripped before API responses
+  - Email normalized to lowercase before storage
+- Database schema is well-designed:
+  - Proper indexes on `org_id` foreign keys
+  - Partial unique index on `users_email_org_idx` filters out soft-deleted records
+  - Relations defined for Drizzle ORM query builder
+- Test coverage is appropriate: 14 unit tests for validation, 6 integration tests for flows
+- Code is readable with minimal boilerplate
+
+**Areas for improvement (not blockers):**
+1. `apps/api/src/modules/auth/auth.routes.ts:32-67`: The `authenticate` middleware is defined inline. When T-003 (Messenger) and other modules need auth, this will be duplicated. Extract to `modules/auth/middleware.ts` and export.
+2. No rate limiting on `/auth/login` and `/auth/register`. Brute force protection is expected in production auth. Consider `@fastify/rate-limit` before going too far.
+3. `config.ts:19`: `JWT_SECRET` has a default value (`dev-secret-change-in-production`). This is fine for dev, but should have validation in production mode to fail startup if not set.
+
+### Commit history review
+- 5 commits total on branch
+- Commit messages follow conventional commits (`feat(auth):`, `feat:`, `chore:`)
+- Each commit is atomic (T-001 setup, T-002 auth)
+- No fixup commits or WIP — clean history
+
+### Plan assessment
+
+**T-002 (in-progress):** 2/6 subtasks done. Remaining work (RLS, 2FA, magic link, departments, API keys) is clearly scoped. +1 vote added.
+
+**T-003 (open, Messenger):** Ready to begin. Schema work can start in parallel with T-002 subtask 3. +1 vote added.
+
+**T-023 (net 0 votes):** Has conflicting +1/-1 votes. The -1 is timing feedback (don't build frontend shell before backend routes exist), not a quality concern. Now that `/auth/me` exists, frontend shell can start with just auth screens. Added clarifying comment.
+
+### Nudges left
+- T-002: Extract `authenticate` middleware to shared location when implementing subtask 3
+- T-002: Add rate limiting to auth endpoints before T-003
+- T-023: Clarified the -1 vote context — timing issue, not rejection
+
+### Tech debt items
+1. No rate limiting on auth endpoints (priority: medium — add before public exposure)
+2. Inline middleware will duplicate across modules (priority: low — refactor when adding T-003)
+3. `next lint` deprecation warning in web package (priority: low — cosmetic)
+
+### Reinforced patterns
+- Module structure (`index.ts`, `routes.ts`, `service.ts`, `schemas.ts`) from Iteration 2 is consistent
+- Test pattern (unit tests always run, integration tests skip when `SKIP_DB_TESTS=true`) working well
+- Fastify plugin pattern for routes is clean and composable
+
+---
+
+## 2026-03-05 - Iteration 4 - T-002 (continued)
+
+### What was implemented
+Addressed reviewer feedback from Iteration 3 and improved auth module foundation:
+
+1. **Extracted middleware** (`apps/api/src/modules/auth/middleware.ts`):
+   - `authenticate`: Validates JWT token and session, attaches `req.user`
+   - `requireAdmin`: Enforces admin or primary_admin role
+   - `requirePrimaryAdmin`: Enforces primary_admin role only
+   - Module declaration extends FastifyRequest type for type-safe `req.user`
+
+2. **Added rate limiting** to auth endpoints:
+   - Installed `@fastify/rate-limit` package
+   - Applied 10 req/minute limit to `/auth/register` and `/auth/login`
+   - Used sub-scope pattern to isolate rate limiting from authenticated routes
+   - Custom error response with `{ code: "RATE_LIMITED", message: "..." }`
+
+3. **Fixed TypeScript strict mode errors** in `auth.service.ts`:
+   - Added null checks for `.returning()` results
+   - Fixed `jwt.sign` expiresIn type issue with type assertion
+   - Fixed regex match indexing with proper type narrowing
+
+### Files changed
+- `apps/api/package.json` - Added @fastify/rate-limit dependency
+- `apps/api/src/modules/auth/middleware.ts` - New (extracted middleware)
+- `apps/api/src/modules/auth/auth.routes.ts` - Refactored to use middleware, added rate limiting
+- `apps/api/src/modules/auth/auth.service.ts` - Fixed TypeScript strict mode errors
+- `apps/api/src/modules/auth/index.ts` - Export middleware functions
+- `apps/api/src/__tests__/middleware.test.ts` - New (middleware unit tests)
+
+### Tests added
+- **5 middleware tests** (4 for authenticate validation, 1 for rate limiting - skipped without DB)
+- All 22 unit tests pass
+
+### Plan deviations
+- Rate limiting test requires DB access (the endpoint queries DB), so it's marked `skipIf(SKIP_DB_TESTS)`
+- Did not implement RLS at database level (requires running Postgres with migrations)
+
+### Learnings for future iterations
+- **New pattern**: Use Fastify sub-scopes to isolate plugin configuration (e.g., rate limiting only for specific routes)
+- **New pattern**: Export middleware from `modules/auth/middleware.ts` for reuse by other modules
+- **Reinforced pattern**: `describe.skipIf()` for tests that need infrastructure not available in unit test mode
+- **Self-reflection**: Should verify `pnpm build` passes before committing - caught TypeScript strict mode errors that weren't visible in tests
+
+### Tech debt addressed
+- ✅ Extracted authenticate middleware (was inline in routes)
+- ✅ Added rate limiting to auth endpoints
+
+### Tech debt remaining
+- `config.ts:19`: JWT_SECRET default value should fail in production mode
+- No database migrations running in CI/test environment
 
 ---

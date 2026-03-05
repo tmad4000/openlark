@@ -48,7 +48,7 @@ export class AuthService {
 
   generateToken(payload: TokenPayload): string {
     return jwt.sign(payload, config.JWT_SECRET, {
-      expiresIn: config.JWT_EXPIRES_IN,
+      expiresIn: config.JWT_EXPIRES_IN as jwt.SignOptions["expiresIn"],
     });
   }
 
@@ -68,6 +68,10 @@ export class AuthService {
       })
       .returning();
 
+    if (!org) {
+      throw new Error("Failed to create organization");
+    }
+
     // Create user as primary admin
     const [user] = await db
       .insert(users)
@@ -81,6 +85,10 @@ export class AuthService {
         emailVerifiedAt: new Date(), // Auto-verify for founder
       })
       .returning();
+
+    if (!user) {
+      throw new Error("Failed to create user");
+    }
 
     // Create session
     const sessionResult = await this.createSession(user.id, user.orgId);
@@ -144,6 +152,10 @@ export class AuthService {
     // Create session
     const sessionResult = await this.createSession(user.id, user.orgId);
 
+    if (!sessionResult) {
+      throw new Error("Failed to create session");
+    }
+
     // Build token
     const token = this.generateToken({
       sub: user.id,
@@ -194,6 +206,10 @@ export class AuthService {
       })
       .returning();
 
+    if (!session) {
+      throw new Error("Failed to create session");
+    }
+
     return session;
   }
 
@@ -204,13 +220,14 @@ export class AuthService {
       // Default to 7 days
       return new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
     }
-    const [, value, unit] = match;
-    const multipliers: Record<string, number> = {
+    const value = match[1]!;
+    const unit = match[2] as "s" | "m" | "h" | "d";
+    const multipliers = {
       s: 1000,
       m: 60 * 1000,
       h: 60 * 60 * 1000,
       d: 24 * 60 * 60 * 1000,
-    };
+    } as const;
     return new Date(now.getTime() + parseInt(value) * multipliers[unit]);
   }
 
