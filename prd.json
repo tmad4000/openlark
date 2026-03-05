@@ -125,8 +125,8 @@
         "Typecheck passes"
       ],
       "priority": 8,
-      "passes": false,
-      "notes": "Hash the token before lookup to prevent timing attacks."
+      "passes": true,
+      "notes": "Created apps/api/src/middleware/auth.ts with authMiddleware function. Reads Authorization: Bearer <token> header, hashes token with SHA-256 before lookup (prevents timing attacks), validates session exists and not expired, loads user (excluding passwordHash) and organization, attaches to request context via Fastify declaration merging. Added POST /auth/logout endpoint that deletes the current session. Typecheck passes."
     },
     {
       "id": "US-009",

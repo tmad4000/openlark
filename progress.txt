@@ -13,3 +13,4 @@
 [2026-03-05 03:12] US-005 — Session and API key schemas — PASS
 [2026-03-05 03:18] US-006 — Auth API - Registration endpoint — PASS
 [2026-03-05 03:21] US-007 — Auth API - Login endpoint — PASS
+[2026-03-05 03:18] US-008 — Auth middleware and session validation — PASS

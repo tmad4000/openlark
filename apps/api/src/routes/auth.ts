@@ -4,6 +4,7 @@ import crypto from "crypto";
 import { db } from "../db";
 import { users, organizations, sessions } from "../db/schema";
 import { eq } from "drizzle-orm";
+import { authMiddleware } from "../middleware/auth";
 
 const BCRYPT_ROUNDS = 12;
 const SESSION_EXPIRY_DAYS = 30;
@@ -195,4 +196,18 @@ export async function authRoutes(fastify: FastifyInstance) {
       token,
     });
   });
+
+  // Logout endpoint - invalidates the current session
+  fastify.post(
+    "/auth/logout",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      // Delete the current session
+      await db.delete(sessions).where(eq(sessions.id, request.sessionId));
+
+      return reply.status(200).send({
+        message: "Logged out successfully",
+      });
+    }
+  );
 }
