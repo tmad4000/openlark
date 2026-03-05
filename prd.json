@@ -178,8 +178,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 11,
-      "passes": false,
-      "notes": "Use Radix UI for dropdown. Lucide icons for nav. Three-panel layout matches Lark desktop."
+      "passes": true,
+      "notes": "Created apps/web/src/app/app/layout.tsx with three-panel structure. Installed lucide-react and @radix-ui/react-dropdown-menu. Navigation rail (56px, bg-gray-900) with 8 icon buttons: Messenger, Calendar, Docs, Tasks, Base, Wiki, Email, Admin using Lucide icons. Active nav item highlighted with blue background. User avatar at bottom with Radix dropdown menu containing Profile, Settings, and Logout options. Session validation via GET /auth/me endpoint (added to API); redirects to /login if no valid session. Resizable sidebar panel (120-400px range) with collapse/expand toggle. Typecheck passes for both web and api packages."
     },
     {
       "id": "US-012",

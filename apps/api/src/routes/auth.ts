@@ -210,4 +210,16 @@ export async function authRoutes(fastify: FastifyInstance) {
       });
     }
   );
+
+  // Get current user endpoint
+  fastify.get(
+    "/auth/me",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      return reply.status(200).send({
+        user: request.user,
+        org: request.org,
+      });
+    }
+  );
 }
