@@ -16,8 +16,8 @@
         "Typecheck passes"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "Use pnpm workspaces. Next.js 15 with App Router. Fastify 5 for API."
+      "passes": true,
+      "notes": "Scaffolded monorepo with apps/web (Next.js 15.5.12), apps/api (Fastify 5), packages/shared. TypeScript strict mode enabled. ESLint + Prettier configured. turbo.json pipelines: build, dev, lint, typecheck. pnpm install succeeds, turbo dev starts both apps (web:3000, api:3001), typecheck passes."
     },
     {
       "id": "US-002",
