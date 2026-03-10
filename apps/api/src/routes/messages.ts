@@ -1,6 +1,6 @@
 import { FastifyInstance } from "fastify";
 import { db } from "../db";
-import { messages, chatMembers, chats, users, messageReadReceipts, messageReactions } from "../db/schema";
+import { messages, chatMembers, chats, users, messageReadReceipts, messageReactions, favorites } from "../db/schema";
 import { eq, and, desc, lt, gt, inArray, sql } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
 import { publish, getChatChannel, getUserPresenceChannel } from "../lib/redis";
@@ -1090,6 +1090,177 @@ export async function messagesRoutes(fastify: FastifyInstance) {
         totalReplies: countResult?.count || 0,
         nextCursor,
         hasMore,
+      });
+    }
+  );
+
+  /**
+   * POST /messages/:id/favorite - Add a message to favorites
+   * Returns: { success: true, favorite: { userId, messageId, createdAt } }
+   */
+  fastify.post<{
+    Params: { id: string };
+  }>(
+    "/messages/:id/favorite",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id: messageId } = request.params;
+
+      // Validate messageId format
+      if (!UUID_REGEX.test(messageId)) {
+        return reply.status(400).send({
+          error: "Invalid message ID format",
+        });
+      }
+
+      const currentUserId = request.user.id;
+
+      // Get the message and verify it exists
+      const [message] = await db
+        .select()
+        .from(messages)
+        .where(eq(messages.id, messageId))
+        .limit(1);
+
+      if (!message) {
+        return reply.status(404).send({
+          error: "Message not found",
+        });
+      }
+
+      // Check user is a member of the chat
+      if (!(await isChatMember(message.chatId, currentUserId))) {
+        return reply.status(403).send({
+          error: "You are not a member of this chat",
+        });
+      }
+
+      // Check if already favorited
+      const [existingFavorite] = await db
+        .select()
+        .from(favorites)
+        .where(
+          and(
+            eq(favorites.userId, currentUserId),
+            eq(favorites.messageId, messageId)
+          )
+        )
+        .limit(1);
+
+      if (existingFavorite) {
+        return reply.status(200).send({
+          success: true,
+          favorite: existingFavorite,
+          alreadyFavorited: true,
+        });
+      }
+
+      // Insert the favorite
+      const [newFavorite] = await db
+        .insert(favorites)
+        .values({
+          userId: currentUserId,
+          messageId,
+        })
+        .returning();
+
+      return reply.status(201).send({
+        success: true,
+        favorite: newFavorite,
+      });
+    }
+  );
+
+  /**
+   * DELETE /messages/:id/favorite - Remove a message from favorites
+   * Returns: { success: true }
+   */
+  fastify.delete<{
+    Params: { id: string };
+  }>(
+    "/messages/:id/favorite",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id: messageId } = request.params;
+
+      // Validate messageId format
+      if (!UUID_REGEX.test(messageId)) {
+        return reply.status(400).send({
+          error: "Invalid message ID format",
+        });
+      }
+
+      const currentUserId = request.user.id;
+
+      // Delete the favorite
+      const result = await db
+        .delete(favorites)
+        .where(
+          and(
+            eq(favorites.userId, currentUserId),
+            eq(favorites.messageId, messageId)
+          )
+        )
+        .returning();
+
+      if (result.length === 0) {
+        return reply.status(404).send({
+          error: "Favorite not found",
+        });
+      }
+
+      return reply.status(200).send({
+        success: true,
+      });
+    }
+  );
+
+  /**
+   * GET /favorites - Get all favorite messages for the current user
+   * Returns: { favorites: Array<{ favorite, message, sender, chat }> }
+   */
+  fastify.get(
+    "/favorites",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const currentUserId = request.user.id;
+
+      // Get all favorites with message, sender, and chat info
+      const favoriteMessages = await db
+        .select({
+          favorite: {
+            userId: favorites.userId,
+            messageId: favorites.messageId,
+            createdAt: favorites.createdAt,
+          },
+          message: {
+            id: messages.id,
+            chatId: messages.chatId,
+            senderId: messages.senderId,
+            type: messages.type,
+            content: messages.content,
+            createdAt: messages.createdAt,
+          },
+          sender: {
+            id: users.id,
+            displayName: users.displayName,
+            avatarUrl: users.avatarUrl,
+          },
+          chat: {
+            id: chats.id,
+            name: chats.name,
+            type: chats.type,
+          },
+        })
+        .from(favorites)
+        .innerJoin(messages, eq(favorites.messageId, messages.id))
+        .innerJoin(users, eq(messages.senderId, users.id))
+        .innerJoin(chats, eq(messages.chatId, chats.id))
+        .where(eq(favorites.userId, currentUserId))
+        .orderBy(desc(favorites.createdAt));
+
+      return reply.status(200).send({
+        favorites: favoriteMessages,
       });
     }
   );

@@ -523,8 +523,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 32,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented pin and favorite functionality. API: POST/DELETE /chats/:id/pins/:messageId for pinning/unpinning, GET /chats/:id/pins for listing; POST/DELETE /messages/:id/favorite for favoriting/unfavoriting, GET /favorites for listing. UI: Added Pin and Star buttons to QuickReactionPicker hover menu with visual feedback. Created PinsPanel accessible via Pin button in chat header showing pinned messages with unpin option. Created FavoritesPanel accessible via Star button in sidebar header showing favorited messages across all chats with navigation to source chat. Used existing pins and favorites schema tables. TypeScript passes."
     },
     {
       "id": "US-033",

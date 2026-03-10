@@ -1,6 +1,6 @@
 import { FastifyInstance } from "fastify";
 import { db } from "../db";
-import { chats, chatMembers, users, messages } from "../db/schema";
+import { chats, chatMembers, users, messages, pins } from "../db/schema";
 import { eq, and, or, inArray, desc, gt, sql, isNull } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
 import { createSystemMessage } from "./messages";
@@ -768,6 +768,227 @@ export async function chatsRoutes(fastify: FastifyInstance) {
       }
 
       return reply.status(200).send({ presence });
+    }
+  );
+
+  /**
+   * POST /chats/:id/pins/:messageId - Pin a message to the chat
+   * Returns: { success: true, pin: { chatId, messageId, pinnedBy, pinnedAt } }
+   */
+  fastify.post<{ Params: { id: string; messageId: string } }>(
+    "/chats/:id/pins/:messageId",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id: chatId, messageId } = request.params;
+
+      // Validate UUID formats
+      if (!UUID_REGEX.test(chatId)) {
+        return reply.status(400).send({
+          error: "Invalid chat ID format",
+        });
+      }
+
+      if (!UUID_REGEX.test(messageId)) {
+        return reply.status(400).send({
+          error: "Invalid message ID format",
+        });
+      }
+
+      const currentUserId = request.user.id;
+
+      // Verify user is a member of this chat
+      const [membership] = await db
+        .select()
+        .from(chatMembers)
+        .where(
+          and(
+            eq(chatMembers.chatId, chatId),
+            eq(chatMembers.userId, currentUserId)
+          )
+        )
+        .limit(1);
+
+      if (!membership) {
+        return reply.status(403).send({
+          error: "Access denied - not a member of this chat",
+        });
+      }
+
+      // Verify the message exists in this chat
+      const [message] = await db
+        .select()
+        .from(messages)
+        .where(and(eq(messages.id, messageId), eq(messages.chatId, chatId)))
+        .limit(1);
+
+      if (!message) {
+        return reply.status(404).send({
+          error: "Message not found in this chat",
+        });
+      }
+
+      // Check if already pinned
+      const [existingPin] = await db
+        .select()
+        .from(pins)
+        .where(and(eq(pins.chatId, chatId), eq(pins.messageId, messageId)))
+        .limit(1);
+
+      if (existingPin) {
+        return reply.status(200).send({
+          success: true,
+          pin: existingPin,
+          alreadyPinned: true,
+        });
+      }
+
+      // Insert the pin
+      const [newPin] = await db
+        .insert(pins)
+        .values({
+          chatId,
+          messageId,
+          pinnedBy: currentUserId,
+        })
+        .returning();
+
+      return reply.status(201).send({
+        success: true,
+        pin: newPin,
+      });
+    }
+  );
+
+  /**
+   * DELETE /chats/:id/pins/:messageId - Unpin a message from the chat
+   * Returns: { success: true }
+   */
+  fastify.delete<{ Params: { id: string; messageId: string } }>(
+    "/chats/:id/pins/:messageId",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id: chatId, messageId } = request.params;
+
+      // Validate UUID formats
+      if (!UUID_REGEX.test(chatId)) {
+        return reply.status(400).send({
+          error: "Invalid chat ID format",
+        });
+      }
+
+      if (!UUID_REGEX.test(messageId)) {
+        return reply.status(400).send({
+          error: "Invalid message ID format",
+        });
+      }
+
+      const currentUserId = request.user.id;
+
+      // Verify user is a member of this chat
+      const [membership] = await db
+        .select()
+        .from(chatMembers)
+        .where(
+          and(
+            eq(chatMembers.chatId, chatId),
+            eq(chatMembers.userId, currentUserId)
+          )
+        )
+        .limit(1);
+
+      if (!membership) {
+        return reply.status(403).send({
+          error: "Access denied - not a member of this chat",
+        });
+      }
+
+      // Delete the pin
+      const result = await db
+        .delete(pins)
+        .where(and(eq(pins.chatId, chatId), eq(pins.messageId, messageId)))
+        .returning();
+
+      if (result.length === 0) {
+        return reply.status(404).send({
+          error: "Pin not found",
+        });
+      }
+
+      return reply.status(200).send({
+        success: true,
+      });
+    }
+  );
+
+  /**
+   * GET /chats/:id/pins - Get all pinned messages in a chat
+   * Returns: { pins: Array<{ pin, message, sender }> }
+   */
+  fastify.get<{ Params: { id: string } }>(
+    "/chats/:id/pins",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id: chatId } = request.params;
+
+      // Validate UUID format
+      if (!UUID_REGEX.test(chatId)) {
+        return reply.status(400).send({
+          error: "Invalid chat ID format",
+        });
+      }
+
+      const currentUserId = request.user.id;
+
+      // Verify user is a member of this chat
+      const [membership] = await db
+        .select()
+        .from(chatMembers)
+        .where(
+          and(
+            eq(chatMembers.chatId, chatId),
+            eq(chatMembers.userId, currentUserId)
+          )
+        )
+        .limit(1);
+
+      if (!membership) {
+        return reply.status(403).send({
+          error: "Access denied - not a member of this chat",
+        });
+      }
+
+      // Get all pinned messages with message content and sender info
+      const pinnedMessages = await db
+        .select({
+          pin: {
+            chatId: pins.chatId,
+            messageId: pins.messageId,
+            pinnedBy: pins.pinnedBy,
+            pinnedAt: pins.pinnedAt,
+          },
+          message: {
+            id: messages.id,
+            chatId: messages.chatId,
+            senderId: messages.senderId,
+            type: messages.type,
+            content: messages.content,
+            createdAt: messages.createdAt,
+          },
+          sender: {
+            id: users.id,
+            displayName: users.displayName,
+            avatarUrl: users.avatarUrl,
+          },
+        })
+        .from(pins)
+        .innerJoin(messages, eq(pins.messageId, messages.id))
+        .innerJoin(users, eq(messages.senderId, users.id))
+        .where(eq(pins.chatId, chatId))
+        .orderBy(desc(pins.pinnedAt));
+
+      return reply.status(200).send({
+        pins: pinnedMessages,
+      });
     }
   );
 }

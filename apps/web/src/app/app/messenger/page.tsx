@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { Search, Plus, MessageCircle, Users, Bell, BellOff, AtSign, Info, Wifi, WifiOff, Loader2, Check, CheckCheck, Circle, MoreHorizontal, Reply, X, MessageSquare } from "lucide-react";
+import { Search, Plus, MessageCircle, Users, Bell, BellOff, AtSign, Info, Wifi, WifiOff, Loader2, Check, CheckCheck, Circle, MoreHorizontal, Reply, X, MessageSquare, Pin, Star } from "lucide-react";
 import * as Dialog from "@radix-ui/react-dialog";
 import MessageInput, { MentionUser } from "@/components/MessageInput";
 import { useWebSocket, ConnectionStatus, WebSocketMessage, TypingEvent, PresenceEvent, ReadReceiptEvent, ReactionEvent } from "@/hooks/useWebSocket";
@@ -243,10 +243,18 @@ function QuickReactionPicker({
   onSelect,
   onOpenFull,
   onReply,
+  onPin,
+  onFavorite,
+  isPinned,
+  isFavorited,
 }: {
   onSelect: (emoji: string) => void;
   onOpenFull: () => void;
   onReply: () => void;
+  onPin?: () => void;
+  onFavorite?: () => void;
+  isPinned?: boolean;
+  isFavorited?: boolean;
 }) {
   return (
     <div className="flex items-center gap-0.5 bg-white border border-gray-200 rounded-full shadow-lg px-1.5 py-0.5">
@@ -275,6 +283,28 @@ function QuickReactionPicker({
       >
         <Reply className="w-4 h-4" />
       </button>
+      {onPin && (
+        <button
+          onClick={onPin}
+          className={`w-7 h-7 flex items-center justify-center hover:bg-gray-100 rounded-full transition-colors ${
+            isPinned ? "text-blue-600" : "text-gray-500"
+          }`}
+          title={isPinned ? "Unpin message" : "Pin message"}
+        >
+          <Pin className="w-4 h-4" />
+        </button>
+      )}
+      {onFavorite && (
+        <button
+          onClick={onFavorite}
+          className={`w-7 h-7 flex items-center justify-center hover:bg-gray-100 rounded-full transition-colors ${
+            isFavorited ? "text-yellow-500" : "text-gray-500"
+          }`}
+          title={isFavorited ? "Remove from favorites" : "Add to favorites"}
+        >
+          <Star className={`w-4 h-4 ${isFavorited ? "fill-current" : ""}`} />
+        </button>
+      )}
     </div>
   );
 }
@@ -514,6 +544,10 @@ function MessageBubble({
   onShowReadReceipts,
   onToggleReaction,
   onOpenThread,
+  onPin,
+  onFavorite,
+  isPinned,
+  isFavorited,
 }: {
   message: Message;
   isCurrentUser: boolean;
@@ -521,6 +555,10 @@ function MessageBubble({
   onShowReadReceipts?: (messageId: string) => void;
   onToggleReaction?: (messageId: string, emoji: string) => void;
   onOpenThread?: (messageId: string) => void;
+  onPin?: (messageId: string) => void;
+  onFavorite?: (messageId: string) => void;
+  isPinned?: boolean;
+  isFavorited?: boolean;
 }) {
   const [showReactionPicker, setShowReactionPicker] = useState(false);
   const [showFullPicker, setShowFullPicker] = useState(false);
@@ -636,6 +674,16 @@ function MessageBubble({
                   setShowReactionPicker(false);
                   onOpenThread?.(message.id);
                 }}
+                onPin={onPin ? () => {
+                  setShowReactionPicker(false);
+                  onPin(message.id);
+                } : undefined}
+                onFavorite={onFavorite ? () => {
+                  setShowReactionPicker(false);
+                  onFavorite(message.id);
+                } : undefined}
+                isPinned={isPinned}
+                isFavorited={isFavorited}
               />
             </div>
           )}
@@ -1072,6 +1120,11 @@ function ChatView({
   // Reactions state
   const [messageReactions, setMessageReactions] = useState<Record<string, Reaction[]>>({});
 
+  // Pins and favorites state
+  const [pinnedMessageIds, setPinnedMessageIds] = useState<Set<string>>(new Set());
+  const [favoritedMessageIds, setFavoritedMessageIds] = useState<Set<string>>(new Set());
+  const [showPinsPanel, setShowPinsPanel] = useState(false);
+
   // Thread panel state
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
 
@@ -1241,6 +1294,132 @@ function ChatView({
     });
   }, [reactionEvent, currentUserId]);
 
+  // Toggle pin on a message
+  const togglePin = useCallback(async (messageId: string) => {
+    const token = getCookie("session_token");
+    if (!token) return;
+
+    const isPinned = pinnedMessageIds.has(messageId);
+
+    // Optimistic update
+    setPinnedMessageIds((prev) => {
+      const next = new Set(prev);
+      if (isPinned) {
+        next.delete(messageId);
+      } else {
+        next.add(messageId);
+      }
+      return next;
+    });
+
+    try {
+      if (isPinned) {
+        await fetch(`/api/chats/${chat.id}/pins/${messageId}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      } else {
+        await fetch(`/api/chats/${chat.id}/pins/${messageId}`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      }
+    } catch {
+      // Revert optimistic update on error
+      setPinnedMessageIds((prev) => {
+        const next = new Set(prev);
+        if (isPinned) {
+          next.add(messageId);
+        } else {
+          next.delete(messageId);
+        }
+        return next;
+      });
+    }
+  }, [chat.id, pinnedMessageIds]);
+
+  // Toggle favorite on a message
+  const toggleFavorite = useCallback(async (messageId: string) => {
+    const token = getCookie("session_token");
+    if (!token) return;
+
+    const isFavorited = favoritedMessageIds.has(messageId);
+
+    // Optimistic update
+    setFavoritedMessageIds((prev) => {
+      const next = new Set(prev);
+      if (isFavorited) {
+        next.delete(messageId);
+      } else {
+        next.add(messageId);
+      }
+      return next;
+    });
+
+    try {
+      if (isFavorited) {
+        await fetch(`/api/messages/${messageId}/favorite`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      } else {
+        await fetch(`/api/messages/${messageId}/favorite`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      }
+    } catch {
+      // Revert optimistic update on error
+      setFavoritedMessageIds((prev) => {
+        const next = new Set(prev);
+        if (isFavorited) {
+          next.add(messageId);
+        } else {
+          next.delete(messageId);
+        }
+        return next;
+      });
+    }
+  }, [favoritedMessageIds]);
+
+  // Load pinned messages for this chat
+  const loadPinnedMessages = useCallback(async () => {
+    const token = getCookie("session_token");
+    if (!token) return;
+
+    try {
+      const res = await fetch(`/api/chats/${chat.id}/pins`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const pinnedIds = new Set<string>(data.pins.map((p: { message: { id: string } }) => p.message.id));
+        setPinnedMessageIds(pinnedIds);
+      }
+    } catch {
+      // Silent fail
+    }
+  }, [chat.id]);
+
+  // Load user's favorites
+  const loadFavorites = useCallback(async () => {
+    const token = getCookie("session_token");
+    if (!token) return;
+
+    try {
+      const res = await fetch("/api/favorites", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const favoriteIds = new Set<string>(data.favorites.map((f: { message: { id: string } }) => f.message.id));
+        setFavoritedMessageIds(favoriteIds);
+      }
+    } catch {
+      // Silent fail
+    }
+  }, []);
+
   // Load messages
   const loadMessages = useCallback(async (cursor?: string) => {
     const token = getCookie("session_token");
@@ -1302,9 +1481,12 @@ function ChatView({
     setMessageReactions({});
     setSelectedMessageForReceipts(null);
     setActiveThreadId(null);
+    setShowPinsPanel(false);
     lastMarkedReadRef.current = null;
     loadMessages();
-  }, [chat.id, loadMessages]);
+    loadPinnedMessages();
+    loadFavorites();
+  }, [chat.id, loadMessages, loadPinnedMessages, loadFavorites]);
 
   // Fetch chat members for @mention autocomplete
   useEffect(() => {
@@ -1648,13 +1830,26 @@ function ChatView({
           </div>
         </div>
 
-        {/* Info button */}
-        <button
-          className="p-2 rounded-full hover:bg-gray-100 text-gray-500 transition-colors"
-          title="Chat info"
-        >
-          <Info className="w-5 h-5" />
-        </button>
+        {/* Header buttons */}
+        <div className="flex items-center gap-1">
+          {/* Pins button */}
+          <button
+            onClick={() => setShowPinsPanel(!showPinsPanel)}
+            className={`p-2 rounded-full hover:bg-gray-100 transition-colors ${
+              showPinsPanel ? "bg-blue-100 text-blue-600" : "text-gray-500"
+            }`}
+            title={`${pinnedMessageIds.size} pinned message${pinnedMessageIds.size !== 1 ? "s" : ""}`}
+          >
+            <Pin className="w-5 h-5" />
+          </button>
+          {/* Info button */}
+          <button
+            className="p-2 rounded-full hover:bg-gray-100 text-gray-500 transition-colors"
+            title="Chat info"
+          >
+            <Info className="w-5 h-5" />
+          </button>
+        </div>
       </div>
 
       {/* Messages Area */}
@@ -1726,6 +1921,10 @@ function ChatView({
                         onShowReadReceipts={setSelectedMessageForReceipts}
                         onToggleReaction={toggleReaction}
                         onOpenThread={setActiveThreadId}
+                        onPin={togglePin}
+                        onFavorite={toggleFavorite}
+                        isPinned={pinnedMessageIds.has(message.id)}
+                        isFavorited={favoritedMessageIds.has(message.id)}
                       />
                       {/* Read receipts popover */}
                       {selectedMessageForReceipts === message.id && (
@@ -1781,6 +1980,173 @@ function ChatView({
           members={chatMembers}
         />
       )}
+
+      {/* Pins Panel */}
+      {showPinsPanel && (
+        <PinsPanel
+          chatId={chat.id}
+          onClose={() => setShowPinsPanel(false)}
+          onUnpin={(messageId) => {
+            togglePin(messageId);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+interface PinnedMessage {
+  pin: {
+    chatId: string;
+    messageId: string;
+    pinnedBy: string;
+    pinnedAt: string;
+  };
+  message: {
+    id: string;
+    chatId: string;
+    senderId: string;
+    type: string;
+    content: Record<string, unknown>;
+    createdAt: string;
+  };
+  sender: {
+    id: string;
+    displayName: string | null;
+    avatarUrl: string | null;
+  };
+}
+
+function PinsPanel({
+  chatId,
+  onClose,
+  onUnpin,
+}: {
+  chatId: string;
+  onClose: () => void;
+  onUnpin: (messageId: string) => void;
+}) {
+  const [pins, setPins] = useState<PinnedMessage[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadPins = async () => {
+      const token = getCookie("session_token");
+      if (!token) return;
+
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const res = await fetch(`/api/chats/${chatId}/pins`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (!res.ok) {
+          throw new Error("Failed to load pinned messages");
+        }
+
+        const data = await res.json();
+        setPins(data.pins || []);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadPins();
+  }, [chatId]);
+
+  const handleUnpin = (messageId: string) => {
+    setPins((prev) => prev.filter((p) => p.message.id !== messageId));
+    onUnpin(messageId);
+  };
+
+  return (
+    <div className="w-80 border-l border-gray-200 bg-white flex flex-col h-full">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+        <div className="flex items-center gap-2">
+          <Pin className="w-5 h-5 text-gray-500" />
+          <h3 className="font-semibold text-gray-900">Pinned Messages</h3>
+          <span className="text-sm text-gray-500">({pins.length})</span>
+        </div>
+        <button
+          onClick={onClose}
+          className="p-1.5 rounded-full hover:bg-gray-100 text-gray-500 transition-colors"
+          title="Close"
+        >
+          <X className="w-5 h-5" />
+        </button>
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto">
+        {isLoading ? (
+          <div className="flex items-center justify-center h-32 text-gray-500">
+            Loading...
+          </div>
+        ) : error ? (
+          <div className="flex items-center justify-center h-32 text-red-500">
+            {error}
+          </div>
+        ) : pins.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-32 text-gray-500">
+            <Pin className="w-8 h-8 mb-2 text-gray-300" />
+            <p className="text-sm">No pinned messages</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-100">
+            {pins.map((pin) => (
+              <div key={pin.message.id} className="p-3 hover:bg-gray-50">
+                <div className="flex items-start gap-2">
+                  {/* Sender avatar */}
+                  <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-200 flex-shrink-0">
+                    {pin.sender.avatarUrl ? (
+                      <img
+                        src={pin.sender.avatarUrl}
+                        alt={pin.sender.displayName || "User"}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-blue-600 text-white text-xs font-medium">
+                        {pin.sender.displayName?.charAt(0).toUpperCase() || "?"}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Content */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-900">
+                        {pin.sender.displayName || "Unknown"}
+                      </span>
+                      <span className="text-xs text-gray-400">
+                        {formatTimestamp(pin.message.createdAt)}
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-600 mt-0.5 line-clamp-2">
+                      {typeof pin.message.content.text === "string"
+                        ? pin.message.content.text
+                        : typeof pin.message.content.html === "string"
+                          ? pin.message.content.html.replace(/<[^>]*>/g, "")
+                          : "Message"}
+                    </p>
+                    <button
+                      onClick={() => handleUnpin(pin.message.id)}
+                      className="text-xs text-red-500 hover:text-red-600 mt-1"
+                    >
+                      Unpin
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -2214,6 +2580,197 @@ function ConnectionStatusIndicator({ status }: { status: ConnectionStatus }) {
   );
 }
 
+interface FavoriteMessage {
+  favorite: {
+    userId: string;
+    messageId: string;
+    createdAt: string;
+  };
+  message: {
+    id: string;
+    chatId: string;
+    senderId: string;
+    type: string;
+    content: Record<string, unknown>;
+    createdAt: string;
+  };
+  sender: {
+    id: string;
+    displayName: string | null;
+    avatarUrl: string | null;
+  };
+  chat: {
+    id: string;
+    name: string | null;
+    type: string;
+  };
+}
+
+function FavoritesPanel({
+  onClose,
+  onSelectChat,
+}: {
+  onClose: () => void;
+  onSelectChat: (chatId: string) => void;
+}) {
+  const [favorites, setFavorites] = useState<FavoriteMessage[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadFavorites = async () => {
+      const token = getCookie("session_token");
+      if (!token) return;
+
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const res = await fetch("/api/favorites", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (!res.ok) {
+          throw new Error("Failed to load favorites");
+        }
+
+        const data = await res.json();
+        setFavorites(data.favorites || []);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadFavorites();
+  }, []);
+
+  const handleRemoveFavorite = async (messageId: string) => {
+    const token = getCookie("session_token");
+    if (!token) return;
+
+    // Optimistic update
+    setFavorites((prev) => prev.filter((f) => f.message.id !== messageId));
+
+    try {
+      await fetch(`/api/messages/${messageId}/favorite`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch {
+      // Reload favorites on error
+      const res = await fetch("/api/favorites", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setFavorites(data.favorites || []);
+      }
+    }
+  };
+
+  return (
+    <div className="w-80 border-r border-gray-200 bg-white flex flex-col h-full">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+        <div className="flex items-center gap-2">
+          <Star className="w-5 h-5 text-yellow-500 fill-current" />
+          <h3 className="font-semibold text-gray-900">Favorites</h3>
+          <span className="text-sm text-gray-500">({favorites.length})</span>
+        </div>
+        <button
+          onClick={onClose}
+          className="p-1.5 rounded-full hover:bg-gray-100 text-gray-500 transition-colors"
+          title="Close"
+        >
+          <X className="w-5 h-5" />
+        </button>
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto">
+        {isLoading ? (
+          <div className="flex items-center justify-center h-32 text-gray-500">
+            Loading...
+          </div>
+        ) : error ? (
+          <div className="flex items-center justify-center h-32 text-red-500">
+            {error}
+          </div>
+        ) : favorites.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-32 text-gray-500">
+            <Star className="w-8 h-8 mb-2 text-gray-300" />
+            <p className="text-sm">No favorites yet</p>
+            <p className="text-xs mt-1 text-gray-400">Star messages to save them here</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-100">
+            {favorites.map((fav) => (
+              <div
+                key={fav.message.id}
+                className="p-3 hover:bg-gray-50 cursor-pointer"
+                onClick={() => {
+                  onSelectChat(fav.message.chatId);
+                  onClose();
+                }}
+              >
+                <div className="flex items-start gap-2">
+                  {/* Sender avatar */}
+                  <div className="w-8 h-8 rounded-full overflow-hidden bg-gray-200 flex-shrink-0">
+                    {fav.sender.avatarUrl ? (
+                      <img
+                        src={fav.sender.avatarUrl}
+                        alt={fav.sender.displayName || "User"}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-blue-600 text-white text-xs font-medium">
+                        {fav.sender.displayName?.charAt(0).toUpperCase() || "?"}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Content */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-900">
+                        {fav.sender.displayName || "Unknown"}
+                      </span>
+                      <span className="text-xs text-gray-400">
+                        {formatTimestamp(fav.message.createdAt)}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      in {fav.chat.name || "Chat"}
+                    </p>
+                    <p className="text-sm text-gray-600 mt-0.5 line-clamp-2">
+                      {typeof fav.message.content.text === "string"
+                        ? fav.message.content.text
+                        : typeof fav.message.content.html === "string"
+                          ? fav.message.content.html.replace(/<[^>]*>/g, "")
+                          : "Message"}
+                    </p>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRemoveFavorite(fav.message.id);
+                      }}
+                      className="text-xs text-gray-400 hover:text-red-500 mt-1"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function MessengerPage() {
   const [chats, setChats] = useState<Chat[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -2224,6 +2781,7 @@ export default function MessengerPage() {
   const [isNewChatDialogOpen, setIsNewChatDialogOpen] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [incomingMessage, setIncomingMessage] = useState<Message | null>(null);
+  const [showFavoritesPanel, setShowFavoritesPanel] = useState(false);
 
   // Typing indicators - track who is typing in each chat
   const [typingByChat, setTypingByChat] = useState<Record<string, TypingUser[]>>({});
@@ -2456,13 +3014,24 @@ export default function MessengerPage() {
         <div className="flex-shrink-0 p-4 border-b border-gray-200">
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-lg font-semibold text-gray-900">Messenger</h2>
-            <button
-              onClick={() => setIsNewChatDialogOpen(true)}
-              className="p-1.5 rounded-md hover:bg-gray-100 text-gray-600 hover:text-gray-900 transition-colors"
-              title="New chat"
-            >
-              <Plus className="w-5 h-5" />
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setShowFavoritesPanel(!showFavoritesPanel)}
+                className={`p-1.5 rounded-md hover:bg-gray-100 transition-colors ${
+                  showFavoritesPanel ? "bg-yellow-100 text-yellow-600" : "text-gray-600 hover:text-gray-900"
+                }`}
+                title="Favorites"
+              >
+                <Star className={`w-5 h-5 ${showFavoritesPanel ? "fill-current" : ""}`} />
+              </button>
+              <button
+                onClick={() => setIsNewChatDialogOpen(true)}
+                className="p-1.5 rounded-md hover:bg-gray-100 text-gray-600 hover:text-gray-900 transition-colors"
+                title="New chat"
+              >
+                <Plus className="w-5 h-5" />
+              </button>
+            </div>
           </div>
           {/* Connection Status */}
           <div className="flex items-center justify-between mb-3">
@@ -2547,6 +3116,14 @@ export default function MessengerPage() {
           )}
         </div>
       </div>
+
+      {/* Favorites Panel */}
+      {showFavoritesPanel && (
+        <FavoritesPanel
+          onClose={() => setShowFavoritesPanel(false)}
+          onSelectChat={(chatId) => setSelectedChatId(chatId)}
+        />
+      )}
 
       {/* Center Panel - Chat View */}
       <div className="flex-1 flex flex-col bg-gray-50">
