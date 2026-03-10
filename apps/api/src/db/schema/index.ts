@@ -5,3 +5,4 @@
 // Runtime TypeScript resolves .js extension correctly via moduleResolution
 export * from "./auth";
 export * from "./messenger";
+export * from "./calendar";

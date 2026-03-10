@@ -8,6 +8,7 @@ import {
   messengerRoutes,
   registerWebSocketRoutes,
 } from "./modules/messenger/index.js";
+import { calendarRoutes } from "./modules/calendar/index.js";
 
 export async function buildApp() {
   const app = Fastify({
@@ -43,6 +44,9 @@ export async function buildApp() {
       // Messenger module (HTTP + WebSocket)
       api.register(messengerRoutes, { prefix: "/messenger" });
       api.register(registerWebSocketRoutes, { prefix: "/messenger" });
+
+      // Calendar module
+      api.register(calendarRoutes, { prefix: "/calendar" });
     },
     { prefix: "/api/v1" }
   );
