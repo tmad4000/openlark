@@ -13,7 +13,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api, type Chat } from "@/lib/api";
-import { cn } from "@/lib/utils";
 
 interface CreateChatDialogProps {
   open: boolean;
@@ -160,12 +159,7 @@ export function CreateChatDialog({
 
             {/* Error message */}
             {error && (
-              <div
-                className={cn(
-                  "text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20",
-                  "px-3 py-2 rounded-md"
-                )}
-              >
+              <div className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 px-3 py-2 rounded-md">
                 {error}
               </div>
             )}
