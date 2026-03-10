@@ -1495,4 +1495,443 @@ export async function messagesRoutes(fastify: FastifyInstance) {
       return reply.status(200).send(messageWithSender);
     }
   );
+
+  /**
+   * POST /messages/:id/forward - Forward a message to one or more chats
+   * Body: { chat_ids: string[] }
+   * Creates forwarded message copies in target chats
+   * Returns: { success: true, forwarded: Array<{ chatId, messageId }> }
+   */
+  fastify.post<{
+    Params: { id: string };
+    Body: { chat_ids: string[] };
+  }>(
+    "/messages/:id/forward",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id: messageId } = request.params;
+      const { chat_ids } = request.body;
+      const currentUserId = request.user.id;
+
+      // Validate messageId format
+      if (!UUID_REGEX.test(messageId)) {
+        return reply.status(400).send({
+          error: "Invalid message ID format",
+        });
+      }
+
+      // Validate chat_ids is provided and is an array
+      if (!chat_ids || !Array.isArray(chat_ids) || chat_ids.length === 0) {
+        return reply.status(400).send({
+          error: "chat_ids must be a non-empty array",
+        });
+      }
+
+      // Validate max number of chats (prevent abuse)
+      if (chat_ids.length > 20) {
+        return reply.status(400).send({
+          error: "Cannot forward to more than 20 chats at once",
+        });
+      }
+
+      // Validate all chat_ids are valid UUIDs
+      for (const chatId of chat_ids) {
+        if (!UUID_REGEX.test(chatId)) {
+          return reply.status(400).send({
+            error: `Invalid chat ID format: ${chatId}`,
+          });
+        }
+      }
+
+      // Get the original message
+      const [originalMessage] = await db
+        .select()
+        .from(messages)
+        .where(eq(messages.id, messageId))
+        .limit(1);
+
+      if (!originalMessage) {
+        return reply.status(404).send({
+          error: "Message not found",
+        });
+      }
+
+      // Check if message has been recalled
+      if (originalMessage.recalledAt) {
+        return reply.status(400).send({
+          error: "Cannot forward a recalled message",
+        });
+      }
+
+      // Check user is a member of the source chat
+      if (!(await isChatMember(originalMessage.chatId, currentUserId))) {
+        return reply.status(403).send({
+          error: "You are not a member of the source chat",
+        });
+      }
+
+      // Get source chat info for attribution
+      const [sourceChat] = await db
+        .select({ name: chats.name, type: chats.type })
+        .from(chats)
+        .where(eq(chats.id, originalMessage.chatId))
+        .limit(1);
+
+      // Get original sender info
+      const [originalSender] = await db
+        .select({
+          id: users.id,
+          displayName: users.displayName,
+        })
+        .from(users)
+        .where(eq(users.id, originalMessage.senderId))
+        .limit(1);
+
+      // Validate user is a member of all target chats
+      const targetChatMemberships = await db
+        .select({ chatId: chatMembers.chatId })
+        .from(chatMembers)
+        .where(
+          and(
+            inArray(chatMembers.chatId, chat_ids),
+            eq(chatMembers.userId, currentUserId)
+          )
+        );
+
+      const memberOfChatIds = new Set(targetChatMemberships.map((m) => m.chatId));
+      const invalidChatIds = chat_ids.filter((id) => !memberOfChatIds.has(id));
+
+      if (invalidChatIds.length > 0) {
+        return reply.status(403).send({
+          error: `You are not a member of these chats: ${invalidChatIds.join(", ")}`,
+        });
+      }
+
+      // Create forwarded messages in each target chat
+      const forwardedMessages: Array<{ chatId: string; messageId: string }> = [];
+
+      for (const targetChatId of chat_ids) {
+        // Build forwarded content with attribution
+        const forwardedContent = {
+          ...originalMessage.content,
+          forwardedFrom: {
+            chatId: originalMessage.chatId,
+            chatName: sourceChat?.name || "Chat",
+            chatType: sourceChat?.type || "dm",
+            messageId: originalMessage.id,
+            senderName: originalSender?.displayName || "Unknown",
+            senderId: originalMessage.senderId,
+            originalCreatedAt: originalMessage.createdAt,
+          },
+        };
+
+        // Create the forwarded message
+        const [newMessage] = await db
+          .insert(messages)
+          .values({
+            chatId: targetChatId,
+            senderId: currentUserId,
+            type: originalMessage.type,
+            content: forwardedContent,
+            forwardedFromMessageId: originalMessage.id,
+            forwardedFromChatId: originalMessage.chatId,
+          })
+          .returning();
+
+        forwardedMessages.push({
+          chatId: targetChatId,
+          messageId: newMessage.id,
+        });
+
+        // Update sender's last_read_message_id
+        await db
+          .update(chatMembers)
+          .set({ lastReadMessageId: newMessage.id })
+          .where(
+            and(
+              eq(chatMembers.chatId, targetChatId),
+              eq(chatMembers.userId, currentUserId)
+            )
+          );
+
+        // Publish message to Redis channel for real-time delivery
+        await publish(getChatChannel(targetChatId), {
+          type: "message",
+          payload: {
+            ...newMessage,
+            sender: {
+              id: request.user.id,
+              displayName: request.user.displayName,
+              avatarUrl: request.user.avatarUrl,
+            },
+          },
+        });
+      }
+
+      return reply.status(201).send({
+        success: true,
+        forwarded: forwardedMessages,
+      });
+    }
+  );
+
+  /**
+   * POST /messages/forward-multiple - Forward multiple messages to one or more chats
+   * Body: { message_ids: string[], chat_ids: string[], combine?: boolean }
+   * If combine is true, messages are combined into a single forwarded bundle
+   * Returns: { success: true, forwarded: Array<{ chatId, messageIds: string[] }> }
+   */
+  fastify.post<{
+    Body: { message_ids: string[]; chat_ids: string[]; combine?: boolean };
+  }>(
+    "/messages/forward-multiple",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { message_ids, chat_ids, combine = false } = request.body;
+      const currentUserId = request.user.id;
+
+      // Validate message_ids
+      if (!message_ids || !Array.isArray(message_ids) || message_ids.length === 0) {
+        return reply.status(400).send({
+          error: "message_ids must be a non-empty array",
+        });
+      }
+
+      if (message_ids.length > 50) {
+        return reply.status(400).send({
+          error: "Cannot forward more than 50 messages at once",
+        });
+      }
+
+      // Validate chat_ids
+      if (!chat_ids || !Array.isArray(chat_ids) || chat_ids.length === 0) {
+        return reply.status(400).send({
+          error: "chat_ids must be a non-empty array",
+        });
+      }
+
+      if (chat_ids.length > 20) {
+        return reply.status(400).send({
+          error: "Cannot forward to more than 20 chats at once",
+        });
+      }
+
+      // Validate UUIDs
+      for (const id of [...message_ids, ...chat_ids]) {
+        if (!UUID_REGEX.test(id)) {
+          return reply.status(400).send({
+            error: `Invalid UUID format: ${id}`,
+          });
+        }
+      }
+
+      // Get all original messages
+      const originalMessages = await db
+        .select()
+        .from(messages)
+        .where(inArray(messages.id, message_ids));
+
+      if (originalMessages.length !== message_ids.length) {
+        return reply.status(404).send({
+          error: "Some messages were not found",
+        });
+      }
+
+      // Check no messages are recalled
+      const recalledMessages = originalMessages.filter((m) => m.recalledAt);
+      if (recalledMessages.length > 0) {
+        return reply.status(400).send({
+          error: "Cannot forward recalled messages",
+        });
+      }
+
+      // Verify user is a member of all source chats
+      const sourceChatIds = [...new Set(originalMessages.map((m) => m.chatId))];
+      for (const chatId of sourceChatIds) {
+        if (!(await isChatMember(chatId, currentUserId))) {
+          return reply.status(403).send({
+            error: "You are not a member of one or more source chats",
+          });
+        }
+      }
+
+      // Verify user is a member of all target chats
+      const targetChatMemberships = await db
+        .select({ chatId: chatMembers.chatId })
+        .from(chatMembers)
+        .where(
+          and(
+            inArray(chatMembers.chatId, chat_ids),
+            eq(chatMembers.userId, currentUserId)
+          )
+        );
+
+      const memberOfChatIds = new Set(targetChatMemberships.map((m) => m.chatId));
+      const invalidChatIds = chat_ids.filter((id) => !memberOfChatIds.has(id));
+
+      if (invalidChatIds.length > 0) {
+        return reply.status(403).send({
+          error: `You are not a member of these chats: ${invalidChatIds.join(", ")}`,
+        });
+      }
+
+      // Get source chat info
+      const sourceChats = await db
+        .select({ id: chats.id, name: chats.name, type: chats.type })
+        .from(chats)
+        .where(inArray(chats.id, sourceChatIds));
+      const sourceChatMap = new Map(sourceChats.map((c) => [c.id, c]));
+
+      // Get sender info for all messages
+      const senderIds = [...new Set(originalMessages.map((m) => m.senderId))];
+      const senders = await db
+        .select({ id: users.id, displayName: users.displayName })
+        .from(users)
+        .where(inArray(users.id, senderIds));
+      const senderMap = new Map(senders.map((s) => [s.id, s]));
+
+      // Sort messages by createdAt for consistent ordering
+      originalMessages.sort((a, b) =>
+        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+      );
+
+      const forwardedResults: Array<{ chatId: string; messageIds: string[] }> = [];
+
+      for (const targetChatId of chat_ids) {
+        const messageIdsForChat: string[] = [];
+
+        if (combine) {
+          // Combine all messages into a single rich_text message bundle
+          const bundledContent = {
+            text: `Forwarded ${originalMessages.length} messages`,
+            bundle: originalMessages.map((m) => {
+              const sourceChat = sourceChatMap.get(m.chatId);
+              const sender = senderMap.get(m.senderId);
+              return {
+                type: m.type,
+                content: m.content,
+                originalMessageId: m.id,
+                originalChatId: m.chatId,
+                originalChatName: sourceChat?.name || "Chat",
+                originalChatType: sourceChat?.type || "dm",
+                senderName: sender?.displayName || "Unknown",
+                senderId: m.senderId,
+                originalCreatedAt: m.createdAt,
+              };
+            }),
+            forwardedFrom: {
+              bundled: true,
+              messageCount: originalMessages.length,
+            },
+          };
+
+          const [newMessage] = await db
+            .insert(messages)
+            .values({
+              chatId: targetChatId,
+              senderId: currentUserId,
+              type: "rich_text",
+              content: bundledContent,
+              forwardedFromMessageId: originalMessages[0].id,
+              forwardedFromChatId: originalMessages[0].chatId,
+            })
+            .returning();
+
+          messageIdsForChat.push(newMessage.id);
+
+          // Update sender's last_read_message_id
+          await db
+            .update(chatMembers)
+            .set({ lastReadMessageId: newMessage.id })
+            .where(
+              and(
+                eq(chatMembers.chatId, targetChatId),
+                eq(chatMembers.userId, currentUserId)
+              )
+            );
+
+          // Publish to WebSocket
+          await publish(getChatChannel(targetChatId), {
+            type: "message",
+            payload: {
+              ...newMessage,
+              sender: {
+                id: request.user.id,
+                displayName: request.user.displayName,
+                avatarUrl: request.user.avatarUrl,
+              },
+            },
+          });
+        } else {
+          // Forward each message individually
+          for (const originalMessage of originalMessages) {
+            const sourceChat = sourceChatMap.get(originalMessage.chatId);
+            const originalSender = senderMap.get(originalMessage.senderId);
+
+            const forwardedContent = {
+              ...originalMessage.content,
+              forwardedFrom: {
+                chatId: originalMessage.chatId,
+                chatName: sourceChat?.name || "Chat",
+                chatType: sourceChat?.type || "dm",
+                messageId: originalMessage.id,
+                senderName: originalSender?.displayName || "Unknown",
+                senderId: originalMessage.senderId,
+                originalCreatedAt: originalMessage.createdAt,
+              },
+            };
+
+            const [newMessage] = await db
+              .insert(messages)
+              .values({
+                chatId: targetChatId,
+                senderId: currentUserId,
+                type: originalMessage.type,
+                content: forwardedContent,
+                forwardedFromMessageId: originalMessage.id,
+                forwardedFromChatId: originalMessage.chatId,
+              })
+              .returning();
+
+            messageIdsForChat.push(newMessage.id);
+
+            // Publish to WebSocket
+            await publish(getChatChannel(targetChatId), {
+              type: "message",
+              payload: {
+                ...newMessage,
+                sender: {
+                  id: request.user.id,
+                  displayName: request.user.displayName,
+                  avatarUrl: request.user.avatarUrl,
+                },
+              },
+            });
+          }
+
+          // Update sender's last_read_message_id to the last forwarded message
+          const lastMessageId = messageIdsForChat[messageIdsForChat.length - 1];
+          await db
+            .update(chatMembers)
+            .set({ lastReadMessageId: lastMessageId })
+            .where(
+              and(
+                eq(chatMembers.chatId, targetChatId),
+                eq(chatMembers.userId, currentUserId)
+              )
+            );
+        }
+
+        forwardedResults.push({
+          chatId: targetChatId,
+          messageIds: messageIdsForChat,
+        });
+      }
+
+      return reply.status(201).send({
+        success: true,
+        forwarded: forwardedResults,
+      });
+    }
+  );
 }

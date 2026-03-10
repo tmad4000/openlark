@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { Search, Plus, MessageCircle, Users, Bell, BellOff, AtSign, Info, Wifi, WifiOff, Loader2, Check, CheckCheck, Circle, MoreHorizontal, Reply, X, MessageSquare, Pin, Star, Pencil, Trash2 } from "lucide-react";
+import { Search, Plus, MessageCircle, Users, Bell, BellOff, AtSign, Info, Wifi, WifiOff, Loader2, Check, CheckCheck, Circle, MoreHorizontal, Reply, X, MessageSquare, Pin, Star, Pencil, Trash2, Forward, Square, CheckSquare } from "lucide-react";
 import * as Dialog from "@radix-ui/react-dialog";
 import MessageInput, { MentionUser } from "@/components/MessageInput";
 import { useWebSocket, ConnectionStatus, WebSocketMessage, TypingEvent, PresenceEvent, ReadReceiptEvent, ReactionEvent } from "@/hooks/useWebSocket";
@@ -102,14 +102,43 @@ interface Reaction {
   users: Array<{ userId: string; displayName: string | null; avatarUrl: string | null }>;
 }
 
+interface ForwardedFrom {
+  chatId: string;
+  chatName: string;
+  chatType: string;
+  messageId: string;
+  senderName: string;
+  senderId: string;
+  originalCreatedAt: string;
+  bundled?: boolean;
+  messageCount?: number;
+}
+
+interface BundledMessage {
+  type: string;
+  content: Record<string, unknown>;
+  originalMessageId: string;
+  originalChatId: string;
+  originalChatName: string;
+  originalChatType: string;
+  senderName: string;
+  senderId: string;
+  originalCreatedAt: string;
+}
+
 interface Message {
   id: string;
   chatId: string;
   senderId: string;
   type: "text" | "rich_text" | "code" | "voice" | "card" | "system";
-  content: Record<string, unknown>;
+  content: Record<string, unknown> & {
+    forwardedFrom?: ForwardedFrom;
+    bundle?: BundledMessage[];
+  };
   threadId: string | null;
   replyToId: string | null;
+  forwardedFromMessageId: string | null;
+  forwardedFromChatId: string | null;
   editedAt: string | null;
   recalledAt: string | null;
   scheduledFor: string | null;
@@ -165,6 +194,73 @@ function getDateKey(dateStr: string): string {
   return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
 }
 
+function ForwardedAttribution({ forwardedFrom }: { forwardedFrom: ForwardedFrom }) {
+  const formattedDate = forwardedFrom.originalCreatedAt
+    ? new Date(forwardedFrom.originalCreatedAt).toLocaleDateString([], {
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : null;
+
+  return (
+    <div className="flex items-center gap-1.5 text-xs text-gray-500 mb-1 border-l-2 border-blue-300 pl-2 py-0.5">
+      <Forward className="w-3 h-3" />
+      <span>
+        Forwarded from{" "}
+        <span className="font-medium text-gray-600">{forwardedFrom.chatName}</span>
+        {forwardedFrom.senderName && (
+          <> · {forwardedFrom.senderName}</>
+        )}
+        {formattedDate && <> · {formattedDate}</>}
+      </span>
+    </div>
+  );
+}
+
+function BundledMessageContent({ bundle }: { bundle: BundledMessage[] }) {
+  return (
+    <div className="border-l-2 border-blue-300 pl-3 space-y-2">
+      <div className="text-xs text-gray-500 font-medium mb-2">
+        {bundle.length} forwarded messages
+      </div>
+      {bundle.map((msg, idx) => (
+        <div key={msg.originalMessageId || idx} className="bg-gray-50 rounded-md p-2">
+          <div className="flex items-center gap-1 text-xs text-gray-500 mb-1">
+            <span className="font-medium text-gray-600">{msg.senderName}</span>
+            <span>·</span>
+            <span>
+              {new Date(msg.originalCreatedAt).toLocaleDateString([], {
+                month: "short",
+                day: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </span>
+          </div>
+          <div className="text-sm">
+            {msg.content.text && typeof msg.content.text === "string" ? (
+              <span className="whitespace-pre-wrap break-words">{msg.content.text}</span>
+            ) : msg.type === "code" && msg.content.code ? (
+              <pre className="bg-gray-900 text-gray-100 p-2 rounded text-xs overflow-x-auto">
+                <code>{String(msg.content.code)}</code>
+              </pre>
+            ) : msg.type === "rich_text" && typeof msg.content.html === "string" ? (
+              <div
+                className="prose prose-sm max-w-none"
+                dangerouslySetInnerHTML={{ __html: msg.content.html }}
+              />
+            ) : (
+              <span className="text-gray-500 italic">[Message]</span>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function renderMessageContent(message: Message): React.ReactNode {
   const { type, content, recalledAt } = message;
 
@@ -173,63 +269,91 @@ function renderMessageContent(message: Message): React.ReactNode {
     return <span className="italic text-gray-400">This message was deleted</span>;
   }
 
-  if (type === "text" && content.text) {
-    return <span className="whitespace-pre-wrap break-words">{String(content.text)}</span>;
-  }
+  const forwardedFrom = content.forwardedFrom as ForwardedFrom | undefined;
+  const bundle = content.bundle as BundledMessage[] | undefined;
 
-  if (type === "system") {
-    const action = content.action;
-    if (action === "group_created") {
-      const createdBy = typeof content.createdBy === "string" ? content.createdBy : null;
-      return (
-        <span className="text-gray-500 text-sm italic">
-          {createdBy ? `${createdBy} created the group` : "Group created"}
-        </span>
-      );
-    }
-    if (action === "members_added") {
-      const members = content.memberNames as string[] | undefined;
-      const addedBy = typeof content.addedBy === "string" ? content.addedBy : "Someone";
-      return (
-        <span className="text-gray-500 text-sm italic">
-          {addedBy} added {members?.join(", ") || "new members"}
-        </span>
-      );
-    }
-    return <span className="text-gray-500 text-sm italic">System message</span>;
-  }
-
-  if (type === "code" && content.code) {
+  // Handle bundled forwarded messages
+  if (bundle && Array.isArray(bundle) && bundle.length > 0) {
     return (
-      <pre className="bg-gray-900 text-gray-100 p-3 rounded-md overflow-x-auto text-sm">
-        <code>{String(content.code)}</code>
-      </pre>
+      <div>
+        {forwardedFrom && <ForwardedAttribution forwardedFrom={forwardedFrom} />}
+        <BundledMessageContent bundle={bundle} />
+      </div>
     );
   }
 
-  if (type === "rich_text") {
-    // Handle HTML content from TipTap
-    if (typeof content.html === "string") {
+  // Regular message with optional forwarded attribution
+  const messageContent = (() => {
+    if (type === "text" && content.text) {
+      return <span className="whitespace-pre-wrap break-words">{String(content.text)}</span>;
+    }
+
+    if (type === "system") {
+      const action = content.action;
+      if (action === "group_created") {
+        const createdBy = typeof content.createdBy === "string" ? content.createdBy : null;
+        return (
+          <span className="text-gray-500 text-sm italic">
+            {createdBy ? `${createdBy} created the group` : "Group created"}
+          </span>
+        );
+      }
+      if (action === "members_added") {
+        const members = content.memberNames as string[] | undefined;
+        const addedBy = typeof content.addedBy === "string" ? content.addedBy : "Someone";
+        return (
+          <span className="text-gray-500 text-sm italic">
+            {addedBy} added {members?.join(", ") || "new members"}
+          </span>
+        );
+      }
+      return <span className="text-gray-500 text-sm italic">System message</span>;
+    }
+
+    if (type === "code" && content.code) {
       return (
-        <div
-          className="prose prose-sm max-w-none break-words [&_a]:text-blue-600 [&_a]:underline [&_code]:bg-gray-100 [&_code]:px-1 [&_code]:rounded [&_blockquote]:border-l-2 [&_blockquote]:border-gray-300 [&_blockquote]:pl-3 [&_blockquote]:italic [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4"
-          dangerouslySetInnerHTML={{ __html: content.html as string }}
-        />
+        <pre className="bg-gray-900 text-gray-100 p-3 rounded-md overflow-x-auto text-sm">
+          <code>{String(content.code)}</code>
+        </pre>
       );
     }
-    // Fallback for block-based rich text
-    if (Array.isArray(content.blocks)) {
-      return (
-        <div className="whitespace-pre-wrap break-words">
-          {(content.blocks as Array<{ type: string; text?: string }>).map((block, i) => (
-            <span key={i}>{block.text || ""}</span>
-          ))}
-        </div>
-      );
+
+    if (type === "rich_text") {
+      // Handle HTML content from TipTap
+      if (typeof content.html === "string") {
+        return (
+          <div
+            className="prose prose-sm max-w-none break-words [&_a]:text-blue-600 [&_a]:underline [&_code]:bg-gray-100 [&_code]:px-1 [&_code]:rounded [&_blockquote]:border-l-2 [&_blockquote]:border-gray-300 [&_blockquote]:pl-3 [&_blockquote]:italic [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4"
+            dangerouslySetInnerHTML={{ __html: content.html as string }}
+          />
+        );
+      }
+      // Fallback for block-based rich text
+      if (Array.isArray(content.blocks)) {
+        return (
+          <div className="whitespace-pre-wrap break-words">
+            {(content.blocks as Array<{ type: string; text?: string }>).map((block, i) => (
+              <span key={i}>{block.text || ""}</span>
+            ))}
+          </div>
+        );
+      }
     }
+
+    return <span className="text-gray-500 italic">[Message]</span>;
+  })();
+
+  // If this is a forwarded message, show the attribution
+  if (forwardedFrom) {
+    return (
+      <div>
+        <ForwardedAttribution forwardedFrom={forwardedFrom} />
+        {messageContent}
+      </div>
+    );
   }
 
-  return <span className="text-gray-500 italic">[Message]</span>;
+  return messageContent;
 }
 
 // Frequently used emojis for quick reaction picker
@@ -243,6 +367,7 @@ function QuickReactionPicker({
   onSelect,
   onOpenFull,
   onReply,
+  onForward,
   onPin,
   onFavorite,
   onEdit,
@@ -251,10 +376,12 @@ function QuickReactionPicker({
   isFavorited,
   canEdit,
   canRecall,
+  canForward,
 }: {
   onSelect: (emoji: string) => void;
   onOpenFull: () => void;
   onReply: () => void;
+  onForward?: () => void;
   onPin?: () => void;
   onFavorite?: () => void;
   onEdit?: () => void;
@@ -263,6 +390,7 @@ function QuickReactionPicker({
   isFavorited?: boolean;
   canEdit?: boolean;
   canRecall?: boolean;
+  canForward?: boolean;
 }) {
   return (
     <div className="flex items-center gap-0.5 bg-white border border-gray-200 rounded-full shadow-lg px-1.5 py-0.5">
@@ -291,6 +419,15 @@ function QuickReactionPicker({
       >
         <Reply className="w-4 h-4" />
       </button>
+      {canForward && onForward && (
+        <button
+          onClick={onForward}
+          className="w-7 h-7 flex items-center justify-center hover:bg-gray-100 rounded-full transition-colors text-gray-500"
+          title="Forward message"
+        >
+          <Forward className="w-4 h-4" />
+        </button>
+      )}
       {onPin && (
         <button
           onClick={onPin}
@@ -574,8 +711,12 @@ function MessageBubble({
   onFavorite,
   onEdit,
   onRecall,
+  onForward,
   isPinned,
   isFavorited,
+  isSelectionMode,
+  isSelected,
+  onToggleSelect,
 }: {
   message: Message;
   isCurrentUser: boolean;
@@ -587,8 +728,12 @@ function MessageBubble({
   onFavorite?: (messageId: string) => void;
   onEdit?: (messageId: string) => void;
   onRecall?: (messageId: string) => void;
+  onForward?: (messageId: string) => void;
   isPinned?: boolean;
   isFavorited?: boolean;
+  isSelectionMode?: boolean;
+  isSelected?: boolean;
+  onToggleSelect?: (messageId: string) => void;
 }) {
   const [showReactionPicker, setShowReactionPicker] = useState(false);
   const [showFullPicker, setShowFullPicker] = useState(false);
@@ -639,12 +784,40 @@ function MessageBubble({
     );
   }
 
+  // Handle click in selection mode
+  const handleClick = () => {
+    if (isSelectionMode && onToggleSelect) {
+      onToggleSelect(message.id);
+    }
+  };
+
   return (
     <div
-      className={`group flex gap-2 py-1 ${isCurrentUser ? "flex-row-reverse" : ""}`}
-      onMouseEnter={() => !isPending && setShowReactionPicker(true)}
+      className={`group flex gap-2 py-1 ${isCurrentUser ? "flex-row-reverse" : ""} ${
+        isSelectionMode ? "cursor-pointer" : ""
+      } ${isSelected ? "bg-blue-50" : ""}`}
+      onMouseEnter={() => !isPending && !isSelectionMode && setShowReactionPicker(true)}
       onMouseLeave={() => !showFullPicker && setShowReactionPicker(false)}
+      onClick={handleClick}
     >
+      {/* Selection checkbox */}
+      {isSelectionMode && (
+        <div className="flex-shrink-0 self-center">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleSelect?.(message.id);
+            }}
+            className="w-5 h-5 rounded border border-gray-300 flex items-center justify-center transition-colors"
+          >
+            {isSelected ? (
+              <CheckSquare className="w-4 h-4 text-blue-600" />
+            ) : (
+              <Square className="w-4 h-4 text-gray-400" />
+            )}
+          </button>
+        </div>
+      )}
       {/* Avatar */}
       {!isCurrentUser && (
         <div className="flex-shrink-0 w-8 h-8 rounded-full overflow-hidden bg-gray-200 self-end">
@@ -704,6 +877,10 @@ function MessageBubble({
                   setShowReactionPicker(false);
                   onOpenThread?.(message.id);
                 }}
+                onForward={onForward ? () => {
+                  setShowReactionPicker(false);
+                  onForward(message.id);
+                } : undefined}
                 onPin={onPin ? () => {
                   setShowReactionPicker(false);
                   onPin(message.id);
@@ -724,6 +901,7 @@ function MessageBubble({
                 isFavorited={isFavorited}
                 canEdit={isCurrentUser && !message.recalledAt && (message.type === "text" || message.type === "rich_text")}
                 canRecall={isCurrentUser && !message.recalledAt}
+                canForward={!message.recalledAt && message.type !== "system"}
               />
             </div>
           )}
@@ -1523,6 +1701,75 @@ function ChatView({
     }
   }, []);
 
+  // Forward message state
+  const [forwardingMessageId, setForwardingMessageId] = useState<string | null>(null);
+  const [forwardingMessage, setForwardingMessage] = useState<Message | null>(null);
+  const [showForwardModal, setShowForwardModal] = useState(false);
+
+  // Open forward modal for a message
+  const openForwardModal = useCallback((messageId: string) => {
+    const message = messages.find(m => m.id === messageId);
+    if (!message) return;
+    setForwardingMessageId(messageId);
+    setForwardingMessage(message);
+    setShowForwardModal(true);
+  }, [messages]);
+
+  // Close forward modal
+  const closeForwardModal = useCallback(() => {
+    setShowForwardModal(false);
+    setForwardingMessageId(null);
+    setForwardingMessage(null);
+  }, []);
+
+  // Multi-select mode for combining and forwarding multiple messages
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedMessageIds, setSelectedMessageIds] = useState<Set<string>>(new Set());
+  const [showMultiForwardModal, setShowMultiForwardModal] = useState(false);
+
+  // Toggle selection mode
+  const toggleSelectionMode = useCallback(() => {
+    setIsSelectionMode((prev) => {
+      if (prev) {
+        // Exiting selection mode - clear selections
+        setSelectedMessageIds(new Set());
+      }
+      return !prev;
+    });
+  }, []);
+
+  // Toggle message selection
+  const toggleMessageSelection = useCallback((messageId: string) => {
+    setSelectedMessageIds((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(messageId)) {
+        newSet.delete(messageId);
+      } else {
+        newSet.add(messageId);
+      }
+      return newSet;
+    });
+  }, []);
+
+  // Get selected messages in order
+  const selectedMessages = useMemo(() => {
+    return messages.filter((m) => selectedMessageIds.has(m.id));
+  }, [messages, selectedMessageIds]);
+
+  // Open multi-forward modal
+  const openMultiForwardModal = useCallback(() => {
+    if (selectedMessageIds.size > 0) {
+      setShowMultiForwardModal(true);
+    }
+  }, [selectedMessageIds.size]);
+
+  // Close multi-forward modal
+  const closeMultiForwardModal = useCallback(() => {
+    setShowMultiForwardModal(false);
+    setIsSelectionMode(false);
+    setSelectedMessageIds(new Set());
+  }, []);
+
   // Load pinned messages for this chat
   const loadPinnedMessages = useCallback(async () => {
     const token = getCookie("session_token");
@@ -1889,6 +2136,8 @@ function ChatView({
       content: p.content,
       threadId: null,
       replyToId: null,
+      forwardedFromMessageId: null,
+      forwardedFromChatId: null,
       editedAt: null,
       recalledAt: null,
       scheduledFor: null,
@@ -1973,6 +2222,16 @@ function ChatView({
 
         {/* Header buttons */}
         <div className="flex items-center gap-1">
+          {/* Selection mode toggle */}
+          <button
+            onClick={toggleSelectionMode}
+            className={`p-2 rounded-full hover:bg-gray-100 transition-colors ${
+              isSelectionMode ? "bg-blue-100 text-blue-600" : "text-gray-500"
+            }`}
+            title={isSelectionMode ? "Exit selection mode" : "Select messages"}
+          >
+            <CheckSquare className="w-5 h-5" />
+          </button>
           {/* Pins button */}
           <button
             onClick={() => setShowPinsPanel(!showPinsPanel)}
@@ -1992,6 +2251,36 @@ function ChatView({
           </button>
         </div>
       </div>
+
+      {/* Selection mode toolbar */}
+      {isSelectionMode && (
+        <div className="flex items-center justify-between px-4 py-2 bg-blue-50 border-b border-blue-100">
+          <div className="text-sm text-blue-700">
+            {selectedMessageIds.size > 0
+              ? `${selectedMessageIds.size} message${selectedMessageIds.size > 1 ? "s" : ""} selected`
+              : "Select messages to forward"}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                setIsSelectionMode(false);
+                setSelectedMessageIds(new Set());
+              }}
+              className="px-3 py-1 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={openMultiForwardModal}
+              disabled={selectedMessageIds.size === 0}
+              className="flex items-center gap-1.5 px-3 py-1 text-sm bg-blue-600 hover:bg-blue-700 text-white font-medium rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Forward className="w-4 h-4" />
+              Forward{selectedMessageIds.size > 1 ? ` (${selectedMessageIds.size})` : ""}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Messages Area */}
       <div
@@ -2066,8 +2355,12 @@ function ChatView({
                         onFavorite={toggleFavorite}
                         onEdit={startEditing}
                         onRecall={recallMessage}
+                        onForward={openForwardModal}
                         isPinned={pinnedMessageIds.has(message.id)}
                         isFavorited={favoritedMessageIds.has(message.id)}
+                        isSelectionMode={isSelectionMode}
+                        isSelected={selectedMessageIds.has(message.id)}
+                        onToggleSelect={toggleMessageSelection}
                       />
                       {/* Read receipts popover */}
                       {selectedMessageForReceipts === message.id && (
@@ -2166,7 +2459,495 @@ function ChatView({
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
+
+      {/* Forward Message Modal */}
+      {showForwardModal && forwardingMessage && (
+        <ForwardMessageModal
+          messageId={forwardingMessageId!}
+          message={forwardingMessage}
+          onClose={closeForwardModal}
+        />
+      )}
+
+      {/* Multi-Forward Modal */}
+      {showMultiForwardModal && selectedMessages.length > 0 && (
+        <MultiForwardModal
+          messages={selectedMessages}
+          currentChatId={chat.id}
+          onClose={closeMultiForwardModal}
+        />
+      )}
     </div>
+  );
+}
+
+// Forward Message Modal Component
+function ForwardMessageModal({
+  messageId,
+  message,
+  onClose,
+}: {
+  messageId: string;
+  message: Message;
+  onClose: () => void;
+}) {
+  const [chats, setChats] = useState<Chat[]>([]);
+  const [selectedChats, setSelectedChats] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [isForwarding, setIsForwarding] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Load user's chats
+  useEffect(() => {
+    const loadChats = async () => {
+      const token = getCookie("session_token");
+      if (!token) return;
+
+      setIsLoading(true);
+      try {
+        const res = await fetch("/api/chats?limit=100", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          // Filter out the current chat where the message is from
+          setChats(data.chats.filter((c: Chat) => c.id !== message.chatId));
+        }
+      } catch {
+        setError("Failed to load chats");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadChats();
+  }, [message.chatId]);
+
+  // Filter chats by search query
+  const filteredChats = useMemo(() => {
+    if (!searchQuery.trim()) return chats;
+    const query = searchQuery.toLowerCase();
+    return chats.filter((chat) =>
+      chat.name?.toLowerCase().includes(query)
+    );
+  }, [chats, searchQuery]);
+
+  // Toggle chat selection
+  const toggleChat = (chatId: string) => {
+    setSelectedChats((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(chatId)) {
+        newSet.delete(chatId);
+      } else {
+        newSet.add(chatId);
+      }
+      return newSet;
+    });
+  };
+
+  // Forward message to selected chats
+  const handleForward = async () => {
+    if (selectedChats.size === 0) return;
+
+    const token = getCookie("session_token");
+    if (!token) return;
+
+    setIsForwarding(true);
+    setError(null);
+
+    try {
+      const res = await fetch(`/api/messages/${messageId}/forward`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ chat_ids: Array.from(selectedChats) }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to forward message");
+      }
+
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to forward message");
+    } finally {
+      setIsForwarding(false);
+    }
+  };
+
+  return (
+    <Dialog.Root open={true} onOpenChange={(open) => !open && onClose()}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 bg-black/50 z-50" />
+        <Dialog.Content className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg shadow-xl z-50 w-full max-w-md max-h-[80vh] flex flex-col">
+          <div className="p-4 border-b border-gray-200">
+            <Dialog.Title className="text-lg font-semibold">Forward Message</Dialog.Title>
+            <button
+              onClick={onClose}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Message Preview */}
+          <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
+            <div className="text-xs text-gray-500 mb-1">Message to forward:</div>
+            <div className="text-sm text-gray-700 line-clamp-2">
+              {message.content.text ? String(message.content.text) : "[Message]"}
+            </div>
+          </div>
+
+          {/* Search */}
+          <div className="p-3 border-b border-gray-200">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search chats..."
+                className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+          </div>
+
+          {/* Chat List */}
+          <div className="flex-1 overflow-y-auto min-h-0">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+              </div>
+            ) : filteredChats.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                {searchQuery ? "No chats found" : "No other chats available"}
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-100">
+                {filteredChats.map((chat) => (
+                  <button
+                    key={chat.id}
+                    onClick={() => toggleChat(chat.id)}
+                    className="w-full flex items-center gap-3 p-3 hover:bg-gray-50 transition-colors text-left"
+                  >
+                    <div className="relative">
+                      {selectedChats.has(chat.id) ? (
+                        <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center">
+                          <Check className="w-5 h-5 text-white" />
+                        </div>
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
+                          {chat.type === "dm" ? (
+                            <MessageCircle className="w-5 h-5 text-gray-500" />
+                          ) : (
+                            <Users className="w-5 h-5 text-gray-500" />
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-gray-900 truncate">
+                        {chat.name || "Chat"}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {chat.type === "dm" ? "Direct message" : `${chat.memberCount} members`}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Error Message */}
+          {error && (
+            <div className="px-4 py-2 bg-red-50 text-red-600 text-sm border-t border-red-100">
+              {error}
+            </div>
+          )}
+
+          {/* Footer */}
+          <div className="p-4 border-t border-gray-200 flex items-center justify-between">
+            <div className="text-sm text-gray-500">
+              {selectedChats.size > 0
+                ? `${selectedChats.size} chat${selectedChats.size > 1 ? "s" : ""} selected`
+                : "Select chats to forward to"}
+            </div>
+            <button
+              onClick={handleForward}
+              disabled={selectedChats.size === 0 || isForwarding}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+            >
+              {isForwarding ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Forwarding...
+                </>
+              ) : (
+                <>
+                  <Forward className="w-4 h-4" />
+                  Forward
+                </>
+              )}
+            </button>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
+
+// Multi-Forward Message Modal Component (for combining and forwarding multiple messages)
+function MultiForwardModal({
+  messages: selectedMessages,
+  currentChatId,
+  onClose,
+}: {
+  messages: Message[];
+  currentChatId: string;
+  onClose: () => void;
+}) {
+  const [chats, setChats] = useState<Chat[]>([]);
+  const [selectedChats, setSelectedChats] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [isForwarding, setIsForwarding] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [combineMessages, setCombineMessages] = useState(selectedMessages.length > 1);
+
+  // Load user's chats
+  useEffect(() => {
+    const loadChats = async () => {
+      const token = getCookie("session_token");
+      if (!token) return;
+
+      setIsLoading(true);
+      try {
+        const res = await fetch("/api/chats?limit=100", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          // Filter out the current chat
+          setChats(data.chats.filter((c: Chat) => c.id !== currentChatId));
+        }
+      } catch {
+        setError("Failed to load chats");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    loadChats();
+  }, [currentChatId]);
+
+  // Filter chats by search query
+  const filteredChats = useMemo(() => {
+    if (!searchQuery.trim()) return chats;
+    const query = searchQuery.toLowerCase();
+    return chats.filter((chat) =>
+      chat.name?.toLowerCase().includes(query)
+    );
+  }, [chats, searchQuery]);
+
+  // Toggle chat selection
+  const toggleChat = (chatId: string) => {
+    setSelectedChats((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(chatId)) {
+        newSet.delete(chatId);
+      } else {
+        newSet.add(chatId);
+      }
+      return newSet;
+    });
+  };
+
+  // Forward messages to selected chats
+  const handleForward = async () => {
+    if (selectedChats.size === 0) return;
+
+    const token = getCookie("session_token");
+    if (!token) return;
+
+    setIsForwarding(true);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/messages/forward-multiple", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          message_ids: selectedMessages.map((m) => m.id),
+          chat_ids: Array.from(selectedChats),
+          combine: combineMessages,
+        }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to forward messages");
+      }
+
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to forward messages");
+    } finally {
+      setIsForwarding(false);
+    }
+  };
+
+  return (
+    <Dialog.Root open={true} onOpenChange={(open) => !open && onClose()}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 bg-black/50 z-50" />
+        <Dialog.Content className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg shadow-xl z-50 w-full max-w-md max-h-[80vh] flex flex-col">
+          <div className="p-4 border-b border-gray-200">
+            <Dialog.Title className="text-lg font-semibold">
+              Forward {selectedMessages.length} Message{selectedMessages.length > 1 ? "s" : ""}
+            </Dialog.Title>
+            <button
+              onClick={onClose}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Message Preview */}
+          <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 max-h-32 overflow-y-auto">
+            <div className="text-xs text-gray-500 mb-1">Messages to forward:</div>
+            <div className="space-y-1">
+              {selectedMessages.slice(0, 3).map((msg) => (
+                <div key={msg.id} className="text-sm text-gray-700 truncate">
+                  <span className="font-medium">{msg.sender.displayName || "Unknown"}: </span>
+                  {msg.content.text ? String(msg.content.text) : "[Message]"}
+                </div>
+              ))}
+              {selectedMessages.length > 3 && (
+                <div className="text-xs text-gray-500">
+                  +{selectedMessages.length - 3} more message{selectedMessages.length - 3 > 1 ? "s" : ""}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Combine option (only show for multiple messages) */}
+          {selectedMessages.length > 1 && (
+            <div className="px-4 py-2 border-b border-gray-200">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={combineMessages}
+                  onChange={(e) => setCombineMessages(e.target.checked)}
+                  className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="text-sm text-gray-700">Combine into single message bundle</span>
+              </label>
+            </div>
+          )}
+
+          {/* Search */}
+          <div className="p-3 border-b border-gray-200">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search chats..."
+                className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+          </div>
+
+          {/* Chat List */}
+          <div className="flex-1 overflow-y-auto min-h-0">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+              </div>
+            ) : filteredChats.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                {searchQuery ? "No chats found" : "No other chats available"}
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-100">
+                {filteredChats.map((chat) => (
+                  <button
+                    key={chat.id}
+                    onClick={() => toggleChat(chat.id)}
+                    className="w-full flex items-center gap-3 p-3 hover:bg-gray-50 transition-colors text-left"
+                  >
+                    <div className="relative">
+                      {selectedChats.has(chat.id) ? (
+                        <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center">
+                          <Check className="w-5 h-5 text-white" />
+                        </div>
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
+                          {chat.type === "dm" ? (
+                            <MessageCircle className="w-5 h-5 text-gray-500" />
+                          ) : (
+                            <Users className="w-5 h-5 text-gray-500" />
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-gray-900 truncate">
+                        {chat.name || "Chat"}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {chat.type === "dm" ? "Direct message" : `${chat.memberCount} members`}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Error Message */}
+          {error && (
+            <div className="px-4 py-2 bg-red-50 text-red-600 text-sm border-t border-red-100">
+              {error}
+            </div>
+          )}
+
+          {/* Footer */}
+          <div className="p-4 border-t border-gray-200 flex items-center justify-between">
+            <div className="text-sm text-gray-500">
+              {selectedChats.size > 0
+                ? `${selectedChats.size} chat${selectedChats.size > 1 ? "s" : ""} selected`
+                : "Select chats to forward to"}
+            </div>
+            <button
+              onClick={handleForward}
+              disabled={selectedChats.size === 0 || isForwarding}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+            >
+              {isForwarding ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Forwarding...
+                </>
+              ) : (
+                <>
+                  <Forward className="w-4 h-4" />
+                  Forward
+                </>
+              )}
+            </button>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
 

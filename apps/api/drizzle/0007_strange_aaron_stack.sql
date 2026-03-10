@@ -1,0 +1,4 @@
+ALTER TABLE "messages" ADD COLUMN "forwarded_from_message_id" uuid;--> statement-breakpoint
+ALTER TABLE "messages" ADD COLUMN "forwarded_from_chat_id" uuid;--> statement-breakpoint
+ALTER TABLE "messages" ADD CONSTRAINT "messages_forwarded_from_message_id_messages_id_fk" FOREIGN KEY ("forwarded_from_message_id") REFERENCES "public"."messages"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "messages" ADD CONSTRAINT "messages_forwarded_from_chat_id_chats_id_fk" FOREIGN KEY ("forwarded_from_chat_id") REFERENCES "public"."chats"("id") ON DELETE no action ON UPDATE no action;

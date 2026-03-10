@@ -50,6 +50,13 @@
       "when": 1773180280647,
       "tag": "0006_unknown_falcon",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1773185900300,
+      "tag": "0007_strange_aaron_stack",
+      "breakpoints": true
     }
   ]
 }

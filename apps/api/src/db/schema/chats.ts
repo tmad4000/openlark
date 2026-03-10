@@ -104,6 +104,8 @@ export const messages = pgTable(
     content: jsonb("content").$type<Record<string, unknown>>().notNull(),
     threadId: uuid("thread_id").references((): AnyPgColumn => messages.id),
     replyToId: uuid("reply_to_id").references((): AnyPgColumn => messages.id),
+    forwardedFromMessageId: uuid("forwarded_from_message_id").references((): AnyPgColumn => messages.id),
+    forwardedFromChatId: uuid("forwarded_from_chat_id").references(() => chats.id),
     editedAt: timestamp("edited_at", { withTimezone: true }),
     recalledAt: timestamp("recalled_at", { withTimezone: true }),
     scheduledFor: timestamp("scheduled_for", { withTimezone: true }),

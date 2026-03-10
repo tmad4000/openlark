@@ -557,8 +557,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 34,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added forwarded_from_message_id and forwarded_from_chat_id columns to messages table. Created POST /messages/:id/forward API endpoint for single message forwarding and POST /messages/forward-multiple for multi-message forwarding with optional combine flag. UI: Forward button in QuickReactionPicker hover menu, ForwardMessageModal for single message with chat search/selection, selection mode toggle in chat header to enter multi-select mode with checkboxes on messages, selection toolbar showing count and Forward button, MultiForwardModal for multiple messages with combine option to bundle messages. Forwarded messages display ForwardedAttribution component showing source chat name, sender, and original timestamp. Bundled messages render via BundledMessageContent component. Typecheck passes."
     },
     {
       "id": "US-035",
