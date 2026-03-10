@@ -328,6 +328,12 @@
           "role": "reviewer",
           "value": 1,
           "reason": "Iter 12 review: 4/6 subtasks complete. Messenger frontend UI well-implemented with ChatList, MessageList, MessageInput, and WebSocket hook. Real-time message delivery working. Static method pattern for cross-component updates works but is fragile (see comment). Remaining: subtask 3 (threads, rich text) and subtask 4 (typing/presence UI)."
+        },
+        {
+          "iteration": 13,
+          "role": "implementer",
+          "value": 1,
+          "reason": "Iteration 13 analysis: 4/6 subtasks done. Frontend UI integrated with WebSocket. Main gaps: no create-chat UI, sender shows truncated UUID instead of displayName, static method pattern for updates is fragile. Subtask 3 (threads/rich text/forwarding) and subtask 4 (typing/presence UI) remain."
         }
       ],
       "comments": [
@@ -415,6 +421,11 @@
           "iteration": 12,
           "role": "reviewer",
           "message": "Iter 12 review: use-websocket.ts handles reconnection well (exponential backoff, max 5 attempts, skip on 4001 auth failure). Token passed via query string is acceptable for WebSocket but consider secure WebSocket (wss://) note for production deployment. NEXT_PUBLIC_WS_URL env var correctly used."
+        },
+        {
+          "iteration": 13,
+          "role": "implementer",
+          "message": "Iteration 13: Added CreateChatDialog component with DM/group support. Users can now create chats from the UI. Also enhanced getChatMembers API to include user displayName/avatarUrl, so MessageList shows actual sender names instead of truncated UUIDs. 11 new tests for CreateChatDialog. 4/6 subtasks done, remaining: subtask 3 (threads, rich text, forwarding) and subtask 4 (typing/presence UI)."
         }
       ],
       "status": "in-progress",
@@ -423,7 +434,7 @@
         "role": "implementer"
       },
       "claimedBy": {
-        "iteration": 11,
+        "iteration": 13,
         "role": "implementer"
       },
       "splitFrom": null
@@ -456,6 +467,12 @@
           "role": "reviewer",
           "value": 1,
           "reason": "Iter 12 review: T-004 is the recommended next major module per goal.md build order (Phase 1: Auth, Messenger, Calendar). Auth is stable, Messenger has core functionality, Calendar is the clear next priority to complete Phase 1. Frontend shell and patterns are in place to support Calendar UI."
+        },
+        {
+          "iteration": 13,
+          "role": "implementer",
+          "value": 1,
+          "reason": "Iteration 13: Calendar is the clear next priority per goal.md Phase 1 build order (Auth → Messenger → Calendar). Auth stable, Messenger has core functionality. Starting Calendar completes Phase 1 foundation."
         }
       ],
       "comments": [],
@@ -1200,7 +1217,7 @@
   ],
   "metadata": {
     "createdAt": "2026-03-04T21:00:00Z",
-    "totalIterations": 22,
+    "totalIterations": 23,
     "iterationLog": [
       {
         "iteration": 1,
@@ -1332,6 +1349,12 @@
         "iteration": 22,
         "role": "implementer",
         "taskWorked": "T-003",
+        "contextCompacted": false
+      },
+      {
+        "iteration": 23,
+        "role": "reviewer",
+        "taskWorked": null,
         "contextCompacted": false
       }
     ]
