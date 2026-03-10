@@ -295,7 +295,7 @@ export async function messagesRoutes(fastify: FastifyInstance) {
         }
       }
 
-      // Fetch messages with sender info
+      // Fetch messages with sender info (excluding thread replies - only show parent messages and non-threaded messages)
       const messageRows = await db
         .select({
           id: messages.id,
@@ -319,8 +319,15 @@ export async function messagesRoutes(fastify: FastifyInstance) {
         .innerJoin(users, eq(messages.senderId, users.id))
         .where(
           cursorTimestamp
-            ? and(eq(messages.chatId, chatId), lt(messages.createdAt, cursorTimestamp))
-            : eq(messages.chatId, chatId)
+            ? and(
+                eq(messages.chatId, chatId),
+                lt(messages.createdAt, cursorTimestamp),
+                sql`${messages.threadId} IS NULL` // Only show parent messages, not thread replies
+              )
+            : and(
+                eq(messages.chatId, chatId),
+                sql`${messages.threadId} IS NULL` // Only show parent messages, not thread replies
+              )
         )
         .orderBy(desc(messages.createdAt))
         .limit(limit + 1); // Fetch one extra to check if there are more
@@ -334,8 +341,35 @@ export async function messagesRoutes(fastify: FastifyInstance) {
         ? resultMessages[resultMessages.length - 1]?.id
         : null;
 
+      // Get reply counts for all messages in the result
+      const messageIds = resultMessages.map((m) => m.id);
+      const replyCounts: Record<string, number> = {};
+
+      if (messageIds.length > 0) {
+        const replyCountRows = await db
+          .select({
+            threadId: messages.threadId,
+            count: sql<number>`count(*)::int`,
+          })
+          .from(messages)
+          .where(inArray(messages.threadId, messageIds))
+          .groupBy(messages.threadId);
+
+        for (const row of replyCountRows) {
+          if (row.threadId) {
+            replyCounts[row.threadId] = row.count;
+          }
+        }
+      }
+
+      // Add replyCount to each message
+      const messagesWithReplyCounts = resultMessages.map((msg) => ({
+        ...msg,
+        replyCount: replyCounts[msg.id] || 0,
+      }));
+
       return reply.status(200).send({
-        messages: resultMessages,
+        messages: messagesWithReplyCounts,
         nextCursor,
         hasMore,
       });
@@ -883,6 +917,148 @@ export async function messagesRoutes(fastify: FastifyInstance) {
 
       return reply.status(200).send({
         reactions: Object.values(reactionGroups),
+      });
+    }
+  );
+
+  /**
+   * GET /messages/:id/thread - Get all replies in a thread
+   * Returns: { parentMessage, replies: Message[], totalReplies: number }
+   */
+  fastify.get<{
+    Params: { id: string };
+    Querystring: { cursor?: string; limit?: string };
+  }>(
+    "/messages/:id/thread",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id: parentMessageId } = request.params;
+      const { cursor, limit: limitStr } = request.query;
+
+      // Validate messageId format
+      if (!UUID_REGEX.test(parentMessageId)) {
+        return reply.status(400).send({
+          error: "Invalid message ID format",
+        });
+      }
+
+      // Parse and validate limit
+      const limit = Math.min(Math.max(parseInt(limitStr || "50", 10) || 50, 1), 100);
+
+      // Validate cursor format if provided
+      if (cursor && !UUID_REGEX.test(cursor)) {
+        return reply.status(400).send({
+          error: "Invalid cursor format",
+        });
+      }
+
+      const currentUserId = request.user.id;
+
+      // Get the parent message and verify it exists
+      const [parentMessage] = await db
+        .select({
+          id: messages.id,
+          chatId: messages.chatId,
+          senderId: messages.senderId,
+          type: messages.type,
+          content: messages.content,
+          threadId: messages.threadId,
+          replyToId: messages.replyToId,
+          editedAt: messages.editedAt,
+          recalledAt: messages.recalledAt,
+          scheduledFor: messages.scheduledFor,
+          createdAt: messages.createdAt,
+          sender: {
+            id: users.id,
+            displayName: users.displayName,
+            avatarUrl: users.avatarUrl,
+          },
+        })
+        .from(messages)
+        .innerJoin(users, eq(messages.senderId, users.id))
+        .where(eq(messages.id, parentMessageId))
+        .limit(1);
+
+      if (!parentMessage) {
+        return reply.status(404).send({
+          error: "Message not found",
+        });
+      }
+
+      // Check user is a member of the chat
+      if (!(await isChatMember(parentMessage.chatId, currentUserId))) {
+        return reply.status(403).send({
+          error: "You are not a member of this chat",
+        });
+      }
+
+      // Build query for thread replies (messages where threadId = parentMessageId)
+      let cursorTimestamp: Date | null = null;
+
+      // If cursor provided, get its timestamp for pagination
+      if (cursor) {
+        const [cursorMessage] = await db
+          .select({ createdAt: messages.createdAt })
+          .from(messages)
+          .where(eq(messages.id, cursor))
+          .limit(1);
+
+        if (cursorMessage) {
+          cursorTimestamp = cursorMessage.createdAt;
+        }
+      }
+
+      // Fetch thread replies with sender info (oldest first for threads)
+      const replyRows = await db
+        .select({
+          id: messages.id,
+          chatId: messages.chatId,
+          senderId: messages.senderId,
+          type: messages.type,
+          content: messages.content,
+          threadId: messages.threadId,
+          replyToId: messages.replyToId,
+          editedAt: messages.editedAt,
+          recalledAt: messages.recalledAt,
+          scheduledFor: messages.scheduledFor,
+          createdAt: messages.createdAt,
+          sender: {
+            id: users.id,
+            displayName: users.displayName,
+            avatarUrl: users.avatarUrl,
+          },
+        })
+        .from(messages)
+        .innerJoin(users, eq(messages.senderId, users.id))
+        .where(
+          cursorTimestamp
+            ? and(eq(messages.threadId, parentMessageId), gt(messages.createdAt, cursorTimestamp))
+            : eq(messages.threadId, parentMessageId)
+        )
+        .orderBy(messages.createdAt) // Oldest first for threads
+        .limit(limit + 1);
+
+      // Determine if there are more replies
+      const hasMore = replyRows.length > limit;
+      const resultReplies = hasMore ? replyRows.slice(0, limit) : replyRows;
+
+      // Get next cursor (last reply ID in the result)
+      const nextCursor = hasMore
+        ? resultReplies[resultReplies.length - 1]?.id
+        : null;
+
+      // Get total reply count
+      const [countResult] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(messages)
+        .where(eq(messages.threadId, parentMessageId));
+
+      return reply.status(200).send({
+        parentMessage,
+        replies: resultReplies,
+        totalReplies: countResult?.count || 0,
+        nextCursor,
+        hasMore,
       });
     }
   );

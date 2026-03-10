@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { Search, Plus, MessageCircle, Users, Bell, BellOff, AtSign, Info, Wifi, WifiOff, Loader2, Check, CheckCheck, Circle, Smile, MoreHorizontal } from "lucide-react";
+import { Search, Plus, MessageCircle, Users, Bell, BellOff, AtSign, Info, Wifi, WifiOff, Loader2, Check, CheckCheck, Circle, Smile, MoreHorizontal, Reply, X, MessageSquare } from "lucide-react";
 import * as Dialog from "@radix-ui/react-dialog";
 import MessageInput from "@/components/MessageInput";
 import { useWebSocket, ConnectionStatus, WebSocketMessage, TypingEvent, PresenceEvent, ReadReceiptEvent, ReactionEvent } from "@/hooks/useWebSocket";
@@ -120,6 +120,7 @@ interface Message {
     avatarUrl: string | null;
   };
   reactions?: Reaction[];
+  replyCount?: number;
 }
 
 interface ReadReceipt {
@@ -241,9 +242,11 @@ interface EmojiData {
 function QuickReactionPicker({
   onSelect,
   onOpenFull,
+  onReply,
 }: {
   onSelect: (emoji: string) => void;
   onOpenFull: () => void;
+  onReply: () => void;
 }) {
   return (
     <div className="flex items-center gap-0.5 bg-white border border-gray-200 rounded-full shadow-lg px-1.5 py-0.5">
@@ -263,6 +266,14 @@ function QuickReactionPicker({
         title="More reactions"
       >
         <MoreHorizontal className="w-4 h-4" />
+      </button>
+      <div className="w-px h-5 bg-gray-200 mx-0.5" />
+      <button
+        onClick={onReply}
+        className="w-7 h-7 flex items-center justify-center hover:bg-gray-100 rounded-full transition-colors text-gray-500"
+        title="Reply in thread"
+      >
+        <Reply className="w-4 h-4" />
       </button>
     </div>
   );
@@ -502,12 +513,14 @@ function MessageBubble({
   readStatus,
   onShowReadReceipts,
   onToggleReaction,
+  onOpenThread,
 }: {
   message: Message;
   isCurrentUser: boolean;
   readStatus?: { totalMembers: number; readCount: number };
   onShowReadReceipts?: (messageId: string) => void;
   onToggleReaction?: (messageId: string, emoji: string) => void;
+  onOpenThread?: (messageId: string) => void;
 }) {
   const [showReactionPicker, setShowReactionPicker] = useState(false);
   const [showFullPicker, setShowFullPicker] = useState(false);
@@ -619,6 +632,10 @@ function MessageBubble({
                   setShowFullPicker(true);
                   setShowReactionPicker(false);
                 }}
+                onReply={() => {
+                  setShowReactionPicker(false);
+                  onOpenThread?.(message.id);
+                }}
               />
             </div>
           )}
@@ -650,6 +667,19 @@ function MessageBubble({
             reactions={message.reactions}
             onToggleReaction={(emoji) => handleReaction(emoji)}
           />
+        )}
+
+        {/* Thread reply indicator */}
+        {message.replyCount && message.replyCount > 0 && (
+          <button
+            onClick={() => onOpenThread?.(message.id)}
+            className="flex items-center gap-1.5 px-2 py-1 mt-1 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded transition-colors"
+          >
+            <MessageSquare className="w-3.5 h-3.5" />
+            <span className="font-medium">
+              {message.replyCount} {message.replyCount === 1 ? "reply" : "replies"}
+            </span>
+          </button>
         )}
 
         {/* Timestamp, pending indicator, edited indicator, and read status */}
@@ -749,6 +779,258 @@ function OnlineIndicator({ isOnline, size = "md" }: { isOnline: boolean; size?: 
   );
 }
 
+interface ThreadPanelProps {
+  parentMessageId: string;
+  chatId: string;
+  currentUserId: string;
+  onClose: () => void;
+  onTypingStart: () => void;
+  onTypingStop: () => void;
+  onToggleReaction: (messageId: string, emoji: string) => void;
+  incomingMessage: Message | null;
+}
+
+function ThreadPanel({
+  parentMessageId,
+  chatId,
+  currentUserId,
+  onClose,
+  onTypingStart,
+  onTypingStop,
+  onToggleReaction,
+  incomingMessage,
+}: ThreadPanelProps) {
+  const [parentMessage, setParentMessage] = useState<Message | null>(null);
+  const [replies, setReplies] = useState<Message[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [isSending, setIsSending] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const repliesEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = "auto") => {
+    repliesEndRef.current?.scrollIntoView({ behavior });
+  }, []);
+
+  // Load thread data
+  const loadThread = useCallback(async (cursor?: string) => {
+    const token = getCookie("session_token");
+    if (!token) return;
+
+    if (!cursor) {
+      setIsLoading(true);
+    }
+    setError(null);
+
+    try {
+      const url = cursor
+        ? `/api/messages/${parentMessageId}/thread?cursor=${cursor}&limit=50`
+        : `/api/messages/${parentMessageId}/thread?limit=50`;
+
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to load thread");
+      }
+
+      const data = await res.json();
+
+      if (cursor) {
+        setReplies((prev) => [...prev, ...data.replies]);
+      } else {
+        setParentMessage(data.parentMessage);
+        setReplies(data.replies || []);
+      }
+
+      setNextCursor(data.nextCursor);
+      setHasMore(data.hasMore);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load thread");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [parentMessageId]);
+
+  // Initial load
+  useEffect(() => {
+    loadThread();
+  }, [loadThread]);
+
+  // Scroll to bottom after initial load
+  useEffect(() => {
+    if (!isLoading && replies.length > 0) {
+      scrollToBottom();
+    }
+  }, [isLoading, replies.length, scrollToBottom]);
+
+  // Handle incoming WebSocket messages for this thread
+  useEffect(() => {
+    if (!incomingMessage) return;
+
+    // Only add if it's a reply to this thread
+    if (incomingMessage.threadId === parentMessageId) {
+      setReplies((prev) => {
+        if (prev.some((r) => r.id === incomingMessage.id)) {
+          return prev;
+        }
+        return [...prev, incomingMessage];
+      });
+      setTimeout(() => scrollToBottom("smooth"), 50);
+    }
+  }, [incomingMessage, parentMessageId, scrollToBottom]);
+
+  // Send reply
+  const handleSendReply = useCallback(async (content: { html: string; text: string }) => {
+    const text = content.text.trim();
+    if (!text) return;
+
+    const token = getCookie("session_token");
+    if (!token) return;
+
+    const hasFormatting = content.html !== `<p>${content.text}</p>` && content.html !== content.text;
+    const messageType = hasFormatting ? "rich_text" : "text";
+    const messageContent = hasFormatting
+      ? { html: content.html, text: content.text }
+      : { text };
+
+    setIsSending(true);
+
+    try {
+      const res = await fetch(`/api/chats/${chatId}/messages`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          type: messageType,
+          content: messageContent,
+          thread_id: parentMessageId,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to send reply");
+      }
+
+      const newMessage = await res.json() as Message;
+      setReplies((prev) => {
+        if (prev.some((r) => r.id === newMessage.id)) {
+          return prev;
+        }
+        return [...prev, newMessage];
+      });
+      setTimeout(() => scrollToBottom("smooth"), 50);
+    } catch (err) {
+      console.error("Failed to send reply:", err);
+    } finally {
+      setIsSending(false);
+    }
+  }, [chatId, parentMessageId, scrollToBottom]);
+
+  return (
+    <div className="w-96 border-l border-gray-200 bg-white flex flex-col h-full">
+      {/* Thread Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+        <div className="flex items-center gap-2">
+          <MessageSquare className="w-5 h-5 text-gray-500" />
+          <h3 className="font-semibold text-gray-900">Thread</h3>
+          <span className="text-sm text-gray-500">
+            {replies.length} {replies.length === 1 ? "reply" : "replies"}
+          </span>
+        </div>
+        <button
+          onClick={onClose}
+          className="p-1.5 rounded-full hover:bg-gray-100 text-gray-500 transition-colors"
+          title="Close thread"
+        >
+          <X className="w-5 h-5" />
+        </button>
+      </div>
+
+      {/* Thread Content */}
+      <div className="flex-1 overflow-y-auto px-4 py-2">
+        {isLoading ? (
+          <div className="flex items-center justify-center h-full text-gray-500">
+            Loading thread...
+          </div>
+        ) : error ? (
+          <div className="flex items-center justify-center h-full text-red-500">
+            {error}
+          </div>
+        ) : (
+          <>
+            {/* Parent Message */}
+            {parentMessage && (
+              <div className="pb-3 mb-3 border-b border-gray-200">
+                <div className="text-xs text-gray-500 mb-2 font-medium">Original message</div>
+                <MessageBubble
+                  message={parentMessage}
+                  isCurrentUser={parentMessage.senderId === currentUserId}
+                  onToggleReaction={onToggleReaction}
+                />
+              </div>
+            )}
+
+            {/* Replies */}
+            {replies.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <MessageCircle className="w-10 h-10 mx-auto mb-2 text-gray-300" />
+                <p className="text-sm">No replies yet</p>
+                <p className="text-xs mt-1">Be the first to reply</p>
+              </div>
+            ) : (
+              <div className="space-y-1">
+                {replies.map((reply) => (
+                  <MessageBubble
+                    key={reply.id}
+                    message={reply}
+                    isCurrentUser={reply.senderId === currentUserId}
+                    onToggleReaction={onToggleReaction}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Load more button */}
+            {hasMore && (
+              <div className="text-center py-2">
+                <button
+                  onClick={() => nextCursor && loadThread(nextCursor)}
+                  className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+                >
+                  Load more replies
+                </button>
+              </div>
+            )}
+
+            <div ref={repliesEndRef} />
+          </>
+        )}
+      </div>
+
+      {/* Reply Input */}
+      <div className="flex-shrink-0 bg-white p-3 border-t border-gray-200">
+        <MessageInput
+          onSend={(content) => {
+            onTypingStop();
+            handleSendReply(content);
+          }}
+          onTypingStart={onTypingStart}
+          onTypingStop={onTypingStop}
+          isSending={isSending}
+          placeholder="Reply in thread..."
+          sendOnEnter={true}
+        />
+      </div>
+    </div>
+  );
+}
+
 function ChatView({
   chat,
   currentUserId,
@@ -786,6 +1068,9 @@ function ChatView({
 
   // Reactions state
   const [messageReactions, setMessageReactions] = useState<Record<string, Reaction[]>>({});
+
+  // Thread panel state
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
 
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -1010,6 +1295,7 @@ function ChatView({
     setMessageReadStatus({});
     setMessageReactions({});
     setSelectedMessageForReceipts(null);
+    setActiveThreadId(null);
     lastMarkedReadRef.current = null;
     loadMessages();
   }, [chat.id, loadMessages]);
@@ -1025,6 +1311,19 @@ function ChatView({
   // Handle incoming WebSocket messages
   useEffect(() => {
     if (!incomingMessage || incomingMessage.chatId !== chat.id) return;
+
+    // If this is a thread reply, update the parent message's reply count instead of adding to main list
+    if (incomingMessage.threadId) {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === incomingMessage.threadId
+            ? { ...m, replyCount: (m.replyCount || 0) + 1 }
+            : m
+        )
+      );
+      // Don't add thread replies to the main message list
+      return;
+    }
 
     setMessages((prev) => {
       // Check if message already exists (to avoid duplicates)
@@ -1270,9 +1569,11 @@ function ChatView({
   }, [onlineUsers]);
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Chat Header */}
-      <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-white">
+    <div className="flex h-full">
+      {/* Main Chat Area */}
+      <div className="flex-1 flex flex-col h-full">
+        {/* Chat Header */}
+        <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-white">
         <div className="flex items-center gap-3">
           {/* Avatar with online indicator */}
           <div className="relative w-10 h-10">
@@ -1387,6 +1688,7 @@ function ChatView({
                         readStatus={messageReadStatus[message.id]}
                         onShowReadReceipts={setSelectedMessageForReceipts}
                         onToggleReaction={toggleReaction}
+                        onOpenThread={setActiveThreadId}
                       />
                       {/* Read receipts popover */}
                       {selectedMessageForReceipts === message.id && (
@@ -1406,25 +1708,40 @@ function ChatView({
             <div ref={messagesEndRef} />
           </>
         )}
+        </div>
+
+        {/* Typing Indicator */}
+        <TypingIndicator typingUsers={typingUsers} />
+
+        {/* Message Input */}
+        <div className="flex-shrink-0 bg-white p-3">
+          <MessageInput
+            onSend={(content) => {
+              onTypingStop();
+              handleSendMessage(content);
+            }}
+            onTypingStart={onTypingStart}
+            onTypingStop={onTypingStop}
+            isSending={isSending}
+            placeholder="Type a message..."
+            sendOnEnter={true}
+          />
+        </div>
       </div>
 
-      {/* Typing Indicator */}
-      <TypingIndicator typingUsers={typingUsers} />
-
-      {/* Message Input */}
-      <div className="flex-shrink-0 bg-white p-3">
-        <MessageInput
-          onSend={(content) => {
-            onTypingStop();
-            handleSendMessage(content);
-          }}
+      {/* Thread Panel */}
+      {activeThreadId && (
+        <ThreadPanel
+          parentMessageId={activeThreadId}
+          chatId={chat.id}
+          currentUserId={currentUserId}
+          onClose={() => setActiveThreadId(null)}
           onTypingStart={onTypingStart}
           onTypingStop={onTypingStop}
-          isSending={isSending}
-          placeholder="Type a message..."
-          sendOnEnter={true}
+          onToggleReaction={toggleReaction}
+          incomingMessage={incomingMessage}
         />
-      </div>
+      )}
     </div>
   );
 }

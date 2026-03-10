@@ -489,8 +489,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 30,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented message threading: Reply button in hover menu, GET /messages/:id/thread endpoint for fetching thread replies, replyCount added to message queries, thread panel slides in from right showing parent + replies, main message list excludes thread replies (only shows parent messages with 'N replies' indicator)"
     },
     {
       "id": "US-031",
