@@ -146,11 +146,45 @@ Started: Wed Mar  4 13:58:43 MST 2026
 - `cn()` utility for conditional class merging with tailwind-merge
 - CVA (class-variance-authority) for variant-based styling
 
-### Auth Flow (Frontend, Iteration 8)
+### Auth Flow (Frontend, Iteration 8, updated Iteration 10)
 - API client stores JWT in localStorage via `api.setToken()`
 - AuthProvider checks localStorage on mount, calls `/auth/me` to validate
 - Protected routes in `(app)/` layout redirect to `/login` if not authenticated
 - Login/register forms call API, store token, then redirect to `/messenger`
+- **IMPORTANT**: Only clear token on 401 Unauthorized, not on network errors or 5xx
+  ```ts
+  const isUnauthorized = error instanceof ApiError && error.isUnauthorized();
+  if (isUnauthorized) {
+    api.setToken(null);
+  }
+  ```
+
+### API Error Handling (Iteration 10)
+- Custom `ApiError` class includes HTTP status code
+- Use `error.isUnauthorized()` to check for 401 status
+- Preserves error code from API response for precise handling
+  ```ts
+  export class ApiError extends Error {
+    constructor(message: string, public readonly status: number, public readonly code?: string) {
+      super(message);
+      this.name = "ApiError";
+    }
+    isUnauthorized(): boolean { return this.status === 401; }
+  }
+  ```
+
+### Keyboard Shortcuts (Iteration 10)
+- Use `useKeyboardShortcut` hook from `hooks/use-keyboard-shortcut.ts`
+- `meta` modifier accepts both Cmd (macOS) and Ctrl (Windows/Linux)
+- Shortcuts ignored when focus is in input/textarea/contenteditable
+- Command palette: Cmd+K opens global search/navigation
+  ```ts
+  useKeyboardShortcut({
+    key: "k",
+    modifiers: ["meta"],
+    callback: () => setSearchOpen(true),
+  });
+  ```
 
 ---
 
@@ -1341,5 +1375,81 @@ From progress log that held true this iteration:
 
 ### New pattern observed
 - **Client-only providers** (`providers.tsx`): Wraps client-only context providers (AuthProvider, ThemeProvider) in a single component used by root layout. This cleanly separates server/client boundaries in Next.js App Router.
+
+---
+
+## 2026-03-10 - Iteration 10 - T-023 (Complete)
+
+### What was implemented
+Completed T-023 by addressing reviewer feedback and implementing subtask 4:
+
+1. **Fixed auth error handling** (`apps/web/src/lib/api.ts`, `apps/web/src/hooks/use-auth.tsx`):
+   - Created `ApiError` class that includes HTTP status code
+   - Added `isUnauthorized()` method for checking 401 errors
+   - Modified `refreshUser` to only clear token on 401 Unauthorized
+   - Network errors and 5xx server errors no longer log users out
+   - Addresses iteration 9 reviewer feedback about accidental logouts
+
+2. **Command palette with keyboard shortcuts** (`apps/web/src/components/command-palette.tsx`):
+   - Cmd+K / Ctrl+K opens command palette (cross-platform)
+   - Navigation to all modules (Messenger, Calendar, Docs, Base, Tasks, Approvals, Admin)
+   - Theme switching (light/dark/system) from command palette
+   - Arrow key navigation with Enter to select
+   - Fuzzy search across titles, descriptions, and keywords
+   - Accessible with VisuallyHidden title/description for screen readers
+
+3. **Keyboard shortcut hook** (`apps/web/src/hooks/use-keyboard-shortcut.ts`):
+   - Reusable hook for registering keyboard shortcuts
+   - Cross-platform: `meta` modifier accepts both Cmd (macOS) and Ctrl (Windows/Linux)
+   - Ignores shortcuts when typing in input/textarea/contenteditable
+   - Supports multiple modifiers (ctrl, meta, shift, alt)
+
+4. **PWA manifest** (`apps/web/public/manifest.json`, layout.tsx):
+   - App manifest with name, description, theme colors
+   - Icon definitions (SVG placeholder, PNG specifications)
+   - App shortcuts for Messenger, Calendar, Docs
+   - Standalone display mode for app-like experience
+   - Viewport and theme-color meta tags for mobile
+
+5. **Dialog component** (`apps/web/src/components/ui/dialog.tsx`):
+   - Built on Radix UI Dialog primitive
+   - Accessible modal with overlay, close button
+   - Animation for open/close states
+
+### Files changed
+- `apps/web/src/lib/api.ts` - Added ApiError class with status
+- `apps/web/src/hooks/use-auth.tsx` - Fixed token clearing logic
+- `apps/web/src/hooks/use-keyboard-shortcut.ts` - New keyboard hook
+- `apps/web/src/components/command-palette.tsx` - New command palette
+- `apps/web/src/components/ui/dialog.tsx` - New dialog component
+- `apps/web/src/app/providers.tsx` - Added CommandPaletteProvider
+- `apps/web/src/app/layout.tsx` - Added PWA manifest and meta tags
+- `apps/web/public/manifest.json` - New PWA manifest
+- `apps/web/public/icons/icon.svg` - New placeholder icon
+
+### Tests added
+- **7 api.test.ts tests**: Token management, error handling, authorization header
+- **8 use-auth.test.tsx tests**: Token refresh, 401 handling, network error preservation, login/logout
+- **12 use-keyboard-shortcut.test.ts tests**: Key matching, modifiers (meta/ctrl/shift/alt), input element bypass, cleanup
+
+### Plan deviations
+- None — followed reviewer feedback and completed subtask 4 as specified
+
+### Learnings for future iterations
+- **New pattern**: Custom `ApiError` class with status code enables precise error handling without losing type safety
+- **New pattern**: Keyboard shortcut hook with `meta` modifier accepts both Cmd and Ctrl for cross-platform support
+- **New pattern**: Command palette provides quick navigation without mouse - matches modern productivity apps
+- **Reinforced pattern**: Radix UI primitives (Dialog, VisuallyHidden) provide accessible foundations
+- **Reinforced pattern**: Test mocking with vi.mock factory function handles class exports correctly
+- **Self-reflection**: Addressing reviewer feedback first (auth fix) before new features (keyboard shortcuts) ensures higher-priority issues get fixed
+
+### Tech debt addressed
+- ✅ Clear token only on 401, not all errors (`use-auth.tsx:62-70`) — RESOLVED from iteration 9
+
+### Tech debt remaining
+- Auto-generated tabs not implemented (FR-2.15 partial)
+- Typing/presence tests skipped (timing sensitivity)
+- Login needs org context for multi-tenant (auth.service.ts:122)
+- PNG icons need to be generated from SVG placeholder
 
 ---

@@ -4,9 +4,26 @@ interface ApiResponse<T> {
   data: T;
 }
 
-interface ApiError {
+interface ApiErrorBody {
   code: string;
   message: string;
+}
+
+// Custom error class that includes HTTP status code
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+    public readonly code?: string
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+
+  // Check if this is an authentication error (401)
+  isUnauthorized(): boolean {
+    return this.status === 401;
+  }
 }
 
 class ApiClient {
@@ -54,8 +71,12 @@ class ApiClient {
     const json = await response.json();
 
     if (!response.ok) {
-      const error = json as ApiError;
-      throw new Error(error.message || "API request failed");
+      const errorBody = json as ApiErrorBody;
+      throw new ApiError(
+        errorBody.message || "API request failed",
+        response.status,
+        errorBody.code
+      );
     }
 
     return (json as ApiResponse<T>).data;

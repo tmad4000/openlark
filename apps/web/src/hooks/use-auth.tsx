@@ -8,7 +8,7 @@ import {
   useCallback,
   type ReactNode,
 } from "react";
-import { api, type User, type Organization } from "@/lib/api";
+import { api, ApiError, type User, type Organization } from "@/lib/api";
 
 interface AuthState {
   user: User | null;
@@ -59,8 +59,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading: false,
         isAuthenticated: true,
       });
-    } catch {
-      api.setToken(null);
+    } catch (error) {
+      // Only clear token on 401 Unauthorized - the token is definitively invalid
+      // Don't clear on network errors, 5xx server errors, etc. - those are temporary
+      const isUnauthorized = error instanceof ApiError && error.isUnauthorized();
+
+      if (isUnauthorized) {
+        api.setToken(null);
+      }
+
       setState({
         user: null,
         organization: null,
