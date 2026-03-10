@@ -172,6 +172,11 @@
           "iteration": 3,
           "role": "reviewer",
           "message": "Iter 3 review: config.ts:19 - JWT_SECRET default value still present after 3 reviews. Recommend adding this check in loadConfig(): if (NODE_ENV === 'production' && JWT_SECRET === 'dev-secret-change-in-production') throw new Error('Must set JWT_SECRET in production'). Simple fix, prevents accidental production exposure."
+        },
+        {
+          "iteration": 4,
+          "role": "implementer",
+          "message": "Iteration 4: Added JWT_SECRET production validation. Server now fails to start if NODE_ENV=production and JWT_SECRET equals the default value. Added 4 tests covering all scenarios. Tech debt item that was flagged 4 times is now resolved."
         }
       ],
       "status": "in-progress",
