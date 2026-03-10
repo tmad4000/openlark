@@ -958,3 +958,83 @@ Fixed critical security tech debt that was flagged 4 times in previous reviews:
 - Login needs org context for multi-tenant (`auth.service.ts:122`) — documented limitation
 
 ---
+
+## 2026-03-10 - Iteration 5 - T-003 (Chat Tabs and Announcements)
+
+### What was implemented
+Messenger module subtask 5: Chat tabs (FR-2.15, FR-2.16) and announcements (FR-2.18):
+
+1. **Database schema** (`apps/api/src/db/schema/messenger.ts`):
+   - `chatTabs` table: id, chatId, type (auto|custom), name, url, position, createdBy, createdAt
+   - `announcements` table: id, chatId, content, authorId, isPinned, createdAt, updatedAt
+   - Relations added to chats table (tabs, announcements)
+   - Type exports for ChatTab, NewChatTab, Announcement, NewAnnouncement
+
+2. **Validation schemas** (`apps/api/src/modules/messenger/messenger.schemas.ts`):
+   - `createChatTabSchema`: name (1-100 chars), url (required, valid URL)
+   - `updateChatTabSchema`: name, url, position (optional)
+   - `createAnnouncementSchema`: content (1-5000 chars)
+   - `updateAnnouncementSchema`: content, isPinned (optional)
+
+3. **Service methods** (`apps/api/src/modules/messenger/messenger.service.ts`):
+   - `getChatTabs(chatId)`: List tabs ordered by position
+   - `createChatTab(chatId, input, userId)`: Create custom tab (admin only, max 20)
+   - `updateChatTab(tabId, input, userId)`: Update custom tab (admin only)
+   - `deleteChatTab(tabId, userId)`: Delete custom tab (admin only)
+   - `getAnnouncements(chatId)`: List announcements (newest first)
+   - `createAnnouncement(chatId, input, userId)`: Create announcement (admin only)
+   - `updateAnnouncement(announcementId, input, userId)`: Update (admin or author)
+   - `deleteAnnouncement(announcementId, userId)`: Delete (admin or author)
+
+4. **API routes** (`apps/api/src/modules/messenger/messenger.routes.ts`):
+   - `GET /chats/:chatId/tabs` - List tabs (any member)
+   - `POST /chats/:chatId/tabs` - Create custom tab (admin only)
+   - `PATCH /tabs/:tabId` - Update tab (admin only)
+   - `DELETE /tabs/:tabId` - Delete tab (admin only)
+   - `GET /chats/:chatId/announcements` - List announcements (any member)
+   - `POST /chats/:chatId/announcements` - Create announcement (admin only)
+   - `PATCH /announcements/:announcementId` - Update (admin or author)
+   - `DELETE /announcements/:announcementId` - Delete (admin or author)
+
+### Files changed
+- `apps/api/src/db/schema/messenger.ts` - Added chatTabs and announcements tables
+- `apps/api/src/modules/messenger/messenger.schemas.ts` - Added 4 new schemas
+- `apps/api/src/modules/messenger/messenger.service.ts` - Added 8 service methods
+- `apps/api/src/modules/messenger/messenger.routes.ts` - Added 8 API endpoints
+- `apps/api/src/__tests__/messenger.test.ts` - Added 21 tests
+- `apps/api/src/__tests__/messenger.integration.test.ts` - Added 5 tests
+
+### Tests added
+- **17 unit tests** for schema validation (createChatTabSchema, updateChatTabSchema, createAnnouncementSchema, updateAnnouncementSchema)
+- **4 unit tests** for auth requirements on new endpoints
+- **5 integration tests**:
+  - Chat tabs CRUD with admin-only permissions
+  - Tab update and delete
+  - Announcements CRUD with admin-only permissions
+  - Announcement update and delete
+  - Author can update their own announcement
+
+### Plan deviations
+- None — followed goal.md specifications for FR-2.15, FR-2.16, FR-2.18
+
+### Learnings for future iterations
+- **Reinforced pattern**: Module structure (routes.ts, service.ts, schemas.ts) scales cleanly
+- **Reinforced pattern**: Admin-only operations check member role in service layer
+- **Reinforced pattern**: Integration tests need table cleanup in foreign key order
+- **New pattern**: Author-or-admin permission check (announcement updates allow either)
+- **Self-reflection**: T-003 subtask 5 was clearly scoped. Schema + service + routes + tests is a complete feature slice.
+
+### Tech debt addressed
+- ✅ T-003 subtask 5 (pins, favorites, chat tabs, announcements) is now complete
+  - Pins and favorites were done in earlier iterations
+  - Chat tabs and announcements added this iteration
+
+### Tech debt remaining
+- Presence broadcasts could be batched (`websocket.ts:218-244`) — low priority
+- Typing/presence tests skipped (`websocket.integration.test.ts`) — timing sensitivity
+- No web app tests (`apps/web`) — add when starting T-023
+- Login needs org context for multi-tenant (`auth.service.ts:122`) — documented limitation
+- T-003 subtask 3 (rich text, threads, forwarding) still pending
+- T-003 subtask 4 (reactions UX, typing, presence UI) — reactions backend done, UI pending
+
+---
