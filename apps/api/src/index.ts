@@ -6,6 +6,7 @@ import { orgsRoutes } from "./routes/orgs";
 import { departmentsRoutes } from "./routes/departments";
 import { usersRoutes } from "./routes/users";
 import { contactsRoutes } from "./routes/contacts";
+import { chatsRoutes } from "./routes/chats";
 import { wsRoutes } from "./routes/ws";
 import { closeRedis } from "./lib/redis";
 
@@ -26,6 +27,7 @@ await fastify.register(orgsRoutes);
 await fastify.register(departmentsRoutes);
 await fastify.register(usersRoutes);
 await fastify.register(contactsRoutes);
+await fastify.register(chatsRoutes);
 await fastify.register(wsRoutes);
 
 fastify.get("/", async () => {

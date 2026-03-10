@@ -321,8 +321,8 @@
         "Typecheck passes"
       ],
       "priority": 20,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented in apps/api/src/routes/chats.ts. POST /chats/dm creates or returns existing DM (checks for existing DM between users). POST /chats/group creates group chat with creator as owner. Both endpoints validate org membership and return full chat with member list including user details."
     },
     {
       "id": "US-021",
