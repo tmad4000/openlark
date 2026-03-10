@@ -12,10 +12,12 @@
   },
   "dependencies": {
     "@fastify/cors": "^10.0.0",
+    "@fastify/websocket": "^11.2.0",
     "@openlark/shared": "workspace:*",
     "bcrypt": "^6.0.0",
     "drizzle-orm": "^0.45.1",
     "fastify": "^5.0.0",
+    "ioredis": "^5.10.0",
     "postgres": "^3.4.8"
   },
   "devDependencies": {

@@ -305,8 +305,8 @@
         "Typecheck passes"
       ],
       "priority": 19,
-      "passes": false,
-      "notes": "Each chat has a Redis pub/sub channel: chat:{chat_id}. User presence tracked via Redis sorted set."
+      "passes": true,
+      "notes": "Added @fastify/websocket 11.2.0 and ioredis 5.10.0. Created src/lib/redis.ts with pub/sub helpers: publish(channel, event), subscribe(channel, callback) returning unsubscribe fn. Created src/routes/ws.ts with /ws WebSocket endpoint. Auth via ?token query param (SHA-256 hash lookup, same as REST auth). On connect: subscribes to all user's chat channels (chat:{chatId}). Messages published to chat channels are forwarded to all connected members. Tracks user connections for targeted broadcasts. Cleanup on disconnect: unsubscribes from all channels, removes from tracking maps. Graceful shutdown: closes Redis connections on SIGTERM/SIGINT. Typecheck passes."
     },
     {
       "id": "US-020",

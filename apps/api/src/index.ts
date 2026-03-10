@@ -1,10 +1,13 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import websocket from "@fastify/websocket";
 import { authRoutes } from "./routes/auth";
 import { orgsRoutes } from "./routes/orgs";
 import { departmentsRoutes } from "./routes/departments";
 import { usersRoutes } from "./routes/users";
 import { contactsRoutes } from "./routes/contacts";
+import { wsRoutes } from "./routes/ws";
+import { closeRedis } from "./lib/redis";
 
 const fastify = Fastify({
   logger: true,
@@ -14,12 +17,16 @@ await fastify.register(cors, {
   origin: true,
 });
 
+// Register WebSocket plugin
+await fastify.register(websocket);
+
 // Register routes
 await fastify.register(authRoutes);
 await fastify.register(orgsRoutes);
 await fastify.register(departmentsRoutes);
 await fastify.register(usersRoutes);
 await fastify.register(contactsRoutes);
+await fastify.register(wsRoutes);
 
 fastify.get("/", async () => {
   return { status: "ok", name: "OpenLark API" };
@@ -39,5 +46,16 @@ const start = async () => {
     process.exit(1);
   }
 };
+
+// Graceful shutdown
+const shutdown = async () => {
+  console.log("Shutting down...");
+  await fastify.close();
+  await closeRedis();
+  process.exit(0);
+};
+
+process.on("SIGTERM", shutdown);
+process.on("SIGINT", shutdown);
 
 start();
