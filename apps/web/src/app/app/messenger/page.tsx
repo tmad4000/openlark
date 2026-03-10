@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { Search, Plus, MessageCircle, Users, Bell, BellOff, AtSign, Info, Wifi, WifiOff, Loader2, Check, CheckCheck, Circle, MoreHorizontal, Reply, X, MessageSquare, Pin, Star } from "lucide-react";
+import { Search, Plus, MessageCircle, Users, Bell, BellOff, AtSign, Info, Wifi, WifiOff, Loader2, Check, CheckCheck, Circle, MoreHorizontal, Reply, X, MessageSquare, Pin, Star, Pencil, Trash2 } from "lucide-react";
 import * as Dialog from "@radix-ui/react-dialog";
 import MessageInput, { MentionUser } from "@/components/MessageInput";
 import { useWebSocket, ConnectionStatus, WebSocketMessage, TypingEvent, PresenceEvent, ReadReceiptEvent, ReactionEvent } from "@/hooks/useWebSocket";
@@ -245,16 +245,24 @@ function QuickReactionPicker({
   onReply,
   onPin,
   onFavorite,
+  onEdit,
+  onRecall,
   isPinned,
   isFavorited,
+  canEdit,
+  canRecall,
 }: {
   onSelect: (emoji: string) => void;
   onOpenFull: () => void;
   onReply: () => void;
   onPin?: () => void;
   onFavorite?: () => void;
+  onEdit?: () => void;
+  onRecall?: () => void;
   isPinned?: boolean;
   isFavorited?: boolean;
+  canEdit?: boolean;
+  canRecall?: boolean;
 }) {
   return (
     <div className="flex items-center gap-0.5 bg-white border border-gray-200 rounded-full shadow-lg px-1.5 py-0.5">
@@ -303,6 +311,24 @@ function QuickReactionPicker({
           title={isFavorited ? "Remove from favorites" : "Add to favorites"}
         >
           <Star className={`w-4 h-4 ${isFavorited ? "fill-current" : ""}`} />
+        </button>
+      )}
+      {canEdit && onEdit && (
+        <button
+          onClick={onEdit}
+          className="w-7 h-7 flex items-center justify-center hover:bg-gray-100 rounded-full transition-colors text-gray-500"
+          title="Edit message"
+        >
+          <Pencil className="w-4 h-4" />
+        </button>
+      )}
+      {canRecall && onRecall && (
+        <button
+          onClick={onRecall}
+          className="w-7 h-7 flex items-center justify-center hover:bg-red-50 rounded-full transition-colors text-gray-500 hover:text-red-500"
+          title="Recall message"
+        >
+          <Trash2 className="w-4 h-4" />
         </button>
       )}
     </div>
@@ -546,6 +572,8 @@ function MessageBubble({
   onOpenThread,
   onPin,
   onFavorite,
+  onEdit,
+  onRecall,
   isPinned,
   isFavorited,
 }: {
@@ -557,6 +585,8 @@ function MessageBubble({
   onOpenThread?: (messageId: string) => void;
   onPin?: (messageId: string) => void;
   onFavorite?: (messageId: string) => void;
+  onEdit?: (messageId: string) => void;
+  onRecall?: (messageId: string) => void;
   isPinned?: boolean;
   isFavorited?: boolean;
 }) {
@@ -682,8 +712,18 @@ function MessageBubble({
                   setShowReactionPicker(false);
                   onFavorite(message.id);
                 } : undefined}
+                onEdit={onEdit ? () => {
+                  setShowReactionPicker(false);
+                  onEdit(message.id);
+                } : undefined}
+                onRecall={onRecall ? () => {
+                  setShowReactionPicker(false);
+                  onRecall(message.id);
+                } : undefined}
                 isPinned={isPinned}
                 isFavorited={isFavorited}
+                canEdit={isCurrentUser && !message.recalledAt && (message.type === "text" || message.type === "rich_text")}
+                canRecall={isCurrentUser && !message.recalledAt}
               />
             </div>
           )}
@@ -1086,6 +1126,7 @@ function ChatView({
   chat,
   currentUserId,
   incomingMessage,
+  updatedMessage,
   typingUsers,
   onTypingStart,
   onTypingStop,
@@ -1096,6 +1137,7 @@ function ChatView({
   chat: Chat;
   currentUserId: string;
   incomingMessage: Message | null;
+  updatedMessage: Message | null;
   typingUsers: TypingUser[];
   onTypingStart: () => void;
   onTypingStop: () => void;
@@ -1294,6 +1336,15 @@ function ChatView({
     });
   }, [reactionEvent, currentUserId]);
 
+  // Handle message updates (edits and recalls) via WebSocket
+  useEffect(() => {
+    if (!updatedMessage || updatedMessage.chatId !== chat.id) return;
+
+    setMessages((prev) =>
+      prev.map((m) => (m.id === updatedMessage.id ? { ...m, ...updatedMessage } : m))
+    );
+  }, [updatedMessage, chat.id]);
+
   // Toggle pin on a message
   const togglePin = useCallback(async (messageId: string) => {
     const token = getCookie("session_token");
@@ -1381,6 +1432,96 @@ function ChatView({
       });
     }
   }, [favoritedMessageIds]);
+
+  // Edit message state
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editingContent, setEditingContent] = useState<Record<string, unknown> | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+
+  // Start editing a message
+  const startEditing = useCallback((messageId: string) => {
+    const message = messages.find(m => m.id === messageId);
+    if (!message) return;
+    setEditingMessageId(messageId);
+    setEditingContent(message.content);
+  }, [messages]);
+
+  // Cancel editing
+  const cancelEditing = useCallback(() => {
+    setEditingMessageId(null);
+    setEditingContent(null);
+  }, []);
+
+  // Save edited message
+  const saveEdit = useCallback(async (newContent: Record<string, unknown>) => {
+    if (!editingMessageId) return;
+
+    const token = getCookie("session_token");
+    if (!token) return;
+
+    setIsEditing(true);
+
+    try {
+      const res = await fetch(`/api/messages/${editingMessageId}`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ content: newContent }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to edit message");
+      }
+
+      const updatedMessage = await res.json();
+
+      // Update local state
+      setMessages((prev) =>
+        prev.map((m) => (m.id === editingMessageId ? { ...m, ...updatedMessage } : m))
+      );
+
+      cancelEditing();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to edit message");
+    } finally {
+      setIsEditing(false);
+    }
+  }, [editingMessageId, cancelEditing]);
+
+  // Recall (delete) a message
+  const recallMessage = useCallback(async (messageId: string) => {
+    const token = getCookie("session_token");
+    if (!token) return;
+
+    // Ask for confirmation
+    if (!window.confirm("Are you sure you want to recall this message? This cannot be undone.")) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/messages/${messageId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to recall message");
+      }
+
+      const updatedMessage = await res.json();
+
+      // Update local state
+      setMessages((prev) =>
+        prev.map((m) => (m.id === messageId ? { ...m, ...updatedMessage } : m))
+      );
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to recall message");
+    }
+  }, []);
 
   // Load pinned messages for this chat
   const loadPinnedMessages = useCallback(async () => {
@@ -1923,6 +2064,8 @@ function ChatView({
                         onOpenThread={setActiveThreadId}
                         onPin={togglePin}
                         onFavorite={toggleFavorite}
+                        onEdit={startEditing}
+                        onRecall={recallMessage}
                         isPinned={pinnedMessageIds.has(message.id)}
                         isFavorited={favoritedMessageIds.has(message.id)}
                       />
@@ -1991,6 +2134,38 @@ function ChatView({
           }}
         />
       )}
+
+      {/* Edit Message Modal */}
+      <Dialog.Root open={!!editingMessageId} onOpenChange={(open) => !open && cancelEditing()}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 bg-black/50 z-50" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg shadow-xl z-50 w-full max-w-lg p-6">
+            <Dialog.Title className="text-lg font-semibold mb-4">Edit Message</Dialog.Title>
+            {editingContent && (
+              <div className="space-y-4">
+                <MessageInput
+                  onSend={(content) => saveEdit(content)}
+                  isSending={isEditing}
+                  placeholder="Edit your message..."
+                  sendOnEnter={true}
+                  members={chatMembers}
+                  initialContent={editingContent}
+                  submitLabel="Save"
+                />
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={cancelEditing}
+                    disabled={isEditing}
+                    className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
     </div>
   );
 }
@@ -2781,6 +2956,7 @@ export default function MessengerPage() {
   const [isNewChatDialogOpen, setIsNewChatDialogOpen] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [incomingMessage, setIncomingMessage] = useState<Message | null>(null);
+  const [updatedMessage, setUpdatedMessage] = useState<Message | null>(null);
   const [showFavoritesPanel, setShowFavoritesPanel] = useState(false);
 
   // Typing indicators - track who is typing in each chat
@@ -2828,6 +3004,12 @@ export default function MessengerPage() {
           return chat;
         })
       );
+    }
+
+    // Handle message updates (edits and recalls)
+    if (message.type === "message_updated" && message.payload) {
+      const payload = message.payload as Message;
+      setUpdatedMessage(payload);
     }
   }, [currentUserId]);
 
@@ -3132,6 +3314,7 @@ export default function MessengerPage() {
             chat={selectedChat}
             currentUserId={currentUserId}
             incomingMessage={incomingMessage}
+            updatedMessage={updatedMessage}
             typingUsers={typingByChat[selectedChat.id] || []}
             onTypingStart={() => sendTypingStart(selectedChat.id)}
             onTypingStop={() => sendTypingStop(selectedChat.id)}

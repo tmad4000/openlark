@@ -38,3 +38,4 @@
 [2026-03-10 23:42] US-030 — Message threading (replies) — PASS
 [2026-03-10 23:58] US-031 — @mention autocomplete — PASS
 [2026-03-11 00:25] US-032 — Pin and favorite messages — PASS
+[2026-03-10 17:36] US-033 — Edit and recall messages — PASS

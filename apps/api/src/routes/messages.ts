@@ -1264,4 +1264,235 @@ export async function messagesRoutes(fastify: FastifyInstance) {
       });
     }
   );
+
+  /**
+   * PATCH /messages/:id - Edit a message
+   * Body: { content: Record<string, unknown> }
+   * Constraints: Only sender can edit, within 24h, max 20 edits, text/rich_text only
+   * Returns: Updated message
+   */
+  fastify.patch<{
+    Params: { id: string };
+    Body: { content: Record<string, unknown> };
+  }>(
+    "/messages/:id",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id: messageId } = request.params;
+      const { content } = request.body;
+      const currentUserId = request.user.id;
+
+      // Validate messageId format
+      if (!UUID_REGEX.test(messageId)) {
+        return reply.status(400).send({
+          error: "Invalid message ID format",
+        });
+      }
+
+      // Validate content
+      if (!content || typeof content !== "object") {
+        return reply.status(400).send({
+          error: "content is required and must be an object",
+        });
+      }
+
+      // Get the message
+      const [message] = await db
+        .select()
+        .from(messages)
+        .where(eq(messages.id, messageId))
+        .limit(1);
+
+      if (!message) {
+        return reply.status(404).send({
+          error: "Message not found",
+        });
+      }
+
+      // Only sender can edit their own messages
+      if (message.senderId !== currentUserId) {
+        return reply.status(403).send({
+          error: "You can only edit your own messages",
+        });
+      }
+
+      // Can't edit recalled messages
+      if (message.recalledAt) {
+        return reply.status(400).send({
+          error: "Cannot edit a recalled message",
+        });
+      }
+
+      // Only text and rich_text messages can be edited
+      if (message.type !== "text" && message.type !== "rich_text") {
+        return reply.status(400).send({
+          error: "Only text and rich_text messages can be edited",
+        });
+      }
+
+      // Check 24h time limit
+      const createdAt = new Date(message.createdAt);
+      const now = new Date();
+      const hoursSinceCreation = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60);
+      if (hoursSinceCreation > 24) {
+        return reply.status(400).send({
+          error: "Messages can only be edited within 24 hours of sending",
+        });
+      }
+
+      // Check edit count (stored in content.editCount, default 0)
+      const currentEditCount = typeof message.content.editCount === "number" ? message.content.editCount : 0;
+      if (currentEditCount >= 20) {
+        return reply.status(400).send({
+          error: "Maximum edit limit (20) reached for this message",
+        });
+      }
+
+      // Update the message
+      const [updatedMessage] = await db
+        .update(messages)
+        .set({
+          content: { ...content, editCount: currentEditCount + 1 },
+          editedAt: new Date(),
+        })
+        .where(eq(messages.id, messageId))
+        .returning();
+
+      // Get sender info for the response and WebSocket event
+      const [sender] = await db
+        .select({
+          id: users.id,
+          displayName: users.displayName,
+          avatarUrl: users.avatarUrl,
+        })
+        .from(users)
+        .where(eq(users.id, message.senderId))
+        .limit(1);
+
+      const messageWithSender = {
+        ...updatedMessage,
+        sender: sender || { id: message.senderId, displayName: null, avatarUrl: null },
+      };
+
+      // Publish update to Redis channel for real-time delivery
+      await publish(getChatChannel(message.chatId), {
+        type: "message_updated",
+        payload: messageWithSender,
+      });
+
+      return reply.status(200).send(messageWithSender);
+    }
+  );
+
+  /**
+   * DELETE /messages/:id - Recall (soft delete) a message
+   * Constraints: Sender can recall own messages within 24h, group owner/admin can recall any
+   * Returns: Updated message with recalledAt set
+   */
+  fastify.delete<{
+    Params: { id: string };
+  }>(
+    "/messages/:id",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id: messageId } = request.params;
+      const currentUserId = request.user.id;
+
+      // Validate messageId format
+      if (!UUID_REGEX.test(messageId)) {
+        return reply.status(400).send({
+          error: "Invalid message ID format",
+        });
+      }
+
+      // Get the message
+      const [message] = await db
+        .select()
+        .from(messages)
+        .where(eq(messages.id, messageId))
+        .limit(1);
+
+      if (!message) {
+        return reply.status(404).send({
+          error: "Message not found",
+        });
+      }
+
+      // Already recalled
+      if (message.recalledAt) {
+        return reply.status(400).send({
+          error: "Message has already been recalled",
+        });
+      }
+
+      // Check if user is the sender
+      const isSender = message.senderId === currentUserId;
+
+      // Check if user is owner/admin of the chat
+      const [memberRecord] = await db
+        .select({ role: chatMembers.role })
+        .from(chatMembers)
+        .where(
+          and(
+            eq(chatMembers.chatId, message.chatId),
+            eq(chatMembers.userId, currentUserId)
+          )
+        )
+        .limit(1);
+
+      const isOwnerOrAdmin = memberRecord && (memberRecord.role === "owner" || memberRecord.role === "admin");
+
+      // If not sender and not owner/admin, deny
+      if (!isSender && !isOwnerOrAdmin) {
+        return reply.status(403).send({
+          error: "You can only recall your own messages, or be a chat owner/admin",
+        });
+      }
+
+      // If sender (not owner/admin), check 24h time limit
+      if (isSender && !isOwnerOrAdmin) {
+        const createdAt = new Date(message.createdAt);
+        const now = new Date();
+        const hoursSinceCreation = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60);
+        if (hoursSinceCreation > 24) {
+          return reply.status(400).send({
+            error: "Messages can only be recalled within 24 hours of sending",
+          });
+        }
+      }
+
+      // Recall the message (soft delete by setting recalledAt)
+      const [updatedMessage] = await db
+        .update(messages)
+        .set({
+          recalledAt: new Date(),
+        })
+        .where(eq(messages.id, messageId))
+        .returning();
+
+      // Get sender info for the WebSocket event
+      const [sender] = await db
+        .select({
+          id: users.id,
+          displayName: users.displayName,
+          avatarUrl: users.avatarUrl,
+        })
+        .from(users)
+        .where(eq(users.id, message.senderId))
+        .limit(1);
+
+      const messageWithSender = {
+        ...updatedMessage,
+        sender: sender || { id: message.senderId, displayName: null, avatarUrl: null },
+      };
+
+      // Publish update to Redis channel for real-time delivery
+      await publish(getChatChannel(message.chatId), {
+        type: "message_updated",
+        payload: messageWithSender,
+      });
+
+      return reply.status(200).send(messageWithSender);
+    }
+  );
 }

@@ -540,8 +540,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 33,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented edit and recall functionality. API: PATCH /messages/:id updates content, sets edited_at, tracks editCount in content (max 20 edits), validates 24h window and own-message-only restriction; DELETE /messages/:id sets recalled_at for soft delete, allows owner/admin to recall any message. UI: Added Pencil (Edit) and Trash2 (Recall) buttons to QuickReactionPicker hover menu, showing Edit only for own text/rich_text messages not yet recalled, Recall for own messages. Created Edit modal using Dialog with MessageInput pre-filled with existing content. Real-time updates via 'message_updated' WebSocket event. Used existing editedAt and recalledAt schema fields. MessageInput now supports initialContent and submitLabel props for edit mode. TypeScript passes."
     },
     {
       "id": "US-034",

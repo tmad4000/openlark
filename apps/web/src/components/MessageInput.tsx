@@ -43,6 +43,8 @@ interface MessageInputProps {
   placeholder?: string;
   sendOnEnter?: boolean;
   members?: MentionUser[];
+  initialContent?: Record<string, unknown>;
+  submitLabel?: string;
 }
 
 interface FormatButtonProps {
@@ -314,6 +316,8 @@ export default function MessageInput({
   placeholder = "Type a message...",
   sendOnEnter = true,
   members = [],
+  initialContent,
+  submitLabel = "Send",
 }: MessageInputProps) {
   const [showToolbar, setShowToolbar] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -410,6 +414,22 @@ export default function MessageInput({
       handleTypingChange();
     },
   }, [suggestion]);
+
+  // Set initial content if provided (for editing)
+  useEffect(() => {
+    if (editor && initialContent) {
+      const html = typeof initialContent.html === "string" ? initialContent.html : "";
+      const text = typeof initialContent.text === "string" ? initialContent.text : "";
+      // Prefer HTML content, fallback to text
+      if (html) {
+        editor.commands.setContent(html);
+      } else if (text) {
+        editor.commands.setContent(`<p>${text}</p>`);
+      }
+      // Focus the editor after setting content
+      editor.commands.focus("end");
+    }
+  }, [editor, initialContent]);
 
   // Close emoji picker when clicking outside
   useEffect(() => {
@@ -692,7 +712,7 @@ export default function MessageInput({
             className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             <Send className="w-4 h-4" />
-            <span>Send</span>
+            <span>{submitLabel}</span>
           </button>
         </div>
 
