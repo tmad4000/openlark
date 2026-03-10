@@ -11,6 +11,10 @@ import {
   reactionSchema,
   paginationSchema,
   pinMessageSchema,
+  createChatTabSchema,
+  updateChatTabSchema,
+  createAnnouncementSchema,
+  updateAnnouncementSchema,
 } from "./messenger.schemas.js";
 import { authenticate } from "../auth/middleware.js";
 import { formatZodError } from "../../utils/validation.js";
@@ -682,6 +686,214 @@ export async function messengerRoutes(app: FastifyInstance) {
         return reply.status(404).send({
           code: "FAVORITE_NOT_FOUND",
           message: "Message not in favorites",
+        });
+      }
+
+      return reply.send({ data: { success: true } });
+    }
+  );
+
+  // ============ CHAT TAB ENDPOINTS (FR-2.15, FR-2.16) ============
+
+  // GET /messenger/chats/:chatId/tabs - Get chat tabs
+  app.get<{ Params: { chatId: string } }>(
+    "/chats/:chatId/tabs",
+    async (req, reply) => {
+      const isMember = await messengerService.isChatMember(
+        req.params.chatId,
+        req.user!.id
+      );
+      if (!isMember) {
+        return reply.status(403).send({
+          code: "NOT_A_MEMBER",
+          message: "You are not a member of this chat",
+        });
+      }
+
+      const tabs = await messengerService.getChatTabs(req.params.chatId);
+      return reply.send({ data: { tabs } });
+    }
+  );
+
+  // POST /messenger/chats/:chatId/tabs - Create a custom tab
+  app.post<{ Params: { chatId: string } }>(
+    "/chats/:chatId/tabs",
+    async (req, reply) => {
+      try {
+        const input = createChatTabSchema.parse(req.body);
+        const tab = await messengerService.createChatTab(
+          req.params.chatId,
+          input,
+          req.user!.id
+        );
+
+        if (!tab) {
+          return reply.status(403).send({
+            code: "FORBIDDEN",
+            message: "You do not have permission to create tabs",
+          });
+        }
+
+        return reply.status(201).send({ data: { tab } });
+      } catch (error) {
+        if (error instanceof ZodError) {
+          return reply.status(400).send(formatZodError(error));
+        }
+        if (error instanceof Error && error.message.includes("Maximum")) {
+          return reply.status(400).send({
+            code: "MAX_TABS_REACHED",
+            message: error.message,
+          });
+        }
+        throw error;
+      }
+    }
+  );
+
+  // PATCH /messenger/tabs/:tabId - Update a tab
+  app.patch<{ Params: { tabId: string } }>(
+    "/tabs/:tabId",
+    async (req, reply) => {
+      try {
+        const input = updateChatTabSchema.parse(req.body);
+        const tab = await messengerService.updateChatTab(
+          req.params.tabId,
+          input,
+          req.user!.id
+        );
+
+        if (!tab) {
+          return reply.status(403).send({
+            code: "FORBIDDEN",
+            message: "You cannot update this tab",
+          });
+        }
+
+        return reply.send({ data: { tab } });
+      } catch (error) {
+        if (error instanceof ZodError) {
+          return reply.status(400).send(formatZodError(error));
+        }
+        throw error;
+      }
+    }
+  );
+
+  // DELETE /messenger/tabs/:tabId - Delete a tab
+  app.delete<{ Params: { tabId: string } }>(
+    "/tabs/:tabId",
+    async (req, reply) => {
+      const deleted = await messengerService.deleteChatTab(
+        req.params.tabId,
+        req.user!.id
+      );
+
+      if (!deleted) {
+        return reply.status(403).send({
+          code: "FORBIDDEN",
+          message: "You cannot delete this tab",
+        });
+      }
+
+      return reply.send({ data: { success: true } });
+    }
+  );
+
+  // ============ ANNOUNCEMENT ENDPOINTS (FR-2.18) ============
+
+  // GET /messenger/chats/:chatId/announcements - Get announcements
+  app.get<{ Params: { chatId: string } }>(
+    "/chats/:chatId/announcements",
+    async (req, reply) => {
+      const isMember = await messengerService.isChatMember(
+        req.params.chatId,
+        req.user!.id
+      );
+      if (!isMember) {
+        return reply.status(403).send({
+          code: "NOT_A_MEMBER",
+          message: "You are not a member of this chat",
+        });
+      }
+
+      const announcements = await messengerService.getAnnouncements(
+        req.params.chatId
+      );
+      return reply.send({ data: { announcements } });
+    }
+  );
+
+  // POST /messenger/chats/:chatId/announcements - Create an announcement
+  app.post<{ Params: { chatId: string } }>(
+    "/chats/:chatId/announcements",
+    async (req, reply) => {
+      try {
+        const input = createAnnouncementSchema.parse(req.body);
+        const announcement = await messengerService.createAnnouncement(
+          req.params.chatId,
+          input,
+          req.user!.id
+        );
+
+        if (!announcement) {
+          return reply.status(403).send({
+            code: "FORBIDDEN",
+            message: "You do not have permission to create announcements",
+          });
+        }
+
+        return reply.status(201).send({ data: { announcement } });
+      } catch (error) {
+        if (error instanceof ZodError) {
+          return reply.status(400).send(formatZodError(error));
+        }
+        throw error;
+      }
+    }
+  );
+
+  // PATCH /messenger/announcements/:announcementId - Update an announcement
+  app.patch<{ Params: { announcementId: string } }>(
+    "/announcements/:announcementId",
+    async (req, reply) => {
+      try {
+        const input = updateAnnouncementSchema.parse(req.body);
+        const announcement = await messengerService.updateAnnouncement(
+          req.params.announcementId,
+          input,
+          req.user!.id
+        );
+
+        if (!announcement) {
+          return reply.status(403).send({
+            code: "FORBIDDEN",
+            message: "You cannot update this announcement",
+          });
+        }
+
+        return reply.send({ data: { announcement } });
+      } catch (error) {
+        if (error instanceof ZodError) {
+          return reply.status(400).send(formatZodError(error));
+        }
+        throw error;
+      }
+    }
+  );
+
+  // DELETE /messenger/announcements/:announcementId - Delete an announcement
+  app.delete<{ Params: { announcementId: string } }>(
+    "/announcements/:announcementId",
+    async (req, reply) => {
+      const deleted = await messengerService.deleteAnnouncement(
+        req.params.announcementId,
+        req.user!.id
+      );
+
+      if (!deleted) {
+        return reply.status(403).send({
+          code: "FORBIDDEN",
+          message: "You cannot delete this announcement",
         });
       }
 

@@ -106,3 +106,39 @@ export const pinMessageSchema = z.object({
 });
 
 export type PinMessageInput = z.infer<typeof pinMessageSchema>;
+
+// Chat tab types
+export const chatTabTypes = ["auto", "custom"] as const;
+export type ChatTabType = (typeof chatTabTypes)[number];
+
+// Create chat tab schema (FR-2.16: custom chat tabs)
+export const createChatTabSchema = z.object({
+  name: z.string().min(1).max(100),
+  url: z.string().url(),
+});
+
+export type CreateChatTabInput = z.infer<typeof createChatTabSchema>;
+
+// Update chat tab schema
+export const updateChatTabSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  url: z.string().url().optional(),
+  position: z.number().int().min(0).optional(),
+});
+
+export type UpdateChatTabInput = z.infer<typeof updateChatTabSchema>;
+
+// Create announcement schema (FR-2.18: group announcements)
+export const createAnnouncementSchema = z.object({
+  content: z.string().min(1).max(5000),
+});
+
+export type CreateAnnouncementInput = z.infer<typeof createAnnouncementSchema>;
+
+// Update announcement schema
+export const updateAnnouncementSchema = z.object({
+  content: z.string().min(1).max(5000).optional(),
+  isPinned: z.boolean().optional(),
+});
+
+export type UpdateAnnouncementInput = z.infer<typeof updateAnnouncementSchema>;

@@ -25,6 +25,8 @@ import {
   messageReadReceipts,
   pins,
   favorites,
+  chatTabs,
+  announcements,
 } from "../db/schema/index.js";
 
 const SKIP_DB_TESTS = process.env.SKIP_DB_TESTS === "true";
@@ -101,6 +103,8 @@ describe.skipIf(SKIP_DB_TESTS)("Messenger API - Integration", () => {
   beforeEach(async () => {
     // Clean up test data before each test (order matters due to foreign keys)
     // Messenger tables first (they reference auth tables)
+    await db.delete(announcements);
+    await db.delete(chatTabs);
     await db.delete(favorites);
     await db.delete(pins);
     await db.delete(messageReadReceipts);
@@ -854,6 +858,261 @@ describe.skipIf(SKIP_DB_TESTS)("Messenger API - Integration", () => {
         headers: { authorization: `Bearer ${user1.token}` },
       });
       expect(JSON.parse(afterUnfavRes.body).data.favorites).toHaveLength(0);
+    });
+  });
+
+  describe("Chat tabs (FR-2.15, FR-2.16)", () => {
+    it("creates and lists custom tabs (admin only)", async () => {
+      const owner = await registerUser(app, "owner@test.com", "Test Org");
+      const member = await addUserToOrg(app, "member@test.com", owner.orgId);
+
+      // Create chat
+      const chatRes = await app.inject({
+        method: "POST",
+        url: "/api/v1/messenger/chats",
+        headers: { authorization: `Bearer ${owner.token}` },
+        payload: {
+          type: "group",
+          name: "Tab Test",
+          memberIds: [member.userId],
+        },
+      });
+      const chatId = JSON.parse(chatRes.body).data.chat.id;
+
+      // Member cannot create tab
+      const memberTabRes = await app.inject({
+        method: "POST",
+        url: `/api/v1/messenger/chats/${chatId}/tabs`,
+        headers: { authorization: `Bearer ${member.token}` },
+        payload: { name: "My Tab", url: "https://example.com" },
+      });
+      expect(memberTabRes.statusCode).toBe(403);
+
+      // Owner can create tab
+      const ownerTabRes = await app.inject({
+        method: "POST",
+        url: `/api/v1/messenger/chats/${chatId}/tabs`,
+        headers: { authorization: `Bearer ${owner.token}` },
+        payload: { name: "Google Docs", url: "https://docs.google.com" },
+      });
+      expect(ownerTabRes.statusCode).toBe(201);
+      const tab = JSON.parse(ownerTabRes.body).data.tab;
+      expect(tab.name).toBe("Google Docs");
+      expect(tab.type).toBe("custom");
+
+      // List tabs
+      const listRes = await app.inject({
+        method: "GET",
+        url: `/api/v1/messenger/chats/${chatId}/tabs`,
+        headers: { authorization: `Bearer ${member.token}` },
+      });
+      expect(listRes.statusCode).toBe(200);
+      const tabs = JSON.parse(listRes.body).data.tabs;
+      expect(tabs).toHaveLength(1);
+      expect(tabs[0].name).toBe("Google Docs");
+    });
+
+    it("updates and deletes custom tabs", async () => {
+      const owner = await registerUser(app, "owner@test.com", "Test Org");
+      const member = await addUserToOrg(app, "member@test.com", owner.orgId);
+
+      // Create chat and tab
+      const chatRes = await app.inject({
+        method: "POST",
+        url: "/api/v1/messenger/chats",
+        headers: { authorization: `Bearer ${owner.token}` },
+        payload: {
+          type: "group",
+          name: "Tab Update Test",
+          memberIds: [member.userId],
+        },
+      });
+      const chatId = JSON.parse(chatRes.body).data.chat.id;
+
+      const createRes = await app.inject({
+        method: "POST",
+        url: `/api/v1/messenger/chats/${chatId}/tabs`,
+        headers: { authorization: `Bearer ${owner.token}` },
+        payload: { name: "Original", url: "https://original.com" },
+      });
+      const tabId = JSON.parse(createRes.body).data.tab.id;
+
+      // Update tab
+      const updateRes = await app.inject({
+        method: "PATCH",
+        url: `/api/v1/messenger/tabs/${tabId}`,
+        headers: { authorization: `Bearer ${owner.token}` },
+        payload: { name: "Updated", url: "https://updated.com" },
+      });
+      expect(updateRes.statusCode).toBe(200);
+      expect(JSON.parse(updateRes.body).data.tab.name).toBe("Updated");
+
+      // Delete tab
+      const deleteRes = await app.inject({
+        method: "DELETE",
+        url: `/api/v1/messenger/tabs/${tabId}`,
+        headers: { authorization: `Bearer ${owner.token}` },
+      });
+      expect(deleteRes.statusCode).toBe(200);
+
+      // Verify deleted
+      const listRes = await app.inject({
+        method: "GET",
+        url: `/api/v1/messenger/chats/${chatId}/tabs`,
+        headers: { authorization: `Bearer ${owner.token}` },
+      });
+      expect(JSON.parse(listRes.body).data.tabs).toHaveLength(0);
+    });
+  });
+
+  describe("Announcements (FR-2.18)", () => {
+    it("creates and lists announcements (admin only)", async () => {
+      const owner = await registerUser(app, "owner@test.com", "Test Org");
+      const member = await addUserToOrg(app, "member@test.com", owner.orgId);
+
+      // Create chat
+      const chatRes = await app.inject({
+        method: "POST",
+        url: "/api/v1/messenger/chats",
+        headers: { authorization: `Bearer ${owner.token}` },
+        payload: {
+          type: "group",
+          name: "Announcement Test",
+          memberIds: [member.userId],
+        },
+      });
+      const chatId = JSON.parse(chatRes.body).data.chat.id;
+
+      // Member cannot create announcement
+      const memberAnnouncementRes = await app.inject({
+        method: "POST",
+        url: `/api/v1/messenger/chats/${chatId}/announcements`,
+        headers: { authorization: `Bearer ${member.token}` },
+        payload: { content: "Unauthorized announcement" },
+      });
+      expect(memberAnnouncementRes.statusCode).toBe(403);
+
+      // Owner can create announcement
+      const ownerAnnouncementRes = await app.inject({
+        method: "POST",
+        url: `/api/v1/messenger/chats/${chatId}/announcements`,
+        headers: { authorization: `Bearer ${owner.token}` },
+        payload: { content: "Important team announcement!" },
+      });
+      expect(ownerAnnouncementRes.statusCode).toBe(201);
+      const announcement = JSON.parse(ownerAnnouncementRes.body).data.announcement;
+      expect(announcement.content).toBe("Important team announcement!");
+      expect(announcement.isPinned).toBe(true);
+
+      // List announcements (any member can view)
+      const listRes = await app.inject({
+        method: "GET",
+        url: `/api/v1/messenger/chats/${chatId}/announcements`,
+        headers: { authorization: `Bearer ${member.token}` },
+      });
+      expect(listRes.statusCode).toBe(200);
+      const announcements = JSON.parse(listRes.body).data.announcements;
+      expect(announcements).toHaveLength(1);
+      expect(announcements[0].content).toBe("Important team announcement!");
+    });
+
+    it("updates and deletes announcements", async () => {
+      const owner = await registerUser(app, "owner@test.com", "Test Org");
+      const member = await addUserToOrg(app, "member@test.com", owner.orgId);
+
+      // Create chat and announcement
+      const chatRes = await app.inject({
+        method: "POST",
+        url: "/api/v1/messenger/chats",
+        headers: { authorization: `Bearer ${owner.token}` },
+        payload: {
+          type: "group",
+          name: "Announcement Update Test",
+          memberIds: [member.userId],
+        },
+      });
+      const chatId = JSON.parse(chatRes.body).data.chat.id;
+
+      const createRes = await app.inject({
+        method: "POST",
+        url: `/api/v1/messenger/chats/${chatId}/announcements`,
+        headers: { authorization: `Bearer ${owner.token}` },
+        payload: { content: "Original announcement" },
+      });
+      const announcementId = JSON.parse(createRes.body).data.announcement.id;
+
+      // Update announcement
+      const updateRes = await app.inject({
+        method: "PATCH",
+        url: `/api/v1/messenger/announcements/${announcementId}`,
+        headers: { authorization: `Bearer ${owner.token}` },
+        payload: { content: "Updated announcement", isPinned: false },
+      });
+      expect(updateRes.statusCode).toBe(200);
+      const updated = JSON.parse(updateRes.body).data.announcement;
+      expect(updated.content).toBe("Updated announcement");
+      expect(updated.isPinned).toBe(false);
+
+      // Delete announcement
+      const deleteRes = await app.inject({
+        method: "DELETE",
+        url: `/api/v1/messenger/announcements/${announcementId}`,
+        headers: { authorization: `Bearer ${owner.token}` },
+      });
+      expect(deleteRes.statusCode).toBe(200);
+
+      // Verify deleted
+      const listRes = await app.inject({
+        method: "GET",
+        url: `/api/v1/messenger/chats/${chatId}/announcements`,
+        headers: { authorization: `Bearer ${owner.token}` },
+      });
+      expect(JSON.parse(listRes.body).data.announcements).toHaveLength(0);
+    });
+
+    it("allows author to update their own announcement", async () => {
+      const owner = await registerUser(app, "owner@test.com", "Test Org");
+      const admin = await addUserToOrg(app, "admin@test.com", owner.orgId);
+
+      // Create chat
+      const chatRes = await app.inject({
+        method: "POST",
+        url: "/api/v1/messenger/chats",
+        headers: { authorization: `Bearer ${owner.token}` },
+        payload: {
+          type: "group",
+          name: "Author Test",
+          memberIds: [admin.userId],
+        },
+      });
+      const chatId = JSON.parse(chatRes.body).data.chat.id;
+
+      // Promote admin
+      await app.inject({
+        method: "PATCH",
+        url: `/api/v1/messenger/chats/${chatId}/members/${admin.userId}`,
+        headers: { authorization: `Bearer ${owner.token}` },
+        payload: { role: "admin" },
+      });
+
+      // Admin creates announcement
+      const createRes = await app.inject({
+        method: "POST",
+        url: `/api/v1/messenger/chats/${chatId}/announcements`,
+        headers: { authorization: `Bearer ${admin.token}` },
+        payload: { content: "Admin's announcement" },
+      });
+      const announcementId = JSON.parse(createRes.body).data.announcement.id;
+
+      // Admin can update their own announcement
+      const updateRes = await app.inject({
+        method: "PATCH",
+        url: `/api/v1/messenger/announcements/${announcementId}`,
+        headers: { authorization: `Bearer ${admin.token}` },
+        payload: { content: "Updated by author" },
+      });
+      expect(updateRes.statusCode).toBe(200);
+      expect(JSON.parse(updateRes.body).data.announcement.content).toBe("Updated by author");
     });
   });
 

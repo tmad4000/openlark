@@ -40,6 +40,9 @@ export const messageTypeEnum = pgEnum("message_type", [
 
 export const topicStatusEnum = pgEnum("topic_status", ["open", "closed"]);
 
+// Chat tab types: auto-generated tabs (Chat, Docs, Files, Pins, Announcements) or custom user-added tabs
+export const chatTabTypeEnum = pgEnum("chat_tab_type", ["auto", "custom"]);
+
 // Chats table
 export const chats = pgTable(
   "chats",
@@ -225,6 +228,57 @@ export const favorites = pgTable(
   ]
 );
 
+// Chat tabs - FR-2.15, FR-2.16
+// Auto-generated tabs (Chat, Docs, Files, Pins, Announcements) and custom user tabs
+export const chatTabs = pgTable(
+  "chat_tabs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    chatId: uuid("chat_id")
+      .notNull()
+      .references(() => chats.id, { onDelete: "cascade" }),
+    type: chatTabTypeEnum("type").notNull().default("custom"),
+    name: varchar("name", { length: 100 }).notNull(),
+    url: text("url"), // For custom tabs - external link
+    position: integer("position").notNull().default(0),
+    createdBy: uuid("created_by").references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("chat_tabs_chat_id_idx").on(table.chatId),
+    uniqueIndex("chat_tabs_chat_name_idx").on(table.chatId, table.name),
+  ]
+);
+
+// Announcements - FR-2.18
+// Group announcements displayed prominently, posted by owner/admin
+export const announcements = pgTable(
+  "announcements",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    chatId: uuid("chat_id")
+      .notNull()
+      .references(() => chats.id, { onDelete: "cascade" }),
+    content: text("content").notNull(),
+    authorId: uuid("author_id")
+      .notNull()
+      .references(() => users.id),
+    isPinned: boolean("is_pinned").notNull().default(true),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("announcements_chat_id_idx").on(table.chatId),
+    index("announcements_created_at_idx").on(table.chatId, table.createdAt),
+  ]
+);
+
 // Relations
 export const chatsRelations = relations(chats, ({ one, many }) => ({
   organization: one(organizations, {
@@ -238,6 +292,8 @@ export const chatsRelations = relations(chats, ({ one, many }) => ({
   members: many(chatMembers),
   messages: many(messages),
   pins: many(pins),
+  tabs: many(chatTabs),
+  announcements: many(announcements),
 }));
 
 export const chatMembersRelations = relations(chatMembers, ({ one }) => ({
@@ -333,6 +389,28 @@ export const favoritesRelations = relations(favorites, ({ one }) => ({
   }),
 }));
 
+export const chatTabsRelations = relations(chatTabs, ({ one }) => ({
+  chat: one(chats, {
+    fields: [chatTabs.chatId],
+    references: [chats.id],
+  }),
+  creator: one(users, {
+    fields: [chatTabs.createdBy],
+    references: [users.id],
+  }),
+}));
+
+export const announcementsRelations = relations(announcements, ({ one }) => ({
+  chat: one(chats, {
+    fields: [announcements.chatId],
+    references: [chats.id],
+  }),
+  author: one(users, {
+    fields: [announcements.authorId],
+    references: [users.id],
+  }),
+}));
+
 // Type exports
 export type Chat = typeof chats.$inferSelect;
 export type NewChat = typeof chats.$inferInsert;
@@ -343,3 +421,7 @@ export type NewMessage = typeof messages.$inferInsert;
 export type MessageReaction = typeof messageReactions.$inferSelect;
 export type Pin = typeof pins.$inferSelect;
 export type Favorite = typeof favorites.$inferSelect;
+export type ChatTab = typeof chatTabs.$inferSelect;
+export type NewChatTab = typeof chatTabs.$inferInsert;
+export type Announcement = typeof announcements.$inferSelect;
+export type NewAnnouncement = typeof announcements.$inferInsert;

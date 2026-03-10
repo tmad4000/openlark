@@ -7,9 +7,13 @@ import {
   messageReadReceipts,
   pins,
   favorites,
+  chatTabs,
+  announcements,
   type Chat,
   type Message,
   type ChatMember,
+  type ChatTab,
+  type Announcement,
 } from "../../db/schema/index.js";
 // Users table is imported via relations in messenger schema
 import { eq, and, isNull, desc, lt, gt, inArray, sql } from "drizzle-orm";
@@ -21,6 +25,10 @@ import type {
   SendMessageInput,
   EditMessageInput,
   PaginationInput,
+  CreateChatTabInput,
+  UpdateChatTabInput,
+  CreateAnnouncementInput,
+  UpdateAnnouncementInput,
 } from "./messenger.schemas.js";
 
 // Constants
@@ -836,6 +844,251 @@ export class MessengerService {
       .innerJoin(messages, eq(favorites.messageId, messages.id))
       .where(eq(favorites.userId, userId))
       .orderBy(desc(favorites.createdAt));
+  }
+
+  // ============ CHAT TAB OPERATIONS ============
+
+  /**
+   * Get chat tabs
+   * FR-2.15: Auto-generated and custom tabs
+   */
+  async getChatTabs(chatId: string): Promise<ChatTab[]> {
+    return db
+      .select()
+      .from(chatTabs)
+      .where(eq(chatTabs.chatId, chatId))
+      .orderBy(chatTabs.position);
+  }
+
+  /**
+   * Create a custom chat tab
+   * FR-2.16: Custom chat tabs (max 20 per chat)
+   */
+  async createChatTab(
+    chatId: string,
+    input: CreateChatTabInput,
+    userId: string
+  ): Promise<ChatTab | null> {
+    // Check permission (owner/admin only)
+    const member = await this.getChatMember(chatId, userId);
+    if (!member || (member.role !== "owner" && member.role !== "admin")) {
+      return null;
+    }
+
+    // Check tab limit (max 20 custom tabs per chat)
+    const existingTabs = await this.getChatTabs(chatId);
+    const customTabs = existingTabs.filter((tab) => tab.type === "custom");
+    if (customTabs.length >= 20) {
+      throw new Error("Maximum of 20 custom tabs per chat");
+    }
+
+    // Get next position
+    const maxPosition = existingTabs.length > 0
+      ? Math.max(...existingTabs.map((t) => t.position))
+      : -1;
+
+    const [tab] = await db
+      .insert(chatTabs)
+      .values({
+        chatId,
+        type: "custom",
+        name: input.name,
+        url: input.url,
+        position: maxPosition + 1,
+        createdBy: userId,
+      })
+      .returning();
+
+    return tab ?? null;
+  }
+
+  /**
+   * Update a chat tab
+   */
+  async updateChatTab(
+    tabId: string,
+    input: UpdateChatTabInput,
+    userId: string
+  ): Promise<ChatTab | null> {
+    // Get the tab first
+    const [tab] = await db
+      .select()
+      .from(chatTabs)
+      .where(eq(chatTabs.id, tabId))
+      .limit(1);
+
+    if (!tab) {
+      return null;
+    }
+
+    // Only custom tabs can be updated
+    if (tab.type !== "custom") {
+      return null;
+    }
+
+    // Check permission
+    const member = await this.getChatMember(tab.chatId, userId);
+    if (!member || (member.role !== "owner" && member.role !== "admin")) {
+      return null;
+    }
+
+    const [updated] = await db
+      .update(chatTabs)
+      .set(input)
+      .where(eq(chatTabs.id, tabId))
+      .returning();
+
+    return updated ?? null;
+  }
+
+  /**
+   * Delete a chat tab
+   */
+  async deleteChatTab(tabId: string, userId: string): Promise<boolean> {
+    // Get the tab first
+    const [tab] = await db
+      .select()
+      .from(chatTabs)
+      .where(eq(chatTabs.id, tabId))
+      .limit(1);
+
+    if (!tab) {
+      return false;
+    }
+
+    // Only custom tabs can be deleted
+    if (tab.type !== "custom") {
+      return false;
+    }
+
+    // Check permission
+    const member = await this.getChatMember(tab.chatId, userId);
+    if (!member || (member.role !== "owner" && member.role !== "admin")) {
+      return false;
+    }
+
+    const result = await db
+      .delete(chatTabs)
+      .where(eq(chatTabs.id, tabId))
+      .returning();
+
+    return result.length > 0;
+  }
+
+  // ============ ANNOUNCEMENT OPERATIONS ============
+
+  /**
+   * Get chat announcements
+   * FR-2.18: Group announcements
+   */
+  async getAnnouncements(chatId: string): Promise<Announcement[]> {
+    return db
+      .select()
+      .from(announcements)
+      .where(eq(announcements.chatId, chatId))
+      .orderBy(desc(announcements.createdAt));
+  }
+
+  /**
+   * Create an announcement
+   * FR-2.18: Owner/admin posts announcement
+   */
+  async createAnnouncement(
+    chatId: string,
+    input: CreateAnnouncementInput,
+    userId: string
+  ): Promise<Announcement | null> {
+    // Check permission (owner/admin only)
+    const member = await this.getChatMember(chatId, userId);
+    if (!member || (member.role !== "owner" && member.role !== "admin")) {
+      return null;
+    }
+
+    const [announcement] = await db
+      .insert(announcements)
+      .values({
+        chatId,
+        content: input.content,
+        authorId: userId,
+      })
+      .returning();
+
+    return announcement ?? null;
+  }
+
+  /**
+   * Update an announcement
+   */
+  async updateAnnouncement(
+    announcementId: string,
+    input: UpdateAnnouncementInput,
+    userId: string
+  ): Promise<Announcement | null> {
+    // Get the announcement first
+    const [announcement] = await db
+      .select()
+      .from(announcements)
+      .where(eq(announcements.id, announcementId))
+      .limit(1);
+
+    if (!announcement) {
+      return null;
+    }
+
+    // Check permission (owner/admin or author)
+    const member = await this.getChatMember(announcement.chatId, userId);
+    const isAuthor = announcement.authorId === userId;
+    const isPrivileged = member && (member.role === "owner" || member.role === "admin");
+
+    if (!isAuthor && !isPrivileged) {
+      return null;
+    }
+
+    const [updated] = await db
+      .update(announcements)
+      .set({
+        ...input,
+        updatedAt: new Date(),
+      })
+      .where(eq(announcements.id, announcementId))
+      .returning();
+
+    return updated ?? null;
+  }
+
+  /**
+   * Delete an announcement
+   */
+  async deleteAnnouncement(
+    announcementId: string,
+    userId: string
+  ): Promise<boolean> {
+    // Get the announcement first
+    const [announcement] = await db
+      .select()
+      .from(announcements)
+      .where(eq(announcements.id, announcementId))
+      .limit(1);
+
+    if (!announcement) {
+      return false;
+    }
+
+    // Check permission (owner/admin or author)
+    const member = await this.getChatMember(announcement.chatId, userId);
+    const isAuthor = announcement.authorId === userId;
+    const isPrivileged = member && (member.role === "owner" || member.role === "admin");
+
+    if (!isAuthor && !isPrivileged) {
+      return false;
+    }
+
+    const result = await db
+      .delete(announcements)
+      .where(eq(announcements.id, announcementId))
+      .returning();
+
+    return result.length > 0;
   }
 }
 

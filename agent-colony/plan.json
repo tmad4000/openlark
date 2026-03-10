@@ -213,7 +213,7 @@
         },
         {
           "description": "Implement pins, favorites, chat tabs, announcements",
-          "done": false
+          "done": true
         }
       ],
       "votes": [
@@ -270,6 +270,12 @@
           "role": "implementer",
           "value": 1,
           "reason": "WebSocket foundation solid. 2/5 subtasks done. Message delivery tests pass reliably. Remaining subtasks (threads, reactions UX, pins UI) are incremental."
+        },
+        {
+          "iteration": 5,
+          "role": "implementer",
+          "value": 1,
+          "reason": "Continuing T-003 subtask 5. Subtasks 3 and 4 have most core work done (reactions, read receipts, pins, favorites implemented). Chat tabs and announcements are clearly missing entities per goal.md FR-2.15, FR-2.16, FR-2.18. Will add schema + CRUD."
         }
       ],
       "comments": [
@@ -317,6 +323,11 @@
           "iteration": 3,
           "role": "reviewer",
           "message": "Iter 3 review: websocket.ts:146-153 publishMessageEvent() is clean but consider batching presence broadcasts on connect/disconnect. Currently iterates chatIds and broadcasts to each chat separately. For users in many chats this creates N broadcasts. Low priority for now."
+        },
+        {
+          "iteration": 5,
+          "role": "implementer",
+          "message": "Iteration 5: Implemented chat tabs (FR-2.15, FR-2.16) and announcements (FR-2.18). Added chatTabs and announcements tables to schema. Added full CRUD operations: getChatTabs, createChatTab, updateChatTab, deleteChatTab, getAnnouncements, createAnnouncement, updateAnnouncement, deleteAnnouncement. Admin-only for creation/modification. Added 21 unit tests for schema validation and auth requirements. Added 5 integration tests. All tests pass (138 passed, 5 skipped). Subtask 5 complete, 3/5 subtasks done."
         }
       ],
       "status": "in-progress",
@@ -325,7 +336,7 @@
         "role": "implementer"
       },
       "claimedBy": {
-        "iteration": 1,
+        "iteration": 5,
         "role": "implementer"
       },
       "splitFrom": null
@@ -1006,6 +1017,12 @@
           "role": "implementer",
           "value": 1,
           "reason": "Backend API sufficient for frontend shell. Auth stable, messenger working. Can start with minimal scope: auth screens + three-panel layout."
+        },
+        {
+          "iteration": 5,
+          "role": "implementer",
+          "value": 1,
+          "reason": "Backend API sufficient for frontend shell. Auth routes stable, messenger complete with WebSocket. Frontend should start soon."
         }
       ],
       "comments": [
@@ -1026,7 +1043,7 @@
   ],
   "metadata": {
     "createdAt": "2026-03-04T21:00:00Z",
-    "totalIterations": 13,
+    "totalIterations": 14,
     "iterationLog": [
       {
         "iteration": 1,
@@ -1104,6 +1121,12 @@
         "iteration": 13,
         "role": "reviewer",
         "taskWorked": null,
+        "contextCompacted": false
+      },
+      {
+        "iteration": 14,
+        "role": "implementer",
+        "taskWorked": "T-002",
         "contextCompacted": false
       }
     ]

@@ -10,6 +10,10 @@ import {
   paginationSchema,
   addMemberSchema,
   updateMemberSchema,
+  createChatTabSchema,
+  updateChatTabSchema,
+  createAnnouncementSchema,
+  updateAnnouncementSchema,
 } from "../modules/messenger/messenger.schemas.js";
 
 describe("Messenger Schema Validation", () => {
@@ -301,6 +305,133 @@ describe("Messenger Schema Validation", () => {
       expect(result.success).toBe(true);
     });
   });
+
+  describe("createChatTabSchema", () => {
+    it("should validate valid tab input", () => {
+      const input = {
+        name: "Google Docs",
+        url: "https://docs.google.com",
+      };
+      const result = createChatTabSchema.safeParse(input);
+      expect(result.success).toBe(true);
+    });
+
+    it("should reject empty name", () => {
+      const input = {
+        name: "",
+        url: "https://example.com",
+      };
+      const result = createChatTabSchema.safeParse(input);
+      expect(result.success).toBe(false);
+    });
+
+    it("should reject name exceeding 100 chars", () => {
+      const input = {
+        name: "x".repeat(101),
+        url: "https://example.com",
+      };
+      const result = createChatTabSchema.safeParse(input);
+      expect(result.success).toBe(false);
+    });
+
+    it("should reject invalid URL", () => {
+      const input = {
+        name: "Test Tab",
+        url: "not-a-url",
+      };
+      const result = createChatTabSchema.safeParse(input);
+      expect(result.success).toBe(false);
+    });
+
+    it("should require URL", () => {
+      const input = {
+        name: "Test Tab",
+      };
+      const result = createChatTabSchema.safeParse(input);
+      expect(result.success).toBe(false);
+    });
+  });
+
+  describe("updateChatTabSchema", () => {
+    it("should validate partial name update", () => {
+      const input = { name: "Updated Name" };
+      const result = updateChatTabSchema.safeParse(input);
+      expect(result.success).toBe(true);
+    });
+
+    it("should validate partial url update", () => {
+      const input = { url: "https://new-url.com" };
+      const result = updateChatTabSchema.safeParse(input);
+      expect(result.success).toBe(true);
+    });
+
+    it("should validate position update", () => {
+      const input = { position: 5 };
+      const result = updateChatTabSchema.safeParse(input);
+      expect(result.success).toBe(true);
+    });
+
+    it("should reject negative position", () => {
+      const input = { position: -1 };
+      const result = updateChatTabSchema.safeParse(input);
+      expect(result.success).toBe(false);
+    });
+  });
+
+  describe("createAnnouncementSchema", () => {
+    it("should validate valid announcement", () => {
+      const input = { content: "Important announcement!" };
+      const result = createAnnouncementSchema.safeParse(input);
+      expect(result.success).toBe(true);
+    });
+
+    it("should reject empty content", () => {
+      const input = { content: "" };
+      const result = createAnnouncementSchema.safeParse(input);
+      expect(result.success).toBe(false);
+    });
+
+    it("should reject content exceeding 5000 chars", () => {
+      const input = { content: "x".repeat(5001) };
+      const result = createAnnouncementSchema.safeParse(input);
+      expect(result.success).toBe(false);
+    });
+
+    it("should accept content at 5000 chars", () => {
+      const input = { content: "x".repeat(5000) };
+      const result = createAnnouncementSchema.safeParse(input);
+      expect(result.success).toBe(true);
+    });
+  });
+
+  describe("updateAnnouncementSchema", () => {
+    it("should validate content update", () => {
+      const input = { content: "Updated announcement" };
+      const result = updateAnnouncementSchema.safeParse(input);
+      expect(result.success).toBe(true);
+    });
+
+    it("should validate isPinned update", () => {
+      const input = { isPinned: false };
+      const result = updateAnnouncementSchema.safeParse(input);
+      expect(result.success).toBe(true);
+    });
+
+    it("should validate combined update", () => {
+      const input = {
+        content: "New content",
+        isPinned: true,
+      };
+      const result = updateAnnouncementSchema.safeParse(input);
+      expect(result.success).toBe(true);
+    });
+
+    it("should reject empty content", () => {
+      const input = { content: "" };
+      const result = updateAnnouncementSchema.safeParse(input);
+      expect(result.success).toBe(false);
+    });
+  });
 });
 
 describe("Messenger Routes - Auth Requirements", () => {
@@ -369,6 +500,40 @@ describe("Messenger Routes - Auth Requirements", () => {
     const response = await app.inject({
       method: "POST",
       url: "/api/v1/messenger/messages/123e4567-e89b-12d3-a456-426614174000/read",
+    });
+    expect(response.statusCode).toBe(401);
+  });
+
+  it("GET /messenger/chats/:chatId/tabs requires authentication", async () => {
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/messenger/chats/123e4567-e89b-12d3-a456-426614174000/tabs",
+    });
+    expect(response.statusCode).toBe(401);
+  });
+
+  it("POST /messenger/chats/:chatId/tabs requires authentication", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/messenger/chats/123e4567-e89b-12d3-a456-426614174000/tabs",
+      payload: { name: "Test Tab", url: "https://example.com" },
+    });
+    expect(response.statusCode).toBe(401);
+  });
+
+  it("GET /messenger/chats/:chatId/announcements requires authentication", async () => {
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/v1/messenger/chats/123e4567-e89b-12d3-a456-426614174000/announcements",
+    });
+    expect(response.statusCode).toBe(401);
+  });
+
+  it("POST /messenger/chats/:chatId/announcements requires authentication", async () => {
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/messenger/chats/123e4567-e89b-12d3-a456-426614174000/announcements",
+      payload: { content: "Important announcement!" },
     });
     expect(response.statusCode).toBe(401);
   });
