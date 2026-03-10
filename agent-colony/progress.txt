@@ -1693,3 +1693,31 @@ Filled two critical UX gaps identified in iteration 12 review:
 - T-003 subtask 4 (typing/presence UI) still pending
 
 ---
+
+## 2026-03-10 - Iteration 14 - SIMPLIFY
+
+### Reuse findings
+- **getChatMembers vs getChatMembersWithUserInfo** (`messenger.service.ts:218-252`): Two methods exist - one returns bare members, one joins with users table. **Skipped** — both serve different use cases. The simple version is used for permission checks and internal logic where user info isn't needed. The extended version is for API responses.
+- **Static method pattern** (`ChatList.addChat`, `MessageList.addMessage`, etc.): Pattern appears in both `chat-list.tsx` and `message-list.tsx`. **Skipped** — extracting a shared utility would be overengineering. Each component owns its state, and the pattern is straightforward and local.
+
+### Quality findings
+- **Unnecessary cn() usage** (`create-chat-dialog.tsx:164-166`): Used `cn()` for two static class strings that didn't need conditional merging. **Fixed** — simplified to single string, removed unused `cn` import.
+
+### Efficiency findings
+- **Parallel fetch in MessageList** (`message-list.tsx:38-41`): Uses `Promise.all` to fetch messages and members concurrently. Good pattern, no issues.
+- **SenderMap creation** (`message-list.tsx:44-49`): Correctly rebuilds on chat change. No issues.
+
+### Deferred to tasks
+- None — no refactoring opportunities large enough to warrant a task.
+
+### Skipped
+- **getChatMembers/getChatMembersWithUserInfo coexistence**: Different use cases (internal vs API). Keeping both is appropriate.
+- **Static method pattern for component updates**: Local, straightforward, extracting would be overengineering.
+
+### Reinforced patterns
+- ✅ Parallel data fetching with `Promise.all` (Iteration 11) — MessageList correctly fetches messages and members concurrently
+- ✅ Module structure (`index.ts`, `routes.ts`, `service.ts`, `schemas.ts`) — backend changes follow established pattern
+- ✅ Component tests with React Testing Library — create-chat-dialog has 11 comprehensive tests
+- ✅ UI component patterns (forwardRef, Radix primitives, CVA variants) — CreateChatDialog uses Dialog, Button, Input consistently
+
+---
