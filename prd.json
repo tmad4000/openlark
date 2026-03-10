@@ -240,8 +240,8 @@
         "Typecheck passes"
       ],
       "priority": 15,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created apps/api/src/routes/users.ts with 3 endpoints. GET /users/me returns current user profile with department memberships (id, name, role, joinedAt). PATCH /users/me updates profile fields with validation (display_name required non-empty, working_hours validated as HH:MM or HH:MM:SS). GET /users/:id returns public profile (displayName, avatarUrl, status, departments) for users in the same organization. All endpoints require authentication via authMiddleware. Typecheck passes."
     },
     {
       "id": "US-016",
