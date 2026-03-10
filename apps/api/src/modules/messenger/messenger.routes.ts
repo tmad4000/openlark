@@ -14,6 +14,7 @@ import {
 } from "./messenger.schemas.js";
 import { authenticate } from "../auth/middleware.js";
 import { formatZodError } from "../../utils/validation.js";
+import { publishMessageEvent, notifyUserJoinedChat } from "./websocket.js";
 
 export async function messengerRoutes(app: FastifyInstance) {
   // All messenger routes require authentication
@@ -39,6 +40,12 @@ export async function messengerRoutes(app: FastifyInstance) {
         req.user!.id,
         req.user!.orgId
       );
+
+      // Notify all members about the new chat (excluding the creator)
+      for (const memberId of input.memberIds) {
+        await notifyUserJoinedChat(result.chat.id, memberId);
+      }
+
       return reply.status(201).send({ data: result });
     } catch (error) {
       if (error instanceof ZodError) {
@@ -167,6 +174,9 @@ export async function messengerRoutes(app: FastifyInstance) {
           });
         }
 
+        // Notify the new member via WebSocket
+        await notifyUserJoinedChat(req.params.chatId, input.userId);
+
         return reply.status(201).send({ data: { member } });
       } catch (error) {
         if (error instanceof ZodError) {
@@ -286,6 +296,13 @@ export async function messengerRoutes(app: FastifyInstance) {
           });
         }
 
+        // Publish real-time event
+        await publishMessageEvent(req.params.chatId, {
+          type: "message:new",
+          chatId: req.params.chatId,
+          message,
+        });
+
         return reply.status(201).send({ data: { message } });
       } catch (error) {
         if (error instanceof ZodError) {
@@ -344,6 +361,14 @@ export async function messengerRoutes(app: FastifyInstance) {
           });
         }
 
+        // Publish real-time event
+        await publishMessageEvent(message.chatId, {
+          type: "message:edited",
+          chatId: message.chatId,
+          messageId: message.id,
+          message,
+        });
+
         return reply.send({ data: { message } });
       } catch (error) {
         if (error instanceof ZodError) {
@@ -391,6 +416,13 @@ export async function messengerRoutes(app: FastifyInstance) {
             message: "You cannot recall this message",
           });
         }
+
+        // Publish real-time event
+        await publishMessageEvent(message.chatId, {
+          type: "message:recalled",
+          chatId: message.chatId,
+          messageId: message.id,
+        });
 
         return reply.send({ data: { success: true } });
       } catch (error) {

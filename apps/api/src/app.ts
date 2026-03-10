@@ -1,9 +1,13 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import sensible from "@fastify/sensible";
+import websocket from "@fastify/websocket";
 import { config } from "./config.js";
 import { authRoutes } from "./modules/auth/index.js";
-import { messengerRoutes } from "./modules/messenger/index.js";
+import {
+  messengerRoutes,
+  registerWebSocketRoutes,
+} from "./modules/messenger/index.js";
 
 export async function buildApp() {
   const app = Fastify({
@@ -21,6 +25,7 @@ export async function buildApp() {
     credentials: true,
   });
   await app.register(sensible);
+  await app.register(websocket);
 
   // Health check
   app.get("/health", async () => {
@@ -35,8 +40,9 @@ export async function buildApp() {
       // Auth module
       api.register(authRoutes, { prefix: "/auth" });
 
-      // Messenger module
+      // Messenger module (HTTP + WebSocket)
       api.register(messengerRoutes, { prefix: "/messenger" });
+      api.register(registerWebSocketRoutes, { prefix: "/messenger" });
     },
     { prefix: "/api/v1" }
   );
