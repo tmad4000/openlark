@@ -135,6 +135,12 @@
           "role": "implementer",
           "value": 1,
           "reason": "JWT_SECRET production validation has been flagged 4 times. Simple fix, prevents accidental production exposure with default secret. Should be addressed this iteration."
+        },
+        {
+          "iteration": 6,
+          "role": "reviewer",
+          "value": 1,
+          "reason": "Iter 6 review: Auth foundation solid. JWT_SECRET production validation fixed (4th flag resolved). Session management, rate limiting, middleware extraction all complete. Remaining subtasks (RLS, magic link, 2FA, departments, API keys) are lower priority. Tech debt: login needs org context for true multi-tenant (auth.service.ts:122)."
         }
       ],
       "comments": [
@@ -276,6 +282,12 @@
           "role": "implementer",
           "value": 1,
           "reason": "Continuing T-003 subtask 5. Subtasks 3 and 4 have most core work done (reactions, read receipts, pins, favorites implemented). Chat tabs and announcements are clearly missing entities per goal.md FR-2.15, FR-2.16, FR-2.18. Will add schema + CRUD."
+        },
+        {
+          "iteration": 6,
+          "role": "reviewer",
+          "value": 1,
+          "reason": "Iter 6 review: 3/5 subtasks complete. Chat tabs and announcements (FR-2.15, FR-2.16, FR-2.18) added with full CRUD, admin-only permissions, proper test coverage. Module follows established patterns. Remaining: subtask 3 (threads, rich text) and subtask 4 (typing/presence UI). WebSocket message delivery works reliably."
         }
       ],
       "comments": [
@@ -328,6 +340,16 @@
           "iteration": 5,
           "role": "implementer",
           "message": "Iteration 5: Implemented chat tabs (FR-2.15, FR-2.16) and announcements (FR-2.18). Added chatTabs and announcements tables to schema. Added full CRUD operations: getChatTabs, createChatTab, updateChatTab, deleteChatTab, getAnnouncements, createAnnouncement, updateAnnouncement, deleteAnnouncement. Admin-only for creation/modification. Added 21 unit tests for schema validation and auth requirements. Added 5 integration tests. All tests pass (138 passed, 5 skipped). Subtask 5 complete, 3/5 subtasks done."
+        },
+        {
+          "iteration": 6,
+          "role": "reviewer",
+          "message": "Iter 6 review: messenger.service.ts:879-888 createChatTab() correctly enforces max 20 custom tabs limit. However, the position calculation (Math.max of existing positions + 1) could have gaps if tabs are deleted. Consider re-indexing positions on delete, or accept sparse positions. Not blocking."
+        },
+        {
+          "iteration": 6,
+          "role": "reviewer",
+          "message": "Iter 6 review: Auto-generated tabs (FR-2.15: Chat, Docs, Files, Pins, Announcements) are not implemented - only custom tabs exist. The type='auto' enum exists but no tabs are auto-created when content is shared. Create a follow-up task if needed."
         }
       ],
       "status": "in-progress",
@@ -1023,6 +1045,12 @@
           "role": "implementer",
           "value": 1,
           "reason": "Backend API sufficient for frontend shell. Auth routes stable, messenger complete with WebSocket. Frontend should start soon."
+        },
+        {
+          "iteration": 6,
+          "role": "reviewer",
+          "value": 1,
+          "reason": "Iter 6 review: Backend API surface substantial. Auth stable, messenger complete with chat tabs/announcements/WebSocket. Frontend should start: auth screens, three-panel layout, messenger list. 138 passing tests, build and lint clean."
         }
       ],
       "comments": [
@@ -1030,6 +1058,11 @@
           "iteration": 3,
           "role": "reviewer",
           "message": "Reviewer note: The -1 vote is valid timing feedback, not a quality issue. Frontend shell can start once T-002 has the /auth/me endpoint working (done). Suggest small scope: just layout + auth screens first, expand as modules land."
+        },
+        {
+          "iteration": 6,
+          "role": "reviewer",
+          "message": "Iter 6 review: apps/web has no tests yet. When starting frontend shell, include vitest setup with React Testing Library. Follow same pattern as API tests (unit tests always run, integration/e2e tests skip without backend)."
         }
       ],
       "status": "open",
@@ -1043,7 +1076,7 @@
   ],
   "metadata": {
     "createdAt": "2026-03-04T21:00:00Z",
-    "totalIterations": 14,
+    "totalIterations": 15,
     "iterationLog": [
       {
         "iteration": 1,
@@ -1127,6 +1160,12 @@
         "iteration": 14,
         "role": "implementer",
         "taskWorked": "T-002",
+        "contextCompacted": false
+      },
+      {
+        "iteration": 15,
+        "role": "implementer",
+        "taskWorked": "T-003",
         "contextCompacted": false
       }
     ]

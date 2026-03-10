@@ -1038,3 +1038,85 @@ Messenger module subtask 5: Chat tabs (FR-2.15, FR-2.16) and announcements (FR-2
 - T-003 subtask 4 (reactions UX, typing, presence UI) — reactions backend done, UI pending
 
 ---
+
+## 2026-03-10 - Iteration 6 - REVIEW
+
+### Code quality observations
+
+**What looks good:**
+- Chat tabs and announcements (FR-2.15, FR-2.16, FR-2.18) properly implemented:
+  - `chatTabs` and `announcements` tables with proper schema, foreign keys, indexes
+  - Admin-only permission checks for creation/modification (messenger.service.ts:872-875, 1001-1005)
+  - Author-or-admin permission for announcement updates (messenger.service.ts:1038-1045)
+  - Max 20 custom tabs per chat enforced (messenger.service.ts:878-883)
+- JWT_SECRET production validation finally addressed after 4 review flags:
+  - `validateProductionSecurity()` in `config.ts` throws if NODE_ENV=production and JWT_SECRET is default
+  - 4 tests covering all scenarios (production with default throws, dev/test allow default, production with custom secret works)
+- Module structure remains consistent: routes.ts → service.ts → schemas.ts pattern followed
+- Test coverage is comprehensive: 138 passing tests, 5 skipped (timing-sensitive pub/sub)
+- Build, lint, and tests all pass cleanly
+- Commit messages follow conventional commits format, history is clean
+
+**Areas needing attention (not blockers):**
+
+1. **Auto-generated tabs not implemented** - FR-2.15 specifies "Auto-generate chat tabs (Chat, Docs, Files, Pins, Announcements) when content is shared". The `chatTabTypeEnum` includes "auto" but no tabs are auto-created. Only custom tabs work currently.
+
+2. **messenger.service.ts:885-888** - Tab position calculation uses `Math.max(...positions) + 1`. If tabs are deleted, positions become sparse (e.g., 0, 1, 5, 8). Consider re-indexing on delete or accept sparse positions. Not blocking.
+
+3. **No web app tests** - `apps/web` still has no tests. When T-023 (frontend shell) starts, include vitest + React Testing Library setup.
+
+4. **Typing/presence tests still skipped** - 5 tests skipped for CI reliability due to Redis pub/sub timing sensitivity. Features work manually. Per-test Redis subscriber isolation would fix.
+
+5. **`next lint` deprecation warning** - Low priority cosmetic issue in `apps/web`.
+
+### Commit history review
+- 22 commits total on branch
+- Recent 5 commits since last review:
+  - `b1e69b7 docs: update progress log for iteration 5 (chat tabs, announcements)`
+  - `c0a4fce feat(messenger): add chat tabs and announcements (FR-2.15, FR-2.16, FR-2.18)`
+  - `482aea0 chore: update plan with iteration 4 comment`
+  - `ebe28b2 docs: update progress log for iteration 4 (JWT_SECRET)`
+  - `79b9f71 fix(auth): add JWT_SECRET production validation`
+- Commits are atomic, well-scoped, follow conventional format
+- Clean history, no WIP or fixup commits
+
+### Plan assessment
+
+**T-002 (in-progress):** +1 vote. JWT_SECRET production validation resolved (4th flag). Auth foundation solid. Session management, rate limiting, middleware extraction complete. Remaining subtasks (RLS, magic link, 2FA, departments, API keys) are lower priority since core auth works. Known tech debt: login needs org context for true multi-tenant (auth.service.ts:122).
+
+**T-003 (in-progress):** +1 vote. 3/5 subtasks complete. Chat tabs and announcements added with proper CRUD, admin-only permissions, good test coverage. Module follows established patterns. Remaining: subtask 3 (threads, rich text, forwarding) and subtask 4 (typing/presence UI). Note: auto-generated tabs (FR-2.15) not implemented yet.
+
+**T-023 (open):** +1 vote. Net votes now +6/-1. Backend API surface is substantial: auth stable with production security, messenger has CRUD + WebSocket + tabs + announcements. Frontend should start: auth screens (login/register), three-panel layout, messenger list view. Add test infrastructure when starting.
+
+### Nudges left
+
+1. **T-003**: Auto-generated tabs (FR-2.15) not implemented - only custom tabs work. Consider creating follow-up task or adding to subtask 3.
+2. **T-003**: Tab position handling on delete - accept sparse positions or re-index.
+3. **T-023**: Include vitest + React Testing Library setup when starting frontend shell.
+
+### Tech debt items
+
+| Priority | Item | Location | Notes |
+|----------|------|----------|-------|
+| Low | Auto-generated tabs not implemented | messenger.service.ts | FR-2.15 partially done |
+| Low | Tab positions become sparse on delete | messenger.service.ts:885-888 | Accept or re-index |
+| Low | Typing/presence tests skipped | websocket.integration.test.ts | Timing sensitivity |
+| Low | No web app tests | apps/web | Add when starting T-023 |
+| Low | `next lint` deprecation warning | apps/web | Cosmetic |
+| Low | Login needs org context for multi-tenant | auth.service.ts:122 | Documented |
+
+### Reinforced patterns
+
+From progress log that held true this iteration:
+- ✅ Module structure (`index.ts`, `routes.ts`, `service.ts`, `schemas.ts`) — messenger tabs/announcements follow exactly
+- ✅ Auth middleware reuse from `modules/auth/middleware.ts` — all new endpoints use `authenticate`
+- ✅ Admin-only permission pattern — tabs/announcements correctly check member role in service layer
+- ✅ Zod schema validation — all new endpoints use proper schemas (createChatTabSchema, etc.)
+- ✅ Integration test pattern — 5 new tests added, table cleanup in FK order
+- ✅ `formatZodError` utility reuse — consistent error formatting across modules
+- ✅ Rate limit pattern (sub-scope isolation) — unchanged, still working correctly
+
+### New pattern observed
+- **Author-or-admin permission** (`messenger.service.ts:1038-1045`): For announcements, either the author OR an admin can update. This is distinct from admin-only (tabs) and provides a flexible permission model for user-created content.
+
+---
