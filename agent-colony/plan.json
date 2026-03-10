@@ -141,6 +141,12 @@
           "role": "reviewer",
           "value": 1,
           "reason": "Iter 6 review: Auth foundation solid. JWT_SECRET production validation fixed (4th flag resolved). Session management, rate limiting, middleware extraction all complete. Remaining subtasks (RLS, magic link, 2FA, departments, API keys) are lower priority. Tech debt: login needs org context for true multi-tenant (auth.service.ts:122)."
+        },
+        {
+          "iteration": 9,
+          "role": "reviewer",
+          "value": 1,
+          "reason": "Iter 9 review: Auth foundation stable, JWT_SECRET production validation complete. Subtasks 3-6 (RLS, magic link, 2FA, departments, API keys) are lower priority since core auth works and messenger/frontend are building on it. Known limitation: login needs org context for true multi-tenant (auth.service.ts:122)."
         }
       ],
       "comments": [
@@ -294,6 +300,12 @@
           "role": "implementer",
           "value": 1,
           "reason": "Iteration 8 review: Core messenger functionality complete (3/5 subtasks). Remaining subtasks (threads/forwarding, typing/presence) are incremental. WebSocket foundation solid. Module follows established patterns."
+        },
+        {
+          "iteration": 9,
+          "role": "reviewer",
+          "value": 1,
+          "reason": "Iter 9 review: 3/5 subtasks complete. Messenger is functionally solid - chat CRUD, WebSocket messaging, tabs, announcements all working. Remaining: subtask 3 (threads, rich text, forwarding) and subtask 4 (typing/presence UI - backend done). Auto-tabs (FR-2.15) still missing but custom tabs work."
         }
       ],
       "comments": [
@@ -1063,6 +1075,12 @@
           "role": "implementer",
           "value": 1,
           "reason": "Backend API stable and comprehensive. Auth + messenger + WebSocket ready. Time to start frontend. Will begin with minimal scope: auth screens + three-panel layout shell."
+        },
+        {
+          "iteration": 9,
+          "role": "reviewer",
+          "value": 1,
+          "reason": "Iter 9 review: Frontend shell (subtasks 1-3) well-implemented. Auth flow correct (login/register with API), theme system with system detection, navigation rail matching Lark patterns. 23 frontend tests covering UI components. Test infrastructure established. Subtask 4 (keyboard shortcuts, PWA) remaining."
         }
       ],
       "comments": [
@@ -1080,6 +1098,21 @@
           "iteration": 8,
           "role": "implementer",
           "message": "Iteration 8: Implemented frontend shell with three-panel layout matching Lark. Created: navigation rail with module icons, auth screens (login/register) connected to API, theme context with system detection, API client for auth/messenger endpoints, test infrastructure with React Testing Library. Files: 22 new files in apps/web/src/, 23 tests added. Subtasks 1-3 complete. Subtask 4 (keyboard shortcuts, PWA) remains."
+        },
+        {
+          "iteration": 9,
+          "role": "reviewer",
+          "message": "Iter 9 review: api.ts:61 assumes all API responses have a { data: T } structure. If API endpoints return differently (e.g., error objects without wrapping), this could cause runtime issues. Verify API contract consistency. Also, consider adding request/response type validation with Zod for safer typing."
+        },
+        {
+          "iteration": 9,
+          "role": "reviewer",
+          "message": "Iter 9 review: use-auth.tsx:62-70 clears token on ANY error from api.me(). This includes network errors and 5xx server errors. Consider checking error type before clearing - only clear token on 401 Unauthorized. Otherwise a temporary server issue logs out all users."
+        },
+        {
+          "iteration": 9,
+          "role": "reviewer",
+          "message": "Iter 9 review: navigation-rail.tsx uses Radix Tooltip directly. The app-shell.tsx doesn't wrap content in TooltipProvider, but the Tooltip component includes it (tooltip.tsx). This works but creates multiple providers. Consider moving TooltipProvider to providers.tsx for cleaner hierarchy."
         }
       ],
       "status": "in-progress",
@@ -1096,7 +1129,7 @@
   ],
   "metadata": {
     "createdAt": "2026-03-04T21:00:00Z",
-    "totalIterations": 18,
+    "totalIterations": 19,
     "iterationLog": [
       {
         "iteration": 1,
@@ -1204,6 +1237,12 @@
         "iteration": 18,
         "role": "simplifier",
         "taskWorked": null,
+        "contextCompacted": false
+      },
+      {
+        "iteration": 19,
+        "role": "implementer",
+        "taskWorked": "T-023",
         "contextCompacted": false
       }
     ]

@@ -1260,3 +1260,86 @@ Frontend shell with three-panel layout matching Lark (T-023 subtasks 1-3):
 - ✅ Integration test pattern — new tests added, table cleanup in FK order respected
 
 ---
+
+## 2026-03-10 - Iteration 9 - REVIEW
+
+### Code quality observations
+
+**What looks good:**
+- Frontend shell (T-023) is well-architected:
+  - Three-panel layout with navigation rail matching Lark patterns
+  - AuthProvider with proper state management (loading, authenticated states)
+  - Theme system with system detection and localStorage persistence
+  - API client with token management and auto-attach Authorization headers
+  - Components use forwardRef, CVA for variants, Radix UI primitives
+  - 23 frontend tests covering UI components (Button, Input, cn utility)
+- Auth flow correctly implemented:
+  - Login/register call API, store token in localStorage, refresh user
+  - Protected routes redirect to /login when not authenticated
+  - Loading state prevents flash of unprotected content
+- Test infrastructure established:
+  - vitest + React Testing Library + jest-dom
+  - Co-located tests with components
+  - Setup file for matchers
+- Build, lint, and all 161 tests pass (138 API + 23 web)
+- Commit history clean, follows conventional commits
+
+**Areas needing attention:**
+
+1. **api.ts:61** - Request method assumes `{ data: T }` response structure. If API returns a different shape (e.g., direct response or error without wrapper), TypeScript types won't catch it at runtime. The API actually returns `{ data: {...} }` for success, so this works, but could add runtime validation.
+
+2. **use-auth.tsx:62-70** - Clears token on ANY error from `api.me()`. This includes network errors, 5xx server errors, etc. Should check error type before clearing. A `401 Unauthorized` should clear token; a `500 Internal Server Error` should not. Currently, a temporary API outage would log out all users.
+
+3. **No frontend integration tests** - Components have unit tests but no tests for auth flow (login → redirect) or API integration. Consider adding Playwright or Cypress for E2E tests later.
+
+4. **next lint deprecation warning** - Still present in lint output. Low priority, cosmetic.
+
+5. **Typing/presence tests still skipped** - 5 API tests skipped for CI reliability. Features work manually. Per-test Redis subscriber isolation would fix. Documented tech debt.
+
+### Commit history review
+- 25 commits total on branch
+- Recent 2 commits since last review:
+  - `cebe448 docs: update progress log for iteration 8 (frontend shell T-023)`
+  - `6936d41 feat(web): add frontend shell with auth screens and three-panel layout (T-023)`
+- Commits are atomic, well-scoped, follow conventional format
+- Clean history, no WIP or fixup commits
+
+### Plan assessment
+
+**T-002 (in-progress):** +1 vote. Auth foundation stable. JWT_SECRET validation complete. Subtasks 3-6 (RLS, magic link, 2FA, departments, API keys) can proceed when needed but are not blocking. Known limitation: login needs org context for true multi-tenant.
+
+**T-003 (in-progress):** +1 vote. 3/5 subtasks complete. Core messenger functionality solid. WebSocket message delivery working. Remaining: subtask 3 (threads, rich text, forwarding) and subtask 4 (typing/presence UI). Auto-tabs (FR-2.15) still unimplemented but custom tabs work.
+
+**T-023 (in-progress):** +1 vote. 3/4 subtasks complete. Frontend shell well-implemented with auth screens, theme system, navigation rail. Subtask 4 (keyboard shortcuts, PWA manifest) remaining. See nudges for improvements.
+
+### Nudges left
+
+1. **T-023**: `use-auth.tsx:62-70` - Only clear token on 401, not on all errors. Network issues shouldn't log users out.
+2. **T-023**: Consider moving `TooltipProvider` to `providers.tsx` for cleaner provider hierarchy.
+3. **T-023**: `api.ts:61` - Consider runtime validation of API responses with Zod for safer typing.
+
+### Tech debt items
+
+| Priority | Item | Location | Notes |
+|----------|------|----------|-------|
+| Medium | Clear token only on 401, not all errors | `use-auth.tsx:62-70` | Could log out users on network issues |
+| Low | Auto-generated tabs not implemented | messenger.service.ts | FR-2.15 partially done |
+| Low | Typing/presence tests skipped | websocket.integration.test.ts | Timing sensitivity |
+| Low | `next lint` deprecation warning | apps/web | Cosmetic |
+| Low | Login needs org context for multi-tenant | auth.service.ts:122 | Documented |
+| Low | No E2E tests for frontend | apps/web | Consider Playwright later |
+
+### Reinforced patterns
+
+From progress log that held true this iteration:
+- ✅ Frontend Structure (Iteration 8) - App Router with route groups, components/hooks/lib structure
+- ✅ UI Component Pattern (Iteration 8) - forwardRef, Radix primitives, CVA variants, cn utility
+- ✅ Auth Flow (Iteration 8) - localStorage token, AuthProvider, protected routes redirect
+- ✅ Frontend Testing (Iteration 8) - vitest + React Testing Library + jest-dom
+- ✅ Module structure (backend) - consistent across auth and messenger modules
+- ✅ Integration test pattern - 161 tests passing, 5 skipped for timing
+
+### New pattern observed
+- **Client-only providers** (`providers.tsx`): Wraps client-only context providers (AuthProvider, ThemeProvider) in a single component used by root layout. This cleanly separates server/client boundaries in Next.js App Router.
+
+---
