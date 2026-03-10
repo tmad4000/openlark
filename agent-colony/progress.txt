@@ -1721,3 +1721,101 @@ Filled two critical UX gaps identified in iteration 12 review:
 - ✅ UI component patterns (forwardRef, Radix primitives, CVA variants) — CreateChatDialog uses Dialog, Button, Input consistently
 
 ---
+
+## 2026-03-10 - Iteration 15 - REVIEW
+
+### Code quality observations
+
+**What looks good:**
+- CreateChatDialog component (`create-chat-dialog.tsx`) is well-structured:
+  - Clear separation: DM vs group type with conditional UI
+  - Form state reset on dialog close via useEffect
+  - Proper loading, error, and validation states
+  - 11 comprehensive tests covering all user flows
+- getChatMembersWithUserInfo service method (`messenger.service.ts:228-252`) is correctly implemented:
+  - Inner join with users table fetches displayName and avatarUrl
+  - Explicit field selection prevents over-fetching
+  - Return type correctly includes nested user object
+- MessageList parallel fetching (`message-list.tsx:38-41`) uses `Promise.all` correctly:
+  - Messages and members fetched concurrently
+  - SenderMap built efficiently from members array
+  - O(1) lookup for sender names during render
+- Simplify iteration 14 correctly addressed:
+  - Removed unnecessary `cn()` usage in create-chat-dialog.tsx
+  - Validated that static method pattern, while fragile, isn't worth extracting
+- Build, lint, and all tests pass cleanly:
+  - 86 web tests passing
+  - Build completes successfully
+  - No lint errors
+
+**Areas needing attention (not blockers):**
+
+1. **Static method pattern still fragile** (`chat-list.tsx:51`, `message-list.tsx:138-140`): This has been flagged in iteration 12 and 13. The pattern `ChatList.addChat = addChat` inside render reassigns a static method to the current instance's closure. Works for single-instance components but breaks with:
+   - Multiple component instances (each overwrites the previous)
+   - Component unmount/remount (stale closure references)
+   - React Strict Mode double-rendering in development
+   
+   For Phase 1 scope, this is acceptable since there's only one messenger page. For Phase 2, consider refactoring to:
+   - React Context with message event emitter
+   - React Query with WebSocket subscription
+   - Or custom event bus pattern
+
+2. **CreateChatDialog uses raw UUIDs** (`create-chat-dialog.tsx:143-158`): Users must manually enter recipient user IDs, which requires them to know UUIDs. This is a UX limitation for Phase 1. For Phase 2, consider:
+   - User search endpoint (`GET /users?q=...`)
+   - Autocomplete/typeahead component
+   - Recent contacts list
+
+3. **message-list.tsx:188-189 bounds access**: `messages[index - 1]` could be undefined when index is 0, but the short-circuit `(index === 0 || ...)` handles it correctly. Code is functionally correct but TypeScript doesn't narrow the type. Minor — no action needed.
+
+4. **next lint deprecation warning**: Still present in lint output. Low priority, cosmetic.
+
+5. **Typing/presence tests still skipped** (`websocket.integration.test.ts`): 5 tests skipped for CI reliability due to Redis pub/sub timing sensitivity. Features work manually. Per-test Redis subscriber isolation would fix. Documented tech debt.
+
+### Commit history review
+- 30 commits total on branch
+- Recent 5 commits since last review:
+  - `bafdb28 docs: update progress log for iteration 14 (simplify)`
+  - `aa4cad7 refactor(web): remove unnecessary cn() usage in create-chat-dialog`
+  - `01a3fca chore: update plan with iteration 13 votes and comment`
+  - `ee1c4f9 docs: update progress log for iteration 13 (create chat, sender names)`
+  - `6b23d6f feat(messenger): add create chat dialog and sender display names`
+- Commits are atomic, well-scoped, follow conventional format
+- Clean history, no WIP or fixup commits
+- Refactor commit appropriately small (single file, 7 line change)
+
+### Plan assessment
+
+**T-002 (in-progress):** +1 vote. Auth foundation remains stable. 2/6 subtasks complete. Known limitation: login needs org context for true multi-tenant (auth.service.ts:122). Remaining subtasks (RLS, magic link, 2FA, departments, API keys) correctly deferred as lower priority.
+
+**T-003 (in-progress):** +1 vote. 4/6 subtasks complete. CreateChatDialog and sender display names added with good quality. Static method pattern flagged again but acceptable for Phase 1. Remaining: subtask 3 (threads, rich text, forwarding) and subtask 4 (typing/presence UI).
+
+**T-004 (open):** +1 vote. Calendar is the clear next priority per goal.md Phase 1 build order (Auth → Messenger → Calendar). Auth stable, Messenger has solid core functionality with frontend UI. Starting T-004 would complete Phase 1 foundation.
+
+### Nudges left
+
+1. **T-003**: Static method pattern (`ChatList.addChat`, `MessageList.addMessage`) flagged 3× now. Consider refactoring to React Context + event emitter or React Query pattern for Phase 2.
+2. **T-003**: CreateChatDialog raw UUID input is a UX limitation. Add user search/autocomplete for Phase 2.
+3. **T-004**: Calendar is the recommended next step. Auth and Messenger foundations are solid enough.
+
+### Tech debt items
+
+| Priority | Item | Location | Notes |
+|----------|------|----------|-------|
+| Medium | Static method pattern fragile | `chat-list.tsx:51`, `message-list.tsx:138` | Flagged 3×, defer to Phase 2 |
+| Low | Raw UUID input for chat creation | `create-chat-dialog.tsx` | Add user search for Phase 2 |
+| Low | Auto-generated tabs not implemented | messenger.service.ts | FR-2.15 partial |
+| Low | Typing/presence tests skipped | websocket.integration.test.ts | Timing sensitivity |
+| Low | Login needs org context for multi-tenant | auth.service.ts:122 | Documented |
+| Low | `next lint` deprecation warning | apps/web | Cosmetic |
+
+### Reinforced patterns
+
+From progress log that held true this iteration:
+- ✅ Parallel data fetching with `Promise.all` (Iteration 11) — MessageList fetches messages and members concurrently
+- ✅ Module structure (`index.ts`, `routes.ts`, `service.ts`, `schemas.ts`) — getChatMembersWithUserInfo follows pattern
+- ✅ Component tests with React Testing Library — 11 CreateChatDialog tests, comprehensive coverage
+- ✅ UI component patterns (forwardRef, Radix primitives) — CreateChatDialog uses Dialog, Button, Input correctly
+- ✅ API Error Handling (Iteration 10) — ApiError class with status used in error handling
+- ✅ Frontend Structure (Iteration 8) — co-located tests, hooks/components/lib organization
+
+---
