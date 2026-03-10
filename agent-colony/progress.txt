@@ -1632,3 +1632,64 @@ From progress log that held true this iteration:
 - **Component static methods for cross-component updates**: Pattern of setting `Component.staticMethod = instanceMethod` inside render to allow parent components to call child instance methods. Works in simple cases but couples components tightly and breaks with multiple instances. Prefer context or event-based patterns for production code.
 
 ---
+
+## 2026-03-10 - Iteration 13 - T-003 (Create Chat Dialog + Sender Names)
+
+### What was implemented
+Filled two critical UX gaps identified in iteration 12 review:
+
+1. **Create Chat Dialog** (`apps/web/src/components/messenger/create-chat-dialog.tsx`):
+   - Modal dialog for creating new DMs or group chats
+   - Radio buttons to switch between DM and group type
+   - Group name input (only shown for group type)
+   - User ID input (comma-separated for groups)
+   - Loading, error, and success states
+   - Auto-selects new chat after creation
+
+2. **Sender Display Names** (enhanced `getChatMembersWithUserInfo`):
+   - New backend method joins chatMembers with users table
+   - Returns member data including `user.displayName` and `user.avatarUrl`
+   - Updated `/messenger/chats/:chatId/members` endpoint to use this
+   - MessageList fetches members in parallel with messages
+   - Builds sender map for efficient name lookup
+   - MessageBubble shows actual displayName instead of truncated UUID
+
+3. **API Client Updates** (`apps/web/src/lib/api.ts`):
+   - Added `getChatMembers(chatId)` method
+   - Extended `ChatMember` type to include optional `user` info
+
+### Files changed
+- `apps/api/src/modules/messenger/messenger.service.ts` - Added getChatMembersWithUserInfo
+- `apps/api/src/modules/messenger/messenger.routes.ts` - Use new method for members endpoint
+- `apps/web/src/app/(app)/messenger/page.tsx` - Wire up create chat dialog
+- `apps/web/src/components/messenger/create-chat-dialog.tsx` - New component
+- `apps/web/src/components/messenger/create-chat-dialog.test.tsx` - New tests
+- `apps/web/src/components/messenger/message-list.tsx` - Fetch members, show sender names
+- `apps/web/src/components/messenger/index.ts` - Export new component
+- `apps/web/src/lib/api.ts` - Add getChatMembers, extend ChatMember type
+
+### Tests added
+- **11 CreateChatDialog tests**: render, type selection, validation, submit DM, submit group, error handling, loading state, form clearing
+
+### Plan deviations
+- None - addressed reviewer nudges from iteration 12
+
+### Learnings for future iterations
+- **Pattern reinforced**: Fetch related data (members) in parallel with primary data (messages) using `Promise.all`
+- **Pattern reinforced**: Build lookup maps for efficient rendering (senderMap for O(1) name lookup)
+- **Gotcha**: When adding user info to existing endpoints, ensure TypeScript types are updated in both backend return types AND frontend API client types
+- **Self-reflection**: The static method pattern (`ChatList.addChat`) is still being used and is still fragile. This should be refactored in a future iteration to use context or event-based patterns.
+
+### Tech debt addressed
+- ✅ No "create chat" UI in messenger page (iteration 12 nudge)
+- ✅ Sender shown as truncated UUID instead of displayName (iteration 12 nudge)
+
+### Tech debt remaining
+- Static method pattern fragile (`chat-list.tsx:51`, `message-list.tsx:118`)
+- Auto-generated tabs not implemented (FR-2.15 partial)
+- Typing/presence tests skipped (timing sensitivity)
+- Login needs org context for multi-tenant (`auth.service.ts:122`)
+- T-003 subtask 3 (threads, rich text, forwarding) still pending
+- T-003 subtask 4 (typing/presence UI) still pending
+
+---
