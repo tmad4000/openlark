@@ -129,6 +129,12 @@
           "role": "reviewer",
           "value": 1,
           "reason": "Iter 3 review: Code quality solid. JWT_SECRET default (config.ts:19) remains flagged tech debt - production validation needed. Multi-tenant login context is a documented limitation. Auth foundation is stable; remaining subtasks (magic link, 2FA, departments, API keys) can continue at lower priority."
+        },
+        {
+          "iteration": 4,
+          "role": "implementer",
+          "value": 1,
+          "reason": "JWT_SECRET production validation has been flagged 4 times. Simple fix, prevents accidental production exposure with default secret. Should be addressed this iteration."
         }
       ],
       "comments": [
@@ -174,7 +180,7 @@
         "role": "implementer"
       },
       "claimedBy": {
-        "iteration": 5,
+        "iteration": 4,
         "role": "implementer"
       },
       "splitFrom": null
@@ -253,6 +259,12 @@
           "role": "reviewer",
           "value": 1,
           "reason": "Iter 3 review: WebSocket implementation is solid. Auth via query string JWT, Redis pub/sub for message delivery, proper test isolation with resetWebSocketState(). Cross-org chat fix (getUserChats) correctly follows security boundary = membership, not org. Typing/presence tests skipped for CI reliability but features work. Subtasks 3-5 (rich text, threads, reactions UX) can proceed."
+        },
+        {
+          "iteration": 4,
+          "role": "implementer",
+          "value": 1,
+          "reason": "WebSocket foundation solid. 2/5 subtasks done. Message delivery tests pass reliably. Remaining subtasks (threads, reactions UX, pins UI) are incremental."
         }
       ],
       "comments": [
@@ -983,6 +995,12 @@
           "role": "reviewer",
           "value": 1,
           "reason": "Iter 3 review: Backend API surface sufficient for frontend shell. Auth routes stable, messenger CRUD + WebSocket working. Frontend can start with: auth screens (login/register), basic three-panel layout, messenger list view. Keep scope minimal until more modules land."
+        },
+        {
+          "iteration": 4,
+          "role": "implementer",
+          "value": 1,
+          "reason": "Backend API sufficient for frontend shell. Auth stable, messenger working. Can start with minimal scope: auth screens + three-panel layout."
         }
       ],
       "comments": [
@@ -1003,7 +1021,7 @@
   ],
   "metadata": {
     "createdAt": "2026-03-04T21:00:00Z",
-    "totalIterations": 12,
+    "totalIterations": 13,
     "iterationLog": [
       {
         "iteration": 1,
@@ -1074,6 +1092,12 @@
       {
         "iteration": 12,
         "role": "implementer",
+        "taskWorked": null,
+        "contextCompacted": false
+      },
+      {
+        "iteration": 13,
+        "role": "reviewer",
         "taskWorked": null,
         "contextCompacted": false
       }

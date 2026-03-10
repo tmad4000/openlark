@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+const DEFAULT_JWT_SECRET = "dev-secret-change-in-production";
+
 const envSchema = z.object({
   NODE_ENV: z
     .enum(["development", "production", "test"])
@@ -16,7 +18,7 @@ const envSchema = z.object({
   REDIS_URL: z.string().default("redis://localhost:6379"),
 
   // JWT
-  JWT_SECRET: z.string().default("dev-secret-change-in-production"),
+  JWT_SECRET: z.string().default(DEFAULT_JWT_SECRET),
   JWT_EXPIRES_IN: z.string().default("7d"),
 
   // MinIO / S3
@@ -32,8 +34,25 @@ const envSchema = z.object({
 
 export type Env = z.infer<typeof envSchema>;
 
+/**
+ * Validate production security requirements.
+ * Throws an error if running in production with insecure defaults.
+ */
+export function validateProductionSecurity(env: Env): void {
+  if (env.NODE_ENV === "production") {
+    if (env.JWT_SECRET === DEFAULT_JWT_SECRET) {
+      throw new Error(
+        "SECURITY ERROR: Cannot use default JWT_SECRET in production. " +
+          "Set JWT_SECRET environment variable to a secure random value."
+      );
+    }
+  }
+}
+
 export function loadConfig(): Env {
-  return envSchema.parse(process.env);
+  const env = envSchema.parse(process.env);
+  validateProductionSecurity(env);
+  return env;
 }
 
 export const config = loadConfig();
