@@ -3,6 +3,7 @@ import { db } from "../db";
 import { chats, chatMembers, users } from "../db/schema";
 import { eq, and, or, inArray } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
+import { createSystemMessage } from "./messages";
 
 // UUID validation regex
 const UUID_REGEX =
@@ -311,6 +312,30 @@ export async function chatsRoutes(fastify: FastifyInstance) {
       }
 
       await db.insert(chatMembers).values(memberValues);
+
+      // Create system message for group creation
+      await createSystemMessage(newChat.id, currentUserId, {
+        action: "group_created",
+        createdBy: request.user.displayName,
+        groupName: name.trim(),
+      });
+
+      // Create system message for members added (if any members besides creator)
+      if (uniqueMemberIds.length > 0) {
+        // Get member names for the system message
+        const addedMembers = await db
+          .select({ id: users.id, displayName: users.displayName })
+          .from(users)
+          .where(inArray(users.id, uniqueMemberIds));
+
+        const memberNames = addedMembers.map((m) => m.displayName).filter(Boolean);
+
+        await createSystemMessage(newChat.id, currentUserId, {
+          action: "members_added",
+          addedBy: request.user.displayName,
+          members: memberNames,
+        });
+      }
 
       const chatWithMembers = await getChatWithMembers(newChat.id);
       return reply.status(201).send(chatWithMembers);

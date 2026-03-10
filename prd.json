@@ -337,8 +337,8 @@
         "Typecheck passes"
       ],
       "priority": 21,
-      "passes": false,
-      "notes": "content is JSONB: {text: 'hello'} for text, {blocks: [...]} for rich text, {code: '...', language: 'js'} for code blocks."
+      "passes": true,
+      "notes": "Implemented in apps/api/src/routes/messages.ts. POST /chats/:id/messages creates message with type/content/thread_id/reply_to_id, validates chat membership, publishes to Redis channel (chat:{chatId}), updates sender's last_read_message_id. GET /chats/:id/messages returns cursor-based paginated messages (newest first, limit 1-100 default 50) with sender info. System messages auto-created on group creation and member addition via createSystemMessage helper. Content is JSONB: {text: 'hello'} for text, {blocks: [...]} for rich text, {code: '...', language: 'js'} for code blocks. Typecheck passes."
     },
     {
       "id": "US-022",
