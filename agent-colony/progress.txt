@@ -911,3 +911,50 @@ From progress log that held true this iteration:
 - ✅ `formatZodError` utility reuse across modules
 
 ---
+
+## 2026-03-10 - Iteration 4 - T-002 (JWT_SECRET production validation)
+
+### What was implemented
+Fixed critical security tech debt that was flagged 4 times in previous reviews:
+
+1. **Production security validation** (`apps/api/src/config.ts`):
+   - Added `DEFAULT_JWT_SECRET` constant to centralize the default value
+   - Added `validateProductionSecurity()` function that throws if NODE_ENV=production and JWT_SECRET equals the default
+   - `loadConfig()` now calls validation after parsing environment variables
+   - Server fails to start in production mode with insecure default secret
+
+2. **Tests** (`apps/api/src/__tests__/config.test.ts`):
+   - Test: Throws when using default JWT_SECRET in production
+   - Test: Allows default JWT_SECRET in development
+   - Test: Allows default JWT_SECRET in test
+   - Test: Allows custom JWT_SECRET in production
+
+### Files changed
+- `apps/api/src/config.ts` - Added validation function and DEFAULT_JWT_SECRET constant
+- `apps/api/src/__tests__/config.test.ts` - Added 4 tests for production security validation
+- `agent-colony/plan.json` - Updated votes and claims
+
+### Tests added
+- **4 unit tests** for `validateProductionSecurity()`:
+  - Production with default secret (throws SECURITY ERROR)
+  - Development with default secret (ok)
+  - Test mode with default secret (ok)
+  - Production with custom secret (ok)
+
+### Plan deviations
+- None — followed the simple fix recommended in reviews
+
+### Learnings for future iterations
+- **Pattern reinforced**: Export testable validation functions separately from config loading for better unit testing
+- **Self-reflection**: This was a simple fix that was deferred through 4 reviews. Addressing tech debt items that are flagged multiple times should be higher priority.
+
+### Tech debt addressed
+- ✅ JWT_SECRET default should fail in production (`config.ts:19`) — **RESOLVED after 4 flags**
+
+### Tech debt remaining
+- Presence broadcasts could be batched (`websocket.ts:218-244`) — low priority
+- Typing/presence tests skipped (`websocket.integration.test.ts`) — timing sensitivity
+- No web app tests (`apps/web`) — add when starting T-023
+- Login needs org context for multi-tenant (`auth.service.ts:122`) — documented limitation
+
+---
