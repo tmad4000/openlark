@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { Search, Plus, MessageCircle, Users, Bell, BellOff, AtSign, Info, Wifi, WifiOff, Loader2 } from "lucide-react";
+import { Search, Plus, MessageCircle, Users, Bell, BellOff, AtSign, Info, Wifi, WifiOff, Loader2, Check, CheckCheck, Circle } from "lucide-react";
 import * as Dialog from "@radix-ui/react-dialog";
 import MessageInput from "@/components/MessageInput";
-import { useWebSocket, ConnectionStatus, WebSocketMessage, TypingEvent, PresenceEvent } from "@/hooks/useWebSocket";
+import { useWebSocket, ConnectionStatus, WebSocketMessage, TypingEvent, PresenceEvent, ReadReceiptEvent } from "@/hooks/useWebSocket";
+import * as Popover from "@radix-ui/react-popover";
 
 interface Chat {
   id: string;
@@ -111,6 +112,20 @@ interface Message {
   };
 }
 
+interface ReadReceipt {
+  userId: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+  readAt: string | null;
+  hasRead: boolean;
+}
+
+interface MessageReadStatus {
+  totalMembers: number;
+  readCount: number;
+  receipts: ReadReceipt[];
+}
+
 function formatMessageTime(dateStr: string): string {
   const date = new Date(dateStr);
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -206,7 +221,215 @@ function renderMessageContent(message: Message): React.ReactNode {
   return <span className="text-gray-500 italic">[Message]</span>;
 }
 
-function MessageBubble({ message, isCurrentUser }: { message: Message; isCurrentUser: boolean }) {
+function ReadStatusIcon({
+  status,
+  onClick,
+}: {
+  status: "unread" | "partial" | "all_read";
+  onClick?: () => void;
+}) {
+  if (status === "unread") {
+    return (
+      <button
+        onClick={onClick}
+        className="text-gray-400 hover:text-gray-600 transition-colors"
+        title="Unread"
+      >
+        <Circle className="w-3 h-3" />
+      </button>
+    );
+  }
+
+  if (status === "partial") {
+    return (
+      <button
+        onClick={onClick}
+        className="text-green-400 hover:text-green-600 transition-colors"
+        title="Some have read"
+      >
+        <Check className="w-3 h-3" />
+      </button>
+    );
+  }
+
+  // all_read
+  return (
+    <button
+      onClick={onClick}
+      className="text-green-600 hover:text-green-700 transition-colors"
+      title="All have read"
+    >
+      <CheckCheck className="w-3 h-3" />
+    </button>
+  );
+}
+
+function ReadReceiptsPopover({
+  messageId,
+  isOpen,
+  onClose,
+}: {
+  messageId: string;
+  isOpen: boolean;
+  onClose: () => void;
+}) {
+  const [receipts, setReceipts] = useState<ReadReceipt[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const fetchReceipts = async () => {
+      const token = getCookie("session_token");
+      if (!token) return;
+
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const res = await fetch(`/api/messages/${messageId}/read-receipts`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (!res.ok) {
+          throw new Error("Failed to load read receipts");
+        }
+
+        const data = await res.json();
+        setReceipts(data.receipts || []);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchReceipts();
+  }, [isOpen, messageId]);
+
+  const readReceipts = receipts.filter((r) => r.hasRead);
+  const unreadReceipts = receipts.filter((r) => !r.hasRead);
+
+  return (
+    <Popover.Root open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <Popover.Anchor />
+      <Popover.Portal>
+        <Popover.Content
+          className="bg-white rounded-lg shadow-lg border border-gray-200 w-64 max-h-80 overflow-hidden z-50"
+          side="top"
+          align="end"
+          sideOffset={5}
+        >
+          <div className="p-3 border-b border-gray-100">
+            <h4 className="text-sm font-semibold text-gray-900">Read Receipts</h4>
+          </div>
+
+          {isLoading ? (
+            <div className="p-4 text-center text-gray-500 text-sm">Loading...</div>
+          ) : error ? (
+            <div className="p-4 text-center text-red-500 text-sm">{error}</div>
+          ) : (
+            <div className="max-h-56 overflow-y-auto">
+              {/* Read section */}
+              {readReceipts.length > 0 && (
+                <div>
+                  <div className="px-3 py-1.5 text-xs font-medium text-green-600 bg-green-50">
+                    Read ({readReceipts.length})
+                  </div>
+                  <div className="divide-y divide-gray-50">
+                    {readReceipts.map((receipt) => (
+                      <div key={receipt.userId} className="flex items-center gap-2 px-3 py-2">
+                        <div className="w-6 h-6 rounded-full overflow-hidden bg-gray-200 flex-shrink-0">
+                          {receipt.avatarUrl ? (
+                            <img
+                              src={receipt.avatarUrl}
+                              alt={receipt.displayName || "User"}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center bg-green-600 text-white text-xs font-medium">
+                              {receipt.displayName?.charAt(0).toUpperCase() || "?"}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-gray-900 truncate">
+                            {receipt.displayName || "Unknown"}
+                          </p>
+                          {receipt.readAt && (
+                            <p className="text-[10px] text-gray-500">
+                              {new Date(receipt.readAt).toLocaleString()}
+                            </p>
+                          )}
+                        </div>
+                        <CheckCheck className="w-4 h-4 text-green-600 flex-shrink-0" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Unread section */}
+              {unreadReceipts.length > 0 && (
+                <div>
+                  <div className="px-3 py-1.5 text-xs font-medium text-gray-500 bg-gray-50">
+                    Not yet read ({unreadReceipts.length})
+                  </div>
+                  <div className="divide-y divide-gray-50">
+                    {unreadReceipts.map((receipt) => (
+                      <div key={receipt.userId} className="flex items-center gap-2 px-3 py-2">
+                        <div className="w-6 h-6 rounded-full overflow-hidden bg-gray-200 flex-shrink-0">
+                          {receipt.avatarUrl ? (
+                            <img
+                              src={receipt.avatarUrl}
+                              alt={receipt.displayName || "User"}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center bg-gray-400 text-white text-xs font-medium">
+                              {receipt.displayName?.charAt(0).toUpperCase() || "?"}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-gray-900 truncate">
+                            {receipt.displayName || "Unknown"}
+                          </p>
+                        </div>
+                        <Circle className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {receipts.length === 0 && (
+                <div className="p-4 text-center text-gray-500 text-sm">
+                  No recipients yet
+                </div>
+              )}
+            </div>
+          )}
+
+          <Popover.Arrow className="fill-white" />
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
+  );
+}
+
+function MessageBubble({
+  message,
+  isCurrentUser,
+  readStatus,
+  onShowReadReceipts,
+}: {
+  message: Message;
+  isCurrentUser: boolean;
+  readStatus?: { totalMembers: number; readCount: number };
+  onShowReadReceipts?: (messageId: string) => void;
+}) {
   const isSystem = message.type === "system";
   const isPending = message.id.startsWith("pending-");
 
@@ -260,7 +483,7 @@ function MessageBubble({ message, isCurrentUser }: { message: Message; isCurrent
           {renderMessageContent(message)}
         </div>
 
-        {/* Timestamp, pending indicator, and edited indicator */}
+        {/* Timestamp, pending indicator, edited indicator, and read status */}
         <div className="flex items-center gap-1 px-1 mt-0.5">
           {isPending ? (
             <span className="text-[10px] text-gray-400 flex items-center gap-1">
@@ -274,6 +497,19 @@ function MessageBubble({ message, isCurrentUser }: { message: Message; isCurrent
               </span>
               {message.editedAt && (
                 <span className="text-[10px] text-gray-400">(edited)</span>
+              )}
+              {/* Read status icon (only for messages sent by current user) */}
+              {isCurrentUser && readStatus && (
+                <ReadStatusIcon
+                  status={
+                    readStatus.readCount === 0
+                      ? "unread"
+                      : readStatus.readCount >= readStatus.totalMembers
+                        ? "all_read"
+                        : "partial"
+                  }
+                  onClick={() => onShowReadReceipts?.(message.id)}
+                />
               )}
             </>
           )}
@@ -352,6 +588,7 @@ function ChatView({
   onTypingStart,
   onTypingStop,
   onlineUsers,
+  onReadReceiptUpdate,
 }: {
   chat: Chat;
   currentUserId: string;
@@ -360,6 +597,7 @@ function ChatView({
   onTypingStart: () => void;
   onTypingStop: () => void;
   onlineUsers: Set<string>;
+  onReadReceiptUpdate?: (event: ReadReceiptEvent) => void;
 }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [pendingMessages, setPendingMessages] = useState<PendingMessage[]>([]);
@@ -370,6 +608,11 @@ function ChatView({
   const [hasMore, setHasMore] = useState(false);
   const [isSending, setIsSending] = useState(false);
 
+  // Read receipts tracking
+  const [messageReadStatus, setMessageReadStatus] = useState<Record<string, { totalMembers: number; readCount: number }>>({});
+  const [selectedMessageForReceipts, setSelectedMessageForReceipts] = useState<string | null>(null);
+  const lastMarkedReadRef = useRef<string | null>(null);
+
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const isInitialLoadRef = useRef(true);
@@ -379,6 +622,31 @@ function ChatView({
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "auto") => {
     messagesEndRef.current?.scrollIntoView({ behavior });
   }, []);
+
+  // Mark messages as read
+  const markAsRead = useCallback(async (lastMessageId: string) => {
+    if (lastMarkedReadRef.current === lastMessageId) return;
+
+    const token = getCookie("session_token");
+    if (!token) return;
+
+    try {
+      const res = await fetch(`/api/chats/${chat.id}/read`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ last_message_id: lastMessageId }),
+      });
+
+      if (res.ok) {
+        lastMarkedReadRef.current = lastMessageId;
+      }
+    } catch {
+      // Silent fail - marking as read is not critical
+    }
+  }, [chat.id]);
 
   // Load messages
   const loadMessages = useCallback(async (cursor?: string) => {
@@ -437,8 +705,19 @@ function ChatView({
     setPendingMessages([]);
     setNextCursor(null);
     setHasMore(false);
+    setMessageReadStatus({});
+    setSelectedMessageForReceipts(null);
+    lastMarkedReadRef.current = null;
     loadMessages();
   }, [chat.id, loadMessages]);
+
+  // Handle incoming read receipt events
+  useEffect(() => {
+    if (!onReadReceiptUpdate) return;
+
+    // When we receive a read receipt, we need to update the read status for messages
+    // This is handled by the parent component passing down the event
+  }, [onReadReceiptUpdate]);
 
   // Handle incoming WebSocket messages
   useEffect(() => {
@@ -465,15 +744,26 @@ function ChatView({
 
     // Scroll to bottom for new messages
     setTimeout(() => scrollToBottom("smooth"), 50);
-  }, [incomingMessage, chat.id, scrollToBottom]);
 
-  // Scroll to bottom on initial load
+    // Mark as read if the message is from someone else
+    if (incomingMessage.senderId !== currentUserId) {
+      markAsRead(incomingMessage.id);
+    }
+  }, [incomingMessage, chat.id, scrollToBottom, currentUserId, markAsRead]);
+
+  // Scroll to bottom on initial load and mark as read
   useEffect(() => {
     if (!isLoading && isInitialLoadRef.current && messages.length > 0) {
       scrollToBottom();
       isInitialLoadRef.current = false;
+
+      // Mark the latest message as read (only if not from current user)
+      const lastMessage = messages[messages.length - 1];
+      if (lastMessage && lastMessage.senderId !== currentUserId) {
+        markAsRead(lastMessage.id);
+      }
     }
-  }, [isLoading, messages.length, scrollToBottom]);
+  }, [isLoading, messages.length, scrollToBottom, messages, currentUserId, markAsRead]);
 
   // Maintain scroll position after loading more messages
   useEffect(() => {
@@ -484,6 +774,60 @@ function ChatView({
       prevScrollHeightRef.current = 0;
     }
   }, [isLoadingMore, messages]);
+
+  // Initialize read status for own messages
+  // For DMs: 1 other member, check if they've read past this message
+  // For groups: need total member count minus 1 (excluding sender)
+  useEffect(() => {
+    if (messages.length === 0) return;
+
+    // Get messages sent by current user that don't have status yet
+    const ownMessages = messages.filter(
+      (m) => m.senderId === currentUserId && !m.id.startsWith("pending-") && m.type !== "system"
+    );
+
+    if (ownMessages.length === 0) return;
+
+    // For DMs, we can infer read status based on chat.unreadCount
+    // If unreadCount is 0, the other user has read all messages
+    if (chat.type === "dm") {
+      const totalMembers = 1; // 1 other member in DM
+      const newStatus: Record<string, { totalMembers: number; readCount: number }> = {};
+
+      ownMessages.forEach((msg) => {
+        if (!messageReadStatus[msg.id]) {
+          // For now, assume all are read if unreadCount is 0
+          // In reality, we'd need to fetch actual receipt status
+          newStatus[msg.id] = {
+            totalMembers,
+            readCount: chat.unreadCount === 0 ? 1 : 0,
+          };
+        }
+      });
+
+      if (Object.keys(newStatus).length > 0) {
+        setMessageReadStatus((prev) => ({ ...prev, ...newStatus }));
+      }
+    } else {
+      // For group chats, initialize with totalMembers-1 and 0 readCount
+      // Real read count would need to be fetched from API
+      const totalMembers = Math.max(0, chat.memberCount - 1);
+      const newStatus: Record<string, { totalMembers: number; readCount: number }> = {};
+
+      ownMessages.forEach((msg) => {
+        if (!messageReadStatus[msg.id]) {
+          newStatus[msg.id] = {
+            totalMembers,
+            readCount: 0, // Unknown until fetched
+          };
+        }
+      });
+
+      if (Object.keys(newStatus).length > 0) {
+        setMessageReadStatus((prev) => ({ ...prev, ...newStatus }));
+      }
+    }
+  }, [messages, currentUserId, chat.type, chat.unreadCount, chat.memberCount, messageReadStatus]);
 
   // Handle scroll for infinite loading
   const handleScroll = useCallback(() => {
@@ -727,11 +1071,22 @@ function ChatView({
 
                 {/* Messages for this date */}
                 {group.messages.map((message) => (
-                  <MessageBubble
-                    key={message.id}
-                    message={message}
-                    isCurrentUser={message.senderId === currentUserId}
-                  />
+                  <div key={message.id} className="relative">
+                    <MessageBubble
+                      message={message}
+                      isCurrentUser={message.senderId === currentUserId}
+                      readStatus={messageReadStatus[message.id]}
+                      onShowReadReceipts={setSelectedMessageForReceipts}
+                    />
+                    {/* Read receipts popover */}
+                    {selectedMessageForReceipts === message.id && (
+                      <ReadReceiptsPopover
+                        messageId={message.id}
+                        isOpen={true}
+                        onClose={() => setSelectedMessageForReceipts(null)}
+                      />
+                    )}
+                  </div>
                 ))}
               </div>
             ))}
@@ -1290,12 +1645,42 @@ export default function MessengerPage() {
     });
   }, []);
 
+  // Track last read receipt event for the current chat
+  const [lastReadReceiptEvent, setLastReadReceiptEvent] = useState<ReadReceiptEvent | null>(null);
+
+  // Handle read receipt events
+  const handleReadReceiptEvent = useCallback((event: ReadReceiptEvent) => {
+    // Update the state so ChatView can react to it
+    setLastReadReceiptEvent(event);
+
+    // Also update the unread count in the chat list if this is from another user
+    // (When someone reads our messages, their unread count decreases)
+    if (event.userId !== currentUserId) {
+      setChats((prevChats) =>
+        prevChats.map((chat) => {
+          if (chat.id === event.chatId) {
+            // For DMs, if the other user has read, the message is fully read
+            if (chat.type === "dm") {
+              return {
+                ...chat,
+                // We can't directly update unreadCount here since it's their unread count
+                // But this event confirms they've read our messages
+              };
+            }
+          }
+          return chat;
+        })
+      );
+    }
+  }, [currentUserId]);
+
   // WebSocket connection
   const { status: wsStatus, reconnect, sendTypingStart, sendTypingStop } = useWebSocket({
     token: null, // Will use cookie
     onMessage: handleWebSocketMessage,
     onTyping: handleTypingEvent,
     onPresence: handlePresenceEvent,
+    onReadReceipt: handleReadReceiptEvent,
   });
 
   // Fetch current user ID

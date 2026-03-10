@@ -30,11 +30,19 @@ export interface PresenceEvent {
   isOnline: boolean;
 }
 
+export interface ReadReceiptEvent {
+  chatId: string;
+  userId: string;
+  lastMessageId: string;
+  displayName: string;
+}
+
 interface UseWebSocketOptions {
   token: string | null;
   onMessage?: (message: WebSocketMessage) => void;
   onTyping?: (event: TypingEvent) => void;
   onPresence?: (event: PresenceEvent) => void;
+  onReadReceipt?: (event: ReadReceiptEvent) => void;
   onConnected?: (data: { userId: string; orgId: string | null }) => void;
   onDisconnected?: () => void;
 }
@@ -61,7 +69,7 @@ function getCookie(name: string): string | null {
 }
 
 export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
-  const { token, onMessage, onTyping, onPresence, onConnected, onDisconnected } = options;
+  const { token, onMessage, onTyping, onPresence, onReadReceipt, onConnected, onDisconnected } = options;
 
   const [status, setStatus] = useState<ConnectionStatus>("disconnected");
   const wsRef = useRef<WebSocket | null>(null);
@@ -75,6 +83,7 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
   const onMessageRef = useRef(onMessage);
   const onTypingRef = useRef(onTyping);
   const onPresenceRef = useRef(onPresence);
+  const onReadReceiptRef = useRef(onReadReceipt);
   const onConnectedRef = useRef(onConnected);
   const onDisconnectedRef = useRef(onDisconnected);
 
@@ -82,9 +91,10 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
     onMessageRef.current = onMessage;
     onTypingRef.current = onTyping;
     onPresenceRef.current = onPresence;
+    onReadReceiptRef.current = onReadReceipt;
     onConnectedRef.current = onConnected;
     onDisconnectedRef.current = onDisconnected;
-  }, [onMessage, onTyping, onPresence, onConnected, onDisconnected]);
+  }, [onMessage, onTyping, onPresence, onReadReceipt, onConnected, onDisconnected]);
 
   const cleanup = useCallback(() => {
     if (retryTimeoutRef.current) {
@@ -172,6 +182,20 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
             userId: message.userId || "",
             displayName: message.displayName || "Unknown",
             isOnline: message.isOnline ?? false,
+          });
+        } else if (message.type === "read_receipt") {
+          // Handle read receipt events
+          const payload = message.payload as {
+            chatId: string;
+            userId: string;
+            lastMessageId: string;
+            displayName: string;
+          };
+          onReadReceiptRef.current?.({
+            chatId: payload.chatId,
+            userId: payload.userId,
+            lastMessageId: payload.lastMessageId,
+            displayName: payload.displayName,
           });
         } else {
           // Forward other messages to the handler

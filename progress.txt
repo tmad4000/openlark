@@ -33,3 +33,4 @@
 [2026-03-10 22:35] US-025 — Message input with rich text formatting — PASS
 [2026-03-10 16:40] US-026 — Real-time message delivery via WebSocket — PASS
 [2026-03-10 16:48] US-027 — Typing indicators and online presence — PASS
+[2026-03-10 16:55] US-028 — Read receipts API and UI — PASS

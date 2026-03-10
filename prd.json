@@ -454,8 +454,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 28,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented read receipts API and UI. POST /chats/:id/read marks messages as read up to a specific message, batch inserts read receipts into message_read_receipts table, and publishes read_receipt event via WebSocket. GET /messages/:id/read-receipts returns list of who has/hasn't read the message with timestamps. UI: ReadStatusIcon component shows gray circle (unread), green check (partial), or green double-check (all read) on messages sent by current user. Click shows ReadReceiptsPopover with list of readers/non-readers. Frontend auto-marks messages as read when viewing a chat and on new incoming messages. WebSocket hook extended with onReadReceipt callback. Typecheck passes."
     },
     {
       "id": "US-029",

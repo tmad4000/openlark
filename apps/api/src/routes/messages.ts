@@ -1,7 +1,7 @@
 import { FastifyInstance } from "fastify";
 import { db } from "../db";
-import { messages, chatMembers, chats, users } from "../db/schema";
-import { eq, and, desc, lt } from "drizzle-orm";
+import { messages, chatMembers, chats, users, messageReadReceipts } from "../db/schema";
+import { eq, and, desc, lt, gt, inArray, sql } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
 import { publish, getChatChannel } from "../lib/redis";
 
@@ -338,6 +338,265 @@ export async function messagesRoutes(fastify: FastifyInstance) {
         messages: resultMessages,
         nextCursor,
         hasMore,
+      });
+    }
+  );
+
+  /**
+   * POST /chats/:id/read - Mark messages as read up to a specific message
+   * Body: { last_message_id: string }
+   * Returns: { success: true, readCount: number }
+   */
+  fastify.post<{
+    Params: { id: string };
+    Body: { last_message_id: string };
+  }>(
+    "/chats/:id/read",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id: chatId } = request.params;
+      const { last_message_id } = request.body;
+
+      // Validate chatId format
+      if (!UUID_REGEX.test(chatId)) {
+        return reply.status(400).send({
+          error: "Invalid chat ID format",
+        });
+      }
+
+      // Validate last_message_id is provided
+      if (!last_message_id) {
+        return reply.status(400).send({
+          error: "last_message_id is required",
+        });
+      }
+
+      // Validate last_message_id format
+      if (!UUID_REGEX.test(last_message_id)) {
+        return reply.status(400).send({
+          error: "Invalid last_message_id format",
+        });
+      }
+
+      const currentUserId = request.user.id;
+
+      // Check user is a member of the chat
+      const [membership] = await db
+        .select()
+        .from(chatMembers)
+        .where(
+          and(
+            eq(chatMembers.chatId, chatId),
+            eq(chatMembers.userId, currentUserId)
+          )
+        )
+        .limit(1);
+
+      if (!membership) {
+        return reply.status(403).send({
+          error: "You are not a member of this chat",
+        });
+      }
+
+      // Validate the target message exists in this chat
+      const [targetMessage] = await db
+        .select()
+        .from(messages)
+        .where(
+          and(
+            eq(messages.id, last_message_id),
+            eq(messages.chatId, chatId)
+          )
+        )
+        .limit(1);
+
+      if (!targetMessage) {
+        return reply.status(404).send({
+          error: "Message not found in this chat",
+        });
+      }
+
+      // Get the user's current last_read_message_id timestamp
+      let oldReadTimestamp: Date | null = null;
+      if (membership.lastReadMessageId) {
+        const [oldReadMsg] = await db
+          .select({ createdAt: messages.createdAt })
+          .from(messages)
+          .where(eq(messages.id, membership.lastReadMessageId))
+          .limit(1);
+        oldReadTimestamp = oldReadMsg?.createdAt ?? null;
+      }
+
+      // Get all messages between old position and new position that need read receipts
+      // These are messages not sent by the current user
+      const messagesToMark = await db
+        .select({ id: messages.id })
+        .from(messages)
+        .where(
+          and(
+            eq(messages.chatId, chatId),
+            sql`${messages.senderId} != ${currentUserId}`,
+            sql`${messages.createdAt} <= ${targetMessage.createdAt}`,
+            oldReadTimestamp
+              ? gt(messages.createdAt, oldReadTimestamp)
+              : sql`1=1`
+          )
+        );
+
+      // Batch insert read receipts
+      if (messagesToMark.length > 0) {
+        const messageIds = messagesToMark.map((m) => m.id);
+
+        // Get existing receipts to avoid duplicates
+        const existingReceipts = await db
+          .select({ messageId: messageReadReceipts.messageId })
+          .from(messageReadReceipts)
+          .where(
+            and(
+              inArray(messageReadReceipts.messageId, messageIds),
+              eq(messageReadReceipts.userId, currentUserId)
+            )
+          );
+
+        const existingSet = new Set(existingReceipts.map((r) => r.messageId));
+        const newReceipts = messageIds.filter((id) => !existingSet.has(id));
+
+        if (newReceipts.length > 0) {
+          await db.insert(messageReadReceipts).values(
+            newReceipts.map((messageId) => ({
+              messageId,
+              userId: currentUserId,
+            }))
+          );
+        }
+      }
+
+      // Update the user's last_read_message_id
+      await db
+        .update(chatMembers)
+        .set({ lastReadMessageId: last_message_id })
+        .where(
+          and(
+            eq(chatMembers.chatId, chatId),
+            eq(chatMembers.userId, currentUserId)
+          )
+        );
+
+      // Publish read receipt event to WebSocket channel
+      await publish(getChatChannel(chatId), {
+        type: "read_receipt",
+        payload: {
+          chatId,
+          userId: currentUserId,
+          lastMessageId: last_message_id,
+          displayName: request.user.displayName,
+        },
+      });
+
+      return reply.status(200).send({
+        success: true,
+        readCount: messagesToMark.length,
+      });
+    }
+  );
+
+  /**
+   * GET /messages/:id/read-receipts - Get read receipts for a specific message
+   * Returns: { receipts: Array<{ userId, displayName, avatarUrl, readAt }>, totalMembers, readCount }
+   */
+  fastify.get<{
+    Params: { id: string };
+  }>(
+    "/messages/:id/read-receipts",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id: messageId } = request.params;
+
+      // Validate messageId format
+      if (!UUID_REGEX.test(messageId)) {
+        return reply.status(400).send({
+          error: "Invalid message ID format",
+        });
+      }
+
+      const currentUserId = request.user.id;
+
+      // Get the message and verify it exists
+      const [message] = await db
+        .select()
+        .from(messages)
+        .where(eq(messages.id, messageId))
+        .limit(1);
+
+      if (!message) {
+        return reply.status(404).send({
+          error: "Message not found",
+        });
+      }
+
+      // Check user is a member of the chat
+      if (!(await isChatMember(message.chatId, currentUserId))) {
+        return reply.status(403).send({
+          error: "You are not a member of this chat",
+        });
+      }
+
+      // Get all chat members (excluding the sender)
+      const members = await db
+        .select({
+          userId: chatMembers.userId,
+          displayName: users.displayName,
+          avatarUrl: users.avatarUrl,
+        })
+        .from(chatMembers)
+        .innerJoin(users, eq(chatMembers.userId, users.id))
+        .where(
+          and(
+            eq(chatMembers.chatId, message.chatId),
+            sql`${chatMembers.userId} != ${message.senderId}`
+          )
+        );
+
+      const memberIds = members.map((m) => m.userId);
+      const totalMembers = members.length;
+
+      // Get read receipts for this message
+      const receipts = await db
+        .select({
+          userId: messageReadReceipts.userId,
+          readAt: messageReadReceipts.readAt,
+          displayName: users.displayName,
+          avatarUrl: users.avatarUrl,
+        })
+        .from(messageReadReceipts)
+        .innerJoin(users, eq(messageReadReceipts.userId, users.id))
+        .where(eq(messageReadReceipts.messageId, messageId));
+
+      const readUserIds = new Set(receipts.map((r) => r.userId));
+
+      // Build response with both read and unread users
+      const readReceipts = receipts.map((r) => ({
+        userId: r.userId,
+        displayName: r.displayName,
+        avatarUrl: r.avatarUrl,
+        readAt: r.readAt,
+        hasRead: true,
+      }));
+
+      const unreadReceipts = members
+        .filter((m) => !readUserIds.has(m.userId))
+        .map((m) => ({
+          userId: m.userId,
+          displayName: m.displayName,
+          avatarUrl: m.avatarUrl,
+          readAt: null,
+          hasRead: false,
+        }));
+
+      return reply.status(200).send({
+        receipts: [...readReceipts, ...unreadReceipts],
+        totalMembers,
+        readCount: receipts.length,
       });
     }
   );
