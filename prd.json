@@ -271,8 +271,8 @@
         "Typecheck passes"
       ],
       "priority": 17,
-      "passes": false,
-      "notes": "content is JSONB to support different message types (text, rich_text blocks, code with language, etc.)"
+      "passes": true,
+      "notes": "content is JSONB to support different message types (text, rich_text blocks, code with language, etc.). Schema at apps/api/src/db/schema/chats.ts, migration 0005_confused_lady_deathstrike.sql"
     },
     {
       "id": "US-018",

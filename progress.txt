@@ -22,3 +22,4 @@
 [2026-03-10 15:54] US-014 — Department management API — PASS
 [2026-03-10 15:57] US-015 — User profile API — PASS
 [2026-03-10 16:00] US-016 — Contacts directory API — PASS
+[2026-03-10 16:02] US-017 — Chat and Message schemas — PASS
