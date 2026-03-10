@@ -1076,7 +1076,7 @@
   ],
   "metadata": {
     "createdAt": "2026-03-04T21:00:00Z",
-    "totalIterations": 15,
+    "totalIterations": 17,
     "iterationLog": [
       {
         "iteration": 1,
@@ -1166,6 +1166,18 @@
         "iteration": 15,
         "role": "implementer",
         "taskWorked": "T-003",
+        "contextCompacted": false
+      },
+      {
+        "iteration": 16,
+        "role": "reviewer",
+        "taskWorked": null,
+        "contextCompacted": false
+      },
+      {
+        "iteration": 17,
+        "role": "simplifier",
+        "taskWorked": null,
         "contextCompacted": false
       }
     ]
