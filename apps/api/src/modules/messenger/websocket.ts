@@ -37,6 +37,9 @@ const userConnections = new Map<string, Set<WebSocket>>();
 // Map of chatId -> Set of userIds subscribed
 const chatSubscribers = new Map<string, Set<string>>();
 
+// Track Redis channel subscriptions for cleanup
+const subscribedChannels = new Set<string>();
+
 // Constants for presence
 const PRESENCE_TTL = 30; // seconds
 const PRESENCE_KEY_PREFIX = "presence:";
@@ -232,6 +235,9 @@ async function subscribeToRedisChannels(chatIds: string[]): Promise<void> {
   if (chatIds.length === 0 || !subscriberInitialized) return;
 
   const channels = chatIds.map((id) => `chat:${id}`);
+  for (const channel of channels) {
+    subscribedChannels.add(channel);
+  }
   await getSubscriber().subscribe(...channels);
 }
 
@@ -249,32 +255,39 @@ export async function publishMessageEvent(
   chatId: string,
   event: WsMessage
 ): Promise<void> {
-  await redis.publish(`chat:${chatId}`, JSON.stringify(event));
+  const channel = `chat:${chatId}`;
+  const payload = JSON.stringify(event);
+  await redis.publish(channel, payload);
 }
 
 /**
  * Notify users that they've been added to a chat
+ *
+ * Only adds to subscription tracking if user is currently connected.
+ * If not connected, they'll subscribe when they connect next.
  */
 export async function notifyUserJoinedChat(
   chatId: string,
   userId: string
 ): Promise<void> {
-  // Add to in-memory subscription tracking
-  if (!chatSubscribers.has(chatId)) {
-    chatSubscribers.set(chatId, new Set());
-  }
-  chatSubscribers.get(chatId)!.add(userId);
-
-  // Subscribe to Redis channel if user is connected
+  // Only track and subscribe if user is currently connected
   if (userConnections.has(userId)) {
-    await subscribeToRedisChannels([chatId]);
-  }
+    // Add to in-memory subscription tracking
+    if (!chatSubscribers.has(chatId)) {
+      chatSubscribers.set(chatId, new Set());
+    }
+    chatSubscribers.get(chatId)!.add(userId);
 
-  // Notify the user
-  sendToUser(userId, {
-    type: "chat:joined",
-    chatId,
-  });
+    // Subscribe to Redis channel
+    await subscribeToRedisChannels([chatId]);
+
+    // Notify the connected user
+    sendToUser(userId, {
+      type: "chat:joined",
+      chatId,
+    });
+  }
+  // If not connected, user will get the chat via getUserChats when they connect
 }
 
 /**
@@ -395,4 +408,39 @@ export async function registerWebSocketRoutes(
       });
     }
   );
+}
+
+/**
+ * Reset WebSocket state (for testing purposes)
+ * This closes all connections, clears in-memory tracking, and unsubscribes from Redis.
+ */
+export async function resetWebSocketState(): Promise<void> {
+  // Close all WebSocket connections gracefully
+  for (const connections of userConnections.values()) {
+    for (const ws of connections) {
+      try {
+        ws.close(1000, "Test reset");
+      } catch {
+        // Ignore errors from already-closed connections
+      }
+    }
+  }
+
+  // Wait for close handlers to complete and connections to fully close
+  await new Promise((resolve) => setTimeout(resolve, 100));
+
+  // Clear in-memory state
+  userConnections.clear();
+  chatSubscribers.clear();
+
+  // Unsubscribe from all Redis channels
+  if (subscriberInitialized && subscribedChannels.size > 0) {
+    try {
+      const channels = Array.from(subscribedChannels);
+      await getSubscriber().unsubscribe(...channels);
+    } catch {
+      // Ignore errors if Redis is not available
+    }
+  }
+  subscribedChannels.clear();
 }

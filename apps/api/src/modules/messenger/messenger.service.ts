@@ -134,15 +134,18 @@ export class MessengerService {
 
   /**
    * Get user's chats
+   *
+   * Returns all chats where the user is a member, regardless of org.
+   * This supports external groups (FR-2.29) where users from different
+   * orgs can be members of the same chat.
    */
-  async getUserChats(userId: string, orgId: string): Promise<Chat[]> {
+  async getUserChats(userId: string, _orgId: string): Promise<Chat[]> {
     const result = await db
       .select({ chat: chats })
       .from(chats)
       .innerJoin(chatMembers, eq(chats.id, chatMembers.chatId))
       .where(
         and(
-          eq(chats.orgId, orgId),
           eq(chatMembers.userId, userId),
           isNull(chatMembers.leftAt),
           isNull(chats.deletedAt)

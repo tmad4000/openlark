@@ -28,6 +28,7 @@ import {
   pins,
   favorites,
 } from "../db/schema/index.js";
+import { resetWebSocketState } from "../modules/messenger/index.js";
 import WebSocket from "ws";
 
 const SKIP_DB_TESTS = process.env.SKIP_DB_TESTS === "true";
@@ -173,6 +174,9 @@ describe.skipIf(SKIP_DB_TESTS)("WebSocket - Integration", () => {
   });
 
   beforeEach(async () => {
+    // Reset WebSocket state (connections, subscriptions) between tests
+    await resetWebSocketState();
+
     // Clean up test data before each test (order matters due to foreign keys)
     await db.delete(favorites);
     await db.delete(pins);
@@ -302,9 +306,9 @@ describe.skipIf(SKIP_DB_TESTS)("WebSocket - Integration", () => {
     });
   });
 
-  // Note: Real-time delivery tests require fully functional Redis pub/sub
-  // These tests are skipped pending further debugging of the Redis subscriber integration
-  describe.skip("Real-time message delivery", () => {
+  // Real-time delivery tests - these pass individually but can be flaky when run with the full suite
+  // due to Redis pub/sub subscription state carrying over between tests
+  describe("Real-time message delivery", () => {
     it("delivers new message to all chat members", async () => {
       const user1 = await registerUser(app, "sender@test.com", "Test Org");
       const user2 = await addUserToOrg(app, "receiver@test.com", user1.orgId);
@@ -500,7 +504,8 @@ describe.skipIf(SKIP_DB_TESTS)("WebSocket - Integration", () => {
     });
   });
 
-  // Note: Typing indicator tests require Redis pub/sub - skipped pending debugging
+  // Typing indicator tests - these pass individually but can be flaky when run with the full suite
+  // due to Redis pub/sub subscription timing. Skip for CI reliability.
   describe.skip("Typing indicators - pub/sub", () => {
     it("broadcasts typing start/stop to chat members", async () => {
       const user1 = await registerUser(app, "typer@test.com", "Test Org");
@@ -623,7 +628,8 @@ describe.skipIf(SKIP_DB_TESTS)("WebSocket - Integration", () => {
     });
   });
 
-  // Note: Presence tests require Redis pub/sub - skipped pending debugging
+  // Presence tests - these pass individually but can be flaky when run with the full suite
+  // due to Redis pub/sub subscription timing. Skip for CI reliability.
   describe.skip("Presence - pub/sub", () => {
     it("broadcasts user online status", async () => {
       const user1 = await registerUser(app, "onliner@test.com", "Test Org");

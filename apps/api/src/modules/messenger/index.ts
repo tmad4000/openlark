@@ -6,4 +6,5 @@ export {
   registerWebSocketRoutes,
   publishMessageEvent,
   notifyUserJoinedChat,
+  resetWebSocketState,
 } from "./websocket.js";
