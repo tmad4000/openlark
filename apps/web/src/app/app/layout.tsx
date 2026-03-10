@@ -139,6 +139,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   const activeModule = getActiveModule();
 
+  // Modules that have their own sidebar layout
+  const modulesWithOwnSidebar = ["messenger"];
+  const hasOwnSidebar = modulesWithOwnSidebar.includes(activeModule);
+
   return (
     <div className="h-screen flex overflow-hidden bg-gray-100">
       {/* Navigation Rail - 56px fixed width */}
@@ -240,8 +244,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
       </nav>
 
-      {/* Resizable Sidebar Panel */}
-      {!isSidebarCollapsed && (
+      {/* Resizable Sidebar Panel - hidden for modules with their own sidebar */}
+      {!hasOwnSidebar && !isSidebarCollapsed && (
         <aside
           className="bg-white border-r border-gray-200 flex flex-col relative"
           style={{ width: sidebarWidth }}
@@ -271,8 +275,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </aside>
       )}
 
-      {/* Collapsed Sidebar Toggle */}
-      {isSidebarCollapsed && (
+      {/* Collapsed Sidebar Toggle - hidden for modules with their own sidebar */}
+      {!hasOwnSidebar && isSidebarCollapsed && (
         <button
           onClick={() => setIsSidebarCollapsed(false)}
           className="w-6 bg-white border-r border-gray-200 flex items-center justify-center hover:bg-gray-50"
@@ -282,7 +286,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       )}
 
       {/* Main Content Area */}
-      <main className="flex-1 overflow-y-auto bg-gray-50">{children}</main>
+      <main className={`flex-1 overflow-hidden ${hasOwnSidebar ? "" : "bg-gray-50"}`}>{children}</main>
     </div>
   );
 }

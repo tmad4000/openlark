@@ -370,8 +370,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 23,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created /app/messenger page with full chat list UI. ChatRow component displays avatar (initials for users, Users icon for groups), name, last message preview, timestamp, and unread badge. Click selects chat and updates center panel placeholder. Filter bar with 6 tabs: All, Private, Group, @Mentions, Unread, Muted (Private/Group/Unread/Muted map to API filters). Search box filters chats by name client-side. New chat button opens Radix Dialog with DM and Group Chat tabs - DM searches contacts and creates/returns existing DM, Group allows multi-select and group name. Layout modified to hide default sidebar for messenger module. Added @radix-ui/react-dialog dependency. Typecheck passes."
     },
     {
       "id": "US-024",
