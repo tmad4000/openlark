@@ -4,3 +4,4 @@ export * from "./users";
 export * from "./departments";
 export * from "./sessions";
 export * from "./api-keys";
+export * from "./invitations";

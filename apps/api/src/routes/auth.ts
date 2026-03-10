@@ -2,8 +2,8 @@ import { FastifyInstance } from "fastify";
 import bcrypt from "bcrypt";
 import crypto from "crypto";
 import { db } from "../db";
-import { users, organizations, sessions } from "../db/schema";
-import { eq } from "drizzle-orm";
+import { users, organizations, sessions, invitations } from "../db/schema";
+import { eq, and, gt } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
 
 const BCRYPT_ROUNDS = 12;
@@ -22,6 +22,15 @@ interface RegisterBody {
 interface LoginBody {
   email: string;
   password: string;
+}
+
+interface AcceptInviteParams {
+  token: string;
+}
+
+interface AcceptInviteBody {
+  password: string;
+  display_name: string;
 }
 
 export async function authRoutes(fastify: FastifyInstance) {
@@ -219,6 +228,271 @@ export async function authRoutes(fastify: FastifyInstance) {
       return reply.status(200).send({
         user: request.user,
         org: request.org,
+      });
+    }
+  );
+
+  /**
+   * GET /auth/accept-invite/:token - Validate invitation and return info
+   * Returns invitation details if valid
+   */
+  fastify.get<{ Params: AcceptInviteParams }>(
+    "/auth/accept-invite/:token",
+    async (request, reply) => {
+      const { token } = request.params;
+
+      if (!token) {
+        return reply.status(400).send({
+          error: "Invitation token is required",
+        });
+      }
+
+      // Hash the token to look up
+      const tokenHash = crypto
+        .createHash("sha256")
+        .update(token)
+        .digest("hex");
+
+      // Find the invitation
+      const [invitation] = await db
+        .select({
+          id: invitations.id,
+          email: invitations.email,
+          orgId: invitations.orgId,
+          status: invitations.status,
+          expiresAt: invitations.expiresAt,
+        })
+        .from(invitations)
+        .where(eq(invitations.tokenHash, tokenHash))
+        .limit(1);
+
+      if (!invitation) {
+        return reply.status(404).send({
+          error: "Invalid invitation token",
+        });
+      }
+
+      // Check if invitation is still pending
+      if (invitation.status !== "pending") {
+        return reply.status(400).send({
+          error: `Invitation has already been ${invitation.status}`,
+        });
+      }
+
+      // Check if invitation has expired
+      if (new Date() > invitation.expiresAt) {
+        // Update status to expired
+        await db
+          .update(invitations)
+          .set({ status: "expired" })
+          .where(eq(invitations.id, invitation.id));
+
+        return reply.status(400).send({
+          error: "Invitation has expired",
+        });
+      }
+
+      // Get organization details
+      const [org] = await db
+        .select({
+          id: organizations.id,
+          name: organizations.name,
+          logoUrl: organizations.logoUrl,
+        })
+        .from(organizations)
+        .where(eq(organizations.id, invitation.orgId))
+        .limit(1);
+
+      if (!org) {
+        return reply.status(404).send({
+          error: "Organization not found",
+        });
+      }
+
+      // Check if user already exists
+      const [existingUser] = await db
+        .select({ id: users.id, displayName: users.displayName })
+        .from(users)
+        .where(eq(users.email, invitation.email))
+        .limit(1);
+
+      return reply.status(200).send({
+        invitation: {
+          email: invitation.email,
+          orgId: org.id,
+          orgName: org.name,
+          orgLogoUrl: org.logoUrl,
+        },
+        existingUser: existingUser
+          ? { id: existingUser.id, displayName: existingUser.displayName }
+          : null,
+      });
+    }
+  );
+
+  /**
+   * POST /auth/accept-invite/:token - Accept invitation and create/update user
+   * Creates new user or adds existing user to organization
+   */
+  fastify.post<{ Params: AcceptInviteParams; Body: AcceptInviteBody }>(
+    "/auth/accept-invite/:token",
+    async (request, reply) => {
+      const { token } = request.params;
+      const { password, display_name } = request.body;
+
+      if (!token) {
+        return reply.status(400).send({
+          error: "Invitation token is required",
+        });
+      }
+
+      // Hash the token to look up
+      const tokenHash = crypto
+        .createHash("sha256")
+        .update(token)
+        .digest("hex");
+
+      // Find the invitation
+      const [invitation] = await db
+        .select()
+        .from(invitations)
+        .where(eq(invitations.tokenHash, tokenHash))
+        .limit(1);
+
+      if (!invitation) {
+        return reply.status(404).send({
+          error: "Invalid invitation token",
+        });
+      }
+
+      // Check if invitation is still pending
+      if (invitation.status !== "pending") {
+        return reply.status(400).send({
+          error: `Invitation has already been ${invitation.status}`,
+        });
+      }
+
+      // Check if invitation has expired
+      if (new Date() > invitation.expiresAt) {
+        // Update status to expired
+        await db
+          .update(invitations)
+          .set({ status: "expired" })
+          .where(eq(invitations.id, invitation.id));
+
+        return reply.status(400).send({
+          error: "Invitation has expired",
+        });
+      }
+
+      // Check if user already exists
+      const [existingUser] = await db
+        .select()
+        .from(users)
+        .where(eq(users.email, invitation.email))
+        .limit(1);
+
+      let user;
+
+      if (existingUser) {
+        // Update existing user to join the new organization
+        const [updatedUser] = await db
+          .update(users)
+          .set({
+            orgId: invitation.orgId,
+            updatedAt: new Date(),
+          })
+          .where(eq(users.id, existingUser.id))
+          .returning({
+            id: users.id,
+            email: users.email,
+            displayName: users.displayName,
+            avatarUrl: users.avatarUrl,
+            timezone: users.timezone,
+            locale: users.locale,
+            status: users.status,
+            orgId: users.orgId,
+            createdAt: users.createdAt,
+            updatedAt: users.updatedAt,
+          });
+
+        user = updatedUser;
+      } else {
+        // Create new user - password and display_name required
+        if (!password || password.length < MIN_PASSWORD_LENGTH) {
+          return reply.status(400).send({
+            error: `Password must be at least ${MIN_PASSWORD_LENGTH} characters`,
+          });
+        }
+
+        if (!display_name || display_name.trim().length === 0) {
+          return reply.status(400).send({
+            error: "Display name is required",
+          });
+        }
+
+        // Hash password
+        const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+
+        // Create new user
+        const [newUser] = await db
+          .insert(users)
+          .values({
+            email: invitation.email,
+            passwordHash,
+            displayName: display_name.trim(),
+            orgId: invitation.orgId,
+          })
+          .returning({
+            id: users.id,
+            email: users.email,
+            displayName: users.displayName,
+            avatarUrl: users.avatarUrl,
+            timezone: users.timezone,
+            locale: users.locale,
+            status: users.status,
+            orgId: users.orgId,
+            createdAt: users.createdAt,
+            updatedAt: users.updatedAt,
+          });
+
+        user = newUser;
+      }
+
+      // Mark invitation as accepted
+      await db
+        .update(invitations)
+        .set({
+          status: "accepted",
+          acceptedAt: new Date(),
+        })
+        .where(eq(invitations.id, invitation.id));
+
+      // Generate session token
+      const sessionToken = crypto.randomBytes(32).toString("hex");
+      const sessionTokenHash = crypto
+        .createHash("sha256")
+        .update(sessionToken)
+        .digest("hex");
+
+      // Calculate expiry date
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + SESSION_EXPIRY_DAYS);
+
+      // Create session
+      await db.insert(sessions).values({
+        userId: user.id,
+        tokenHash: sessionTokenHash,
+        ip: request.ip,
+        deviceInfo: {
+          userAgent: request.headers["user-agent"],
+        },
+        expiresAt,
+      });
+
+      return reply.status(200).send({
+        user,
+        token: sessionToken,
       });
     }
   );

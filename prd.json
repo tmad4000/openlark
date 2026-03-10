@@ -209,8 +209,8 @@
         "Typecheck passes"
       ],
       "priority": 13,
-      "passes": false,
-      "notes": "Email sending is a background job via BullMQ - stub for now."
+      "passes": true,
+      "notes": "Created invitations table with id, org_id, email, token_hash, invited_by_id, status (pending/accepted/declined/revoked/expired), expires_at, accepted_at, created_at. Migration 0004_stale_ser_duncan.sql applied. POST /orgs/:id/invitations creates invitations for array of emails, validates emails, skips existing members and pending invitations, returns invitation links with unique tokens (32 bytes hex). GET /auth/accept-invite/:token validates token, checks expiry and status, returns invitation details and existing user info. POST /auth/accept-invite/:token accepts invitation, creates new user (with password/display_name) or updates existing user's orgId, marks invitation as accepted, creates session. Email sending stubbed - will be background job via BullMQ. Typecheck passes."
     },
     {
       "id": "US-014",
