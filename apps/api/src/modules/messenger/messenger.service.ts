@@ -9,6 +9,7 @@ import {
   favorites,
   chatTabs,
   announcements,
+  users,
   type Chat,
   type Message,
   type ChatMember,
@@ -219,6 +220,35 @@ export class MessengerService {
       .select()
       .from(chatMembers)
       .where(and(eq(chatMembers.chatId, chatId), isNull(chatMembers.leftAt)));
+  }
+
+  /**
+   * Get chat members with user info (displayName, avatarUrl)
+   */
+  async getChatMembersWithUserInfo(chatId: string): Promise<
+    Array<ChatMember & { user: { displayName: string | null; avatarUrl: string | null } }>
+  > {
+    const result = await db
+      .select({
+        id: chatMembers.id,
+        chatId: chatMembers.chatId,
+        userId: chatMembers.userId,
+        role: chatMembers.role,
+        joinedAt: chatMembers.joinedAt,
+        muted: chatMembers.muted,
+        label: chatMembers.label,
+        lastReadMessageId: chatMembers.lastReadMessageId,
+        leftAt: chatMembers.leftAt,
+        user: {
+          displayName: users.displayName,
+          avatarUrl: users.avatarUrl,
+        },
+      })
+      .from(chatMembers)
+      .innerJoin(users, eq(chatMembers.userId, users.id))
+      .where(and(eq(chatMembers.chatId, chatId), isNull(chatMembers.leftAt)));
+
+    return result;
   }
 
   /**

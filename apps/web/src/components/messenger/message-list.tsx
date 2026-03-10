@@ -6,6 +6,9 @@ import { api, type Message } from "@/lib/api";
 import { useAuth } from "@/hooks/use-auth";
 import { Loader2 } from "lucide-react";
 
+// Map of userId to display name for sender lookup
+type SenderMap = Map<string, { displayName: string | null; avatarUrl: string | null }>;
+
 interface MessageListProps {
   chatId: string;
   onMessagesLoaded?: (messages: Message[]) => void;
@@ -14,6 +17,7 @@ interface MessageListProps {
 export function MessageList({ chatId, onMessagesLoaded }: MessageListProps) {
   const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
+  const [senderMap, setSenderMap] = useState<SenderMap>(new Map());
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
@@ -21,17 +25,33 @@ export function MessageList({ chatId, onMessagesLoaded }: MessageListProps) {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const loadMoreTriggerRef = useRef<HTMLDivElement>(null);
 
-  // Initial load
+  // Initial load - fetch both messages and members
   useEffect(() => {
     async function loadMessages() {
       try {
         setIsLoading(true);
         setError(null);
         setMessages([]);
-        const response = await api.getMessages(chatId, { limit: 50 });
-        setMessages(response.messages);
-        setHasMore(response.messages.length === 50);
-        onMessagesLoaded?.(response.messages);
+        setSenderMap(new Map());
+
+        // Fetch messages and members in parallel
+        const [messagesResponse, membersResponse] = await Promise.all([
+          api.getMessages(chatId, { limit: 50 }),
+          api.getChatMembers(chatId),
+        ]);
+
+        // Build sender map from members
+        const newSenderMap: SenderMap = new Map();
+        for (const member of membersResponse.members) {
+          if (member.user) {
+            newSenderMap.set(member.userId, member.user);
+          }
+        }
+        setSenderMap(newSenderMap);
+
+        setMessages(messagesResponse.messages);
+        setHasMore(messagesResponse.messages.length === 50);
+        onMessagesLoaded?.(messagesResponse.messages);
       } catch (err) {
         setError(
           err instanceof Error ? err.message : "Failed to load messages"
@@ -168,6 +188,7 @@ export function MessageList({ chatId, onMessagesLoaded }: MessageListProps) {
             const showSender = !isOwn && (
               index === 0 || messages[index - 1]?.senderId !== message.senderId
             );
+            const senderInfo = senderMap.get(message.senderId);
 
             return (
               <MessageBubble
@@ -175,6 +196,7 @@ export function MessageList({ chatId, onMessagesLoaded }: MessageListProps) {
                 message={message}
                 isOwn={isOwn}
                 showSender={showSender}
+                senderName={senderInfo?.displayName}
               />
             );
           })}
@@ -193,9 +215,10 @@ interface MessageBubbleProps {
   message: Message;
   isOwn: boolean;
   showSender: boolean;
+  senderName?: string | null;
 }
 
-function MessageBubble({ message, isOwn, showSender }: MessageBubbleProps) {
+function MessageBubble({ message, isOwn, showSender, senderName }: MessageBubbleProps) {
   const isRecalled = !!message.recalledAt;
   const isEdited = !!message.editedAt;
 
@@ -233,7 +256,7 @@ function MessageBubble({ message, isOwn, showSender }: MessageBubbleProps) {
       >
         {showSender && (
           <div className="text-xs font-medium mb-1 opacity-70">
-            User {message.senderId.slice(0, 8)}
+            {senderName || `User ${message.senderId.slice(0, 8)}`}
           </div>
         )}
         <div className="text-sm whitespace-pre-wrap break-words">

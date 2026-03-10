@@ -154,7 +154,7 @@ export async function messengerRoutes(app: FastifyInstance) {
         });
       }
 
-      const members = await messengerService.getChatMembers(req.params.chatId);
+      const members = await messengerService.getChatMembersWithUserInfo(req.params.chatId);
       return reply.send({ data: { members } });
     }
   );

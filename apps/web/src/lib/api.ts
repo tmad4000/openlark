@@ -146,6 +146,10 @@ class ApiClient {
       body: JSON.stringify(data),
     });
   }
+
+  async getChatMembers(chatId: string) {
+    return this.request<{ members: ChatMember[] }>(`/messenger/chats/${chatId}/members`);
+  }
 }
 
 // Types
@@ -182,6 +186,10 @@ export interface ChatMember {
   userId: string;
   role: "owner" | "admin" | "member";
   joinedAt: string;
+  user?: {
+    displayName: string | null;
+    avatarUrl: string | null;
+  };
 }
 
 export interface Message {

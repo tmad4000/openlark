@@ -6,13 +6,16 @@ import { useWebSocket, type NewMessageEvent, type MessageEditedEvent, type Messa
 import { ChatList } from "@/components/messenger/chat-list";
 import { MessageList } from "@/components/messenger/message-list";
 import { MessageInput } from "@/components/messenger/message-input";
+import { CreateChatDialog } from "@/components/messenger/create-chat-dialog";
 import { AppShell } from "@/components/layout/app-shell";
 import { cn } from "@/lib/utils";
 import { MessageSquare, Wifi, WifiOff } from "lucide-react";
+import type { Chat } from "@/lib/api";
 
 export default function MessengerPage() {
   const { user, organization } = useAuth();
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
 
   // WebSocket for real-time updates
   const { status: wsStatus, isConnected } = useWebSocket({
@@ -38,14 +41,26 @@ export default function MessengerPage() {
     setSelectedChatId(chatId);
   }, []);
 
+  const handleCreateChat = useCallback(() => {
+    setIsCreateDialogOpen(true);
+  }, []);
+
+  const handleChatCreated = useCallback((chat: Chat) => {
+    // Add the new chat to the list and select it
+    ChatList.addChat(chat);
+    setSelectedChatId(chat.id);
+  }, []);
+
   const sidebar = (
     <ChatList
       selectedChatId={selectedChatId}
       onSelectChat={handleSelectChat}
+      onCreateChat={handleCreateChat}
     />
   );
 
   return (
+    <>
     <AppShell sidebar={sidebar}>
       {selectedChatId ? (
         <div className="flex flex-col h-full">
@@ -119,5 +134,13 @@ export default function MessengerPage() {
         </div>
       )}
     </AppShell>
+
+      {/* Create chat dialog */}
+      <CreateChatDialog
+        open={isCreateDialogOpen}
+        onOpenChange={setIsCreateDialogOpen}
+        onChatCreated={handleChatCreated}
+      />
+    </>
   );
 }
