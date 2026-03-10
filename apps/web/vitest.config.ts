@@ -5,9 +5,11 @@ import { resolve } from "path";
 export default defineConfig({
   plugins: [react()],
   test: {
-    globals: false,
+    globals: true,
     environment: "jsdom",
+    setupFiles: ["./src/test/setup.ts"],
     passWithNoTests: true,
+    include: ["src/**/*.{test,spec}.{ts,tsx}"],
   },
   resolve: {
     alias: {
