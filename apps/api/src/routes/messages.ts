@@ -200,6 +200,18 @@ export async function messagesRoutes(fastify: FastifyInstance) {
           )
         );
 
+      // Reopen "done" chats for all members when a new message arrives
+      // This brings the chat back to the active list
+      await db
+        .update(chatMembers)
+        .set({ done: false })
+        .where(
+          and(
+            eq(chatMembers.chatId, chatId),
+            eq(chatMembers.done, true)
+          )
+        );
+
       // Publish message to Redis channel for real-time delivery
       await publish(getChatChannel(chatId), {
         type: "message",

@@ -57,6 +57,13 @@
       "when": 1773185900300,
       "tag": "0007_strange_aaron_stack",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1773186710158,
+      "tag": "0008_flawless_weapon_omega",
+      "breakpoints": true
     }
   ]
 }

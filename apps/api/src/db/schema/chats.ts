@@ -80,6 +80,8 @@ export const chatMembers = pgTable(
       .notNull()
       .defaultNow(),
     muted: boolean("muted").notNull().default(false),
+    done: boolean("done").notNull().default(false),
+    pinned: boolean("pinned").notNull().default(false),
     label: varchar("label", { length: 100 }),
     lastReadMessageId: uuid("last_read_message_id"),
   },

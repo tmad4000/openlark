@@ -7,7 +7,7 @@ import { createSystemMessage } from "./messages";
 import { getTypingUsers, getOnlineUsers } from "../lib/redis";
 
 interface GetChatsQuery {
-  filter?: "dm" | "group" | "unread" | "muted";
+  filter?: "dm" | "group" | "unread" | "muted" | "done";
 }
 
 // UUID validation regex
@@ -42,6 +42,8 @@ async function getChatWithMembers(chatId: string) {
       role: chatMembers.role,
       joinedAt: chatMembers.joinedAt,
       muted: chatMembers.muted,
+      done: chatMembers.done,
+      pinned: chatMembers.pinned,
       label: chatMembers.label,
       lastReadMessageId: chatMembers.lastReadMessageId,
       user: {
@@ -109,6 +111,13 @@ async function findExistingDm(userId1: string, userId2: string, orgId: string) {
   return null;
 }
 
+interface UpdateChatMemberBody {
+  muted?: boolean;
+  done?: boolean;
+  pinned?: boolean;
+  label?: string | null;
+}
+
 export async function chatsRoutes(fastify: FastifyInstance) {
   /**
    * GET /chats - Get user's chat list with last message preview and unread count
@@ -123,7 +132,7 @@ export async function chatsRoutes(fastify: FastifyInstance) {
       const currentUserId = request.user.id;
 
       // Validate filter if provided
-      const validFilters = ["dm", "group", "unread", "muted"];
+      const validFilters = ["dm", "group", "unread", "muted", "done"];
       if (filter && !validFilters.includes(filter)) {
         return reply.status(400).send({
           error: `filter must be one of: ${validFilters.join(", ")}`,
@@ -135,6 +144,9 @@ export async function chatsRoutes(fastify: FastifyInstance) {
         .select({
           chatId: chatMembers.chatId,
           muted: chatMembers.muted,
+          done: chatMembers.done,
+          pinned: chatMembers.pinned,
+          label: chatMembers.label,
           lastReadMessageId: chatMembers.lastReadMessageId,
         })
         .from(chatMembers)
@@ -162,6 +174,12 @@ export async function chatsRoutes(fastify: FastifyInstance) {
         chatList = chatList.filter((c) => c.type !== "dm");
       } else if (filter === "muted") {
         chatList = chatList.filter((c) => membershipMap.get(c.id)?.muted === true);
+      } else if (filter === "done") {
+        // Show only done chats
+        chatList = chatList.filter((c) => membershipMap.get(c.id)?.done === true);
+      } else {
+        // By default, filter out done chats (they're searchable but not in active list)
+        chatList = chatList.filter((c) => membershipMap.get(c.id)?.done !== true);
       }
 
       if (chatList.length === 0) {
@@ -351,6 +369,9 @@ export async function chatsRoutes(fastify: FastifyInstance) {
           memberCount,
           unreadCount,
           muted: membership?.muted ?? false,
+          done: membership?.done ?? false,
+          pinned: membership?.pinned ?? false,
+          label: membership?.label ?? null,
           lastMessage: lastMessage
             ? {
                 id: lastMessage.id,
@@ -371,8 +392,12 @@ export async function chatsRoutes(fastify: FastifyInstance) {
         result = result.filter((c) => c.unreadCount > 0);
       }
 
-      // Sort by last message timestamp (most recent first)
+      // Sort: pinned chats first, then by last message timestamp (most recent first)
       result.sort((a, b) => {
+        // Pinned chats always come first
+        if (a.pinned && !b.pinned) return -1;
+        if (!a.pinned && b.pinned) return 1;
+        // Within same pinned status, sort by last message time
         const aTime = a.lastMessageAt?.getTime() ?? 0;
         const bTime = b.lastMessageAt?.getTime() ?? 0;
         return bTime - aTime;
@@ -988,6 +1013,102 @@ export async function chatsRoutes(fastify: FastifyInstance) {
 
       return reply.status(200).send({
         pins: pinnedMessages,
+      });
+    }
+  );
+
+  /**
+   * PATCH /chat-members/:chatId/me - Update current user's membership settings for a chat
+   * Body: { muted?: boolean, done?: boolean, pinned?: boolean, label?: string | null }
+   * Returns: Updated chat member settings
+   */
+  fastify.patch<{ Params: { chatId: string }; Body: UpdateChatMemberBody }>(
+    "/chat-members/:chatId/me",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { chatId } = request.params;
+      const { muted, done, pinned, label } = request.body;
+
+      // Validate UUID format
+      if (!UUID_REGEX.test(chatId)) {
+        return reply.status(400).send({
+          error: "Invalid chat ID format",
+        });
+      }
+
+      const currentUserId = request.user.id;
+
+      // Verify user is a member of this chat
+      const [membership] = await db
+        .select()
+        .from(chatMembers)
+        .where(
+          and(
+            eq(chatMembers.chatId, chatId),
+            eq(chatMembers.userId, currentUserId)
+          )
+        )
+        .limit(1);
+
+      if (!membership) {
+        return reply.status(403).send({
+          error: "Access denied - not a member of this chat",
+        });
+      }
+
+      // Build update object with only provided fields
+      const updates: Partial<{
+        muted: boolean;
+        done: boolean;
+        pinned: boolean;
+        label: string | null;
+      }> = {};
+
+      if (typeof muted === "boolean") {
+        updates.muted = muted;
+      }
+      if (typeof done === "boolean") {
+        updates.done = done;
+      }
+      if (typeof pinned === "boolean") {
+        updates.pinned = pinned;
+      }
+      if (label !== undefined) {
+        // Allow setting label to null to remove it
+        updates.label = label;
+      }
+
+      // If no updates provided, return current membership
+      if (Object.keys(updates).length === 0) {
+        return reply.status(200).send({
+          chatId: membership.chatId,
+          userId: membership.userId,
+          muted: membership.muted,
+          done: membership.done,
+          pinned: membership.pinned,
+          label: membership.label,
+        });
+      }
+
+      // Update the membership
+      const [updated] = await db
+        .update(chatMembers)
+        .set(updates)
+        .where(
+          and(
+            eq(chatMembers.chatId, chatId),
+            eq(chatMembers.userId, currentUserId)
+          )
+        )
+        .returning();
+
+      return reply.status(200).send({
+        chatId: updated.chatId,
+        userId: updated.userId,
+        muted: updated.muted,
+        done: updated.done,
+        pinned: updated.pinned,
+        label: updated.label,
       });
     }
   );

@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { Search, Plus, MessageCircle, Users, Bell, BellOff, AtSign, Info, Wifi, WifiOff, Loader2, Check, CheckCheck, Circle, MoreHorizontal, Reply, X, MessageSquare, Pin, Star, Pencil, Trash2, Forward, Square, CheckSquare } from "lucide-react";
+import { Search, Plus, MessageCircle, Users, Bell, BellOff, AtSign, Info, Wifi, WifiOff, Loader2, Check, CheckCheck, Circle, MoreHorizontal, Reply, X, MessageSquare, Pin, Star, Pencil, Trash2, Forward, Square, CheckSquare, Tag } from "lucide-react";
 import * as Dialog from "@radix-ui/react-dialog";
+import * as ContextMenu from "@radix-ui/react-context-menu";
 import MessageInput, { MentionUser } from "@/components/MessageInput";
 import { useWebSocket, ConnectionStatus, WebSocketMessage, TypingEvent, PresenceEvent, ReadReceiptEvent, ReactionEvent } from "@/hooks/useWebSocket";
 import data from "@emoji-mart/data";
@@ -17,6 +18,9 @@ interface Chat {
   memberCount: number;
   unreadCount: number;
   muted: boolean;
+  done: boolean;
+  pinned: boolean;
+  label: string | null;
   lastMessage: {
     id: string;
     type: string;
@@ -37,7 +41,7 @@ interface User {
   status: string;
 }
 
-type FilterType = "all" | "private" | "group" | "mentions" | "unread" | "muted";
+type FilterType = "all" | "private" | "group" | "mentions" | "unread" | "muted" | "done";
 
 const FILTER_TABS: { id: FilterType; label: string; icon?: React.ComponentType<{ className?: string }> }[] = [
   { id: "all", label: "All" },
@@ -46,6 +50,7 @@ const FILTER_TABS: { id: FilterType; label: string; icon?: React.ComponentType<{
   { id: "mentions", label: "@Mentions", icon: AtSign },
   { id: "unread", label: "Unread", icon: Bell },
   { id: "muted", label: "Muted", icon: BellOff },
+  { id: "done", label: "Done", icon: Check },
 ];
 
 function getCookie(name: string): string | null {
@@ -3112,16 +3117,59 @@ function ChatRow({
   isSelected,
   onClick,
   isOnline,
+  onUpdateChat,
 }: {
   chat: Chat;
   isSelected: boolean;
   onClick: () => void;
   isOnline?: boolean;
+  onUpdateChat: (chatId: string, updates: Partial<Pick<Chat, "muted" | "done" | "pinned" | "label">>) => void;
 }) {
   const preview = getMessagePreview(chat.lastMessage);
   const timestamp = chat.lastMessage ? formatTimestamp(chat.lastMessage.createdAt) : formatTimestamp(chat.createdAt);
+  const [isLabelDialogOpen, setIsLabelDialogOpen] = useState(false);
+  const [labelInput, setLabelInput] = useState(chat.label || "");
 
-  return (
+  const handleContextAction = async (action: "mute" | "done" | "pin" | "label", value?: string) => {
+    const token = getCookie("session_token");
+    if (!token) return;
+
+    const body: Record<string, boolean | string | null> = {};
+    if (action === "mute") body.muted = !chat.muted;
+    if (action === "done") body.done = !chat.done;
+    if (action === "pin") body.pinned = !chat.pinned;
+    if (action === "label") body.label = value ?? null;
+
+    try {
+      const res = await fetch(`/api/chat-members/${chat.id}/me`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        onUpdateChat(chat.id, {
+          muted: data.muted,
+          done: data.done,
+          pinned: data.pinned,
+          label: data.label,
+        });
+      }
+    } catch {
+      // Silent fail - could add toast notification here
+    }
+  };
+
+  const handleLabelSubmit = () => {
+    handleContextAction("label", labelInput.trim() || undefined);
+    setIsLabelDialogOpen(false);
+  };
+
+  const rowContent = (
     <button
       onClick={onClick}
       className={`w-full flex items-start gap-3 p-3 text-left transition-colors hover:bg-gray-100 ${
@@ -3149,9 +3197,12 @@ function ChatRow({
       {/* Content */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-2">
-          <span className={`text-sm truncate ${chat.unreadCount > 0 ? "font-semibold text-gray-900" : "text-gray-900"}`}>
-            {chat.name || "Unknown"}
-          </span>
+          <div className="flex items-center gap-1.5 min-w-0">
+            {chat.pinned && <Pin className="w-3 h-3 text-blue-500 flex-shrink-0" />}
+            <span className={`text-sm truncate ${chat.unreadCount > 0 ? "font-semibold text-gray-900" : "text-gray-900"}`}>
+              {chat.name || "Unknown"}
+            </span>
+          </div>
           <span className="text-xs text-gray-500 flex-shrink-0">{timestamp}</span>
         </div>
         <div className="flex items-center justify-between gap-2 mt-0.5">
@@ -3161,17 +3212,117 @@ function ChatRow({
             ) : null}
             {preview}
           </span>
-          {chat.unreadCount > 0 && (
-            <span className="flex-shrink-0 min-w-[20px] h-5 px-1.5 flex items-center justify-center bg-blue-600 text-white text-xs font-medium rounded-full">
-              {chat.unreadCount > 99 ? "99+" : chat.unreadCount}
-            </span>
-          )}
-          {chat.muted && chat.unreadCount === 0 && (
-            <BellOff className="w-4 h-4 text-gray-400 flex-shrink-0" />
-          )}
+          <div className="flex items-center gap-1 flex-shrink-0">
+            {chat.label && (
+              <span className="px-1.5 py-0.5 text-xs font-medium rounded bg-purple-100 text-purple-700 truncate max-w-[60px]">
+                {chat.label}
+              </span>
+            )}
+            {chat.unreadCount > 0 && (
+              <span className="min-w-[20px] h-5 px-1.5 flex items-center justify-center bg-blue-600 text-white text-xs font-medium rounded-full">
+                {chat.unreadCount > 99 ? "99+" : chat.unreadCount}
+              </span>
+            )}
+            {chat.muted && chat.unreadCount === 0 && (
+              <BellOff className="w-4 h-4 text-gray-400" />
+            )}
+          </div>
         </div>
       </div>
     </button>
+  );
+
+  return (
+    <>
+      <ContextMenu.Root>
+        <ContextMenu.Trigger asChild>
+          {rowContent}
+        </ContextMenu.Trigger>
+        <ContextMenu.Portal>
+          <ContextMenu.Content className="min-w-[180px] bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
+            <ContextMenu.Item
+              className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer outline-none"
+              onClick={() => handleContextAction("mute")}
+            >
+              {chat.muted ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
+              {chat.muted ? "Unmute" : "Mute"}
+            </ContextMenu.Item>
+            <ContextMenu.Item
+              className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer outline-none"
+              onClick={() => handleContextAction("done")}
+            >
+              <Check className="w-4 h-4" />
+              {chat.done ? "Reopen" : "Mark as Done"}
+            </ContextMenu.Item>
+            <ContextMenu.Item
+              className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer outline-none"
+              onClick={() => handleContextAction("pin")}
+            >
+              <Pin className="w-4 h-4" />
+              {chat.pinned ? "Unpin from Top" : "Pin to Top"}
+            </ContextMenu.Item>
+            <ContextMenu.Separator className="h-px bg-gray-200 my-1" />
+            <ContextMenu.Item
+              className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer outline-none"
+              onClick={() => {
+                setLabelInput(chat.label || "");
+                setIsLabelDialogOpen(true);
+              }}
+            >
+              <Tag className="w-4 h-4" />
+              {chat.label ? "Edit Label" : "Add Label"}
+            </ContextMenu.Item>
+            {chat.label && (
+              <ContextMenu.Item
+                className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-gray-100 cursor-pointer outline-none"
+                onClick={() => handleContextAction("label", "")}
+              >
+                <X className="w-4 h-4" />
+                Remove Label
+              </ContextMenu.Item>
+            )}
+          </ContextMenu.Content>
+        </ContextMenu.Portal>
+      </ContextMenu.Root>
+
+      {/* Label Dialog */}
+      <Dialog.Root open={isLabelDialogOpen} onOpenChange={setIsLabelDialogOpen}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 bg-black/50 z-50" />
+          <Dialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg shadow-xl p-6 w-80 z-50">
+            <Dialog.Title className="text-lg font-semibold text-gray-900 mb-4">
+              {chat.label ? "Edit Label" : "Add Label"}
+            </Dialog.Title>
+            <input
+              type="text"
+              value={labelInput}
+              onChange={(e) => setLabelInput(e.target.value)}
+              placeholder="Enter label..."
+              maxLength={100}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleLabelSubmit();
+              }}
+            />
+            <div className="flex justify-end gap-2 mt-4">
+              <button
+                onClick={() => setIsLabelDialogOpen(false)}
+                className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-md"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleLabelSubmit}
+                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              >
+                Save
+              </button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+    </>
   );
 }
 
@@ -3266,6 +3417,9 @@ function NewChatDialog({
         memberCount: chat.members?.length || 2,
         unreadCount: 0,
         muted: false,
+        done: false,
+        pinned: false,
+        label: null,
         lastMessage: null,
         lastMessageAt: chat.createdAt,
         createdAt: chat.createdAt,
@@ -3316,6 +3470,9 @@ function NewChatDialog({
         memberCount: chat.members?.length || selectedUsers.length + 1,
         unreadCount: 0,
         muted: false,
+        done: false,
+        pinned: false,
+        label: null,
         lastMessage: null,
         lastMessageAt: chat.createdAt,
         createdAt: chat.createdAt,
@@ -3923,6 +4080,8 @@ export default function MessengerPage() {
           filterParam = "?filter=unread";
         } else if (activeFilter === "muted") {
           filterParam = "?filter=muted";
+        } else if (activeFilter === "done") {
+          filterParam = "?filter=done";
         }
         // "all" and "mentions" don't have API filters - mentions would need a separate endpoint
 
@@ -3966,6 +4125,32 @@ export default function MessengerPage() {
     });
     setSelectedChatId(newChat.id);
   };
+
+  const handleUpdateChat = useCallback((chatId: string, updates: Partial<Pick<Chat, "muted" | "done" | "pinned" | "label">>) => {
+    setChats((prev) => {
+      // If marking as done, remove from list (unless we're viewing done filter)
+      if (updates.done === true && activeFilter !== "done") {
+        return prev.filter((c) => c.id !== chatId);
+      }
+      // If reopening (done=false) and we're viewing done filter, remove from list
+      if (updates.done === false && activeFilter === "done") {
+        return prev.filter((c) => c.id !== chatId);
+      }
+      // Otherwise update the chat in place
+      const updatedChats = prev.map((c) => (c.id === chatId ? { ...c, ...updates } : c));
+      // Re-sort if pinned status changed
+      if (updates.pinned !== undefined) {
+        updatedChats.sort((a, b) => {
+          if (a.pinned && !b.pinned) return -1;
+          if (!a.pinned && b.pinned) return 1;
+          const aTime = new Date(a.lastMessageAt).getTime();
+          const bTime = new Date(b.lastMessageAt).getTime();
+          return bTime - aTime;
+        });
+      }
+      return updatedChats;
+    });
+  }, [activeFilter]);
 
   const selectedChat = chats.find((c) => c.id === selectedChatId);
 
@@ -4073,6 +4258,7 @@ export default function MessengerPage() {
                   isSelected={chat.id === selectedChatId}
                   onClick={() => setSelectedChatId(chat.id)}
                   isOnline={chat.type === "dm" ? onlineUsers.has(chat.id) : undefined}
+                  onUpdateChat={handleUpdateChat}
                 />
               ))}
             </div>
