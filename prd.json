@@ -352,8 +352,8 @@
         "Typecheck passes"
       ],
       "priority": 22,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented in apps/api/src/routes/chats.ts. GET /chats returns paginated chat list with: id, type, name (for DMs uses other user's displayName), avatarUrl (for DMs uses other user's avatar), memberCount, unreadCount (messages after last_read_message_id not sent by current user), muted flag, lastMessage (id, type, content, createdAt, senderName), lastMessageAt, createdAt, updatedAt. Sorted by lastMessageAt descending (most recent first). Supports filter query param: dm (only DM chats), group (non-DM chats), unread (chats with unreadCount > 0), muted (chats where user has muted=true). Typecheck passes."
     },
     {
       "id": "US-023",

@@ -1,9 +1,13 @@
 import { FastifyInstance } from "fastify";
 import { db } from "../db";
-import { chats, chatMembers, users } from "../db/schema";
-import { eq, and, or, inArray } from "drizzle-orm";
+import { chats, chatMembers, users, messages } from "../db/schema";
+import { eq, and, or, inArray, desc, gt, sql, isNull } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
 import { createSystemMessage } from "./messages";
+
+interface GetChatsQuery {
+  filter?: "dm" | "group" | "unread" | "muted";
+}
 
 // UUID validation regex
 const UUID_REGEX =
@@ -105,6 +109,278 @@ async function findExistingDm(userId1: string, userId2: string, orgId: string) {
 }
 
 export async function chatsRoutes(fastify: FastifyInstance) {
+  /**
+   * GET /chats - Get user's chat list with last message preview and unread count
+   * Query: filter (dm|group|unread|muted)
+   * Returns: Chats sorted by last message timestamp
+   */
+  fastify.get<{ Querystring: GetChatsQuery }>(
+    "/chats",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { filter } = request.query;
+      const currentUserId = request.user.id;
+
+      // Validate filter if provided
+      const validFilters = ["dm", "group", "unread", "muted"];
+      if (filter && !validFilters.includes(filter)) {
+        return reply.status(400).send({
+          error: `filter must be one of: ${validFilters.join(", ")}`,
+        });
+      }
+
+      // Get all chats the user is a member of with their membership info
+      const userMemberships = await db
+        .select({
+          chatId: chatMembers.chatId,
+          muted: chatMembers.muted,
+          lastReadMessageId: chatMembers.lastReadMessageId,
+        })
+        .from(chatMembers)
+        .where(eq(chatMembers.userId, currentUserId));
+
+      if (userMemberships.length === 0) {
+        return reply.status(200).send([]);
+      }
+
+      const chatIds = userMemberships.map((m) => m.chatId);
+      const membershipMap = new Map(
+        userMemberships.map((m) => [m.chatId, m])
+      );
+
+      // Get all chats
+      let chatList = await db
+        .select()
+        .from(chats)
+        .where(inArray(chats.id, chatIds));
+
+      // Apply type filter (dm or group)
+      if (filter === "dm") {
+        chatList = chatList.filter((c) => c.type === "dm");
+      } else if (filter === "group") {
+        chatList = chatList.filter((c) => c.type !== "dm");
+      } else if (filter === "muted") {
+        chatList = chatList.filter((c) => membershipMap.get(c.id)?.muted === true);
+      }
+
+      if (chatList.length === 0) {
+        return reply.status(200).send([]);
+      }
+
+      const filteredChatIds = chatList.map((c) => c.id);
+
+      // Get member counts for each chat
+      const memberCounts = await db
+        .select({
+          chatId: chatMembers.chatId,
+          count: sql<number>`count(*)::int`.as("count"),
+        })
+        .from(chatMembers)
+        .where(inArray(chatMembers.chatId, filteredChatIds))
+        .groupBy(chatMembers.chatId);
+
+      const memberCountMap = new Map(
+        memberCounts.map((m) => [m.chatId, m.count])
+      );
+
+      // Get last message for each chat (subquery approach)
+      const lastMessages = await db
+        .select({
+          chatId: messages.chatId,
+          id: messages.id,
+          type: messages.type,
+          content: messages.content,
+          createdAt: messages.createdAt,
+          senderId: messages.senderId,
+          senderName: users.displayName,
+        })
+        .from(messages)
+        .innerJoin(users, eq(messages.senderId, users.id))
+        .where(inArray(messages.chatId, filteredChatIds))
+        .orderBy(desc(messages.createdAt));
+
+      // Group by chatId and get the most recent message per chat
+      const lastMessageMap = new Map<
+        string,
+        {
+          id: string;
+          type: string;
+          content: Record<string, unknown>;
+          createdAt: Date;
+          senderId: string;
+          senderName: string | null;
+        }
+      >();
+
+      for (const msg of lastMessages) {
+        if (!lastMessageMap.has(msg.chatId)) {
+          lastMessageMap.set(msg.chatId, {
+            id: msg.id,
+            type: msg.type,
+            content: msg.content as Record<string, unknown>,
+            createdAt: msg.createdAt,
+            senderId: msg.senderId,
+            senderName: msg.senderName,
+          });
+        }
+      }
+
+      // Get unread counts for each chat
+      // Count messages after the user's last_read_message_id
+      const unreadCountPromises = filteredChatIds.map(async (chatId) => {
+        const membership = membershipMap.get(chatId);
+        const lastReadMessageId = membership?.lastReadMessageId;
+
+        if (!lastReadMessageId) {
+          // No message read yet - count all messages not sent by user
+          const [result] = await db
+            .select({
+              count: sql<number>`count(*)::int`.as("count"),
+            })
+            .from(messages)
+            .where(
+              and(
+                eq(messages.chatId, chatId),
+                sql`${messages.senderId} != ${currentUserId}`
+              )
+            );
+          return { chatId, count: result?.count ?? 0 };
+        }
+
+        // Get the timestamp of the last read message
+        const [lastReadMsg] = await db
+          .select({ createdAt: messages.createdAt })
+          .from(messages)
+          .where(eq(messages.id, lastReadMessageId))
+          .limit(1);
+
+        if (!lastReadMsg) {
+          // Last read message was deleted - count all messages not sent by user
+          const [result] = await db
+            .select({
+              count: sql<number>`count(*)::int`.as("count"),
+            })
+            .from(messages)
+            .where(
+              and(
+                eq(messages.chatId, chatId),
+                sql`${messages.senderId} != ${currentUserId}`
+              )
+            );
+          return { chatId, count: result?.count ?? 0 };
+        }
+
+        // Count messages after the last read message, not sent by user
+        const [result] = await db
+          .select({
+            count: sql<number>`count(*)::int`.as("count"),
+          })
+          .from(messages)
+          .where(
+            and(
+              eq(messages.chatId, chatId),
+              gt(messages.createdAt, lastReadMsg.createdAt),
+              sql`${messages.senderId} != ${currentUserId}`
+            )
+          );
+
+        return { chatId, count: result?.count ?? 0 };
+      });
+
+      const unreadCounts = await Promise.all(unreadCountPromises);
+      const unreadCountMap = new Map(
+        unreadCounts.map((u) => [u.chatId, u.count])
+      );
+
+      // For DMs, get the other user's info (name/avatar)
+      const dmChats = chatList.filter((c) => c.type === "dm");
+      const dmOtherUserMap = new Map<
+        string,
+        { displayName: string | null; avatarUrl: string | null }
+      >();
+
+      if (dmChats.length > 0) {
+        const dmChatIds = dmChats.map((c) => c.id);
+        const dmMembers = await db
+          .select({
+            chatId: chatMembers.chatId,
+            userId: chatMembers.userId,
+            displayName: users.displayName,
+            avatarUrl: users.avatarUrl,
+          })
+          .from(chatMembers)
+          .innerJoin(users, eq(chatMembers.userId, users.id))
+          .where(
+            and(
+              inArray(chatMembers.chatId, dmChatIds),
+              sql`${chatMembers.userId} != ${currentUserId}`
+            )
+          );
+
+        for (const member of dmMembers) {
+          dmOtherUserMap.set(member.chatId, {
+            displayName: member.displayName,
+            avatarUrl: member.avatarUrl,
+          });
+        }
+      }
+
+      // Build the response
+      let result = chatList.map((chat) => {
+        const lastMessage = lastMessageMap.get(chat.id);
+        const membership = membershipMap.get(chat.id);
+        const unreadCount = unreadCountMap.get(chat.id) ?? 0;
+        const memberCount = memberCountMap.get(chat.id) ?? 0;
+
+        // For DMs, use the other user's name and avatar
+        let displayName = chat.name;
+        let displayAvatar = chat.avatarUrl;
+
+        if (chat.type === "dm") {
+          const otherUser = dmOtherUserMap.get(chat.id);
+          displayName = otherUser?.displayName ?? "Unknown";
+          displayAvatar = otherUser?.avatarUrl ?? null;
+        }
+
+        return {
+          id: chat.id,
+          type: chat.type,
+          name: displayName,
+          avatarUrl: displayAvatar,
+          memberCount,
+          unreadCount,
+          muted: membership?.muted ?? false,
+          lastMessage: lastMessage
+            ? {
+                id: lastMessage.id,
+                type: lastMessage.type,
+                content: lastMessage.content,
+                createdAt: lastMessage.createdAt,
+                senderName: lastMessage.senderName,
+              }
+            : null,
+          lastMessageAt: lastMessage?.createdAt ?? chat.createdAt,
+          createdAt: chat.createdAt,
+          updatedAt: chat.updatedAt,
+        };
+      });
+
+      // Apply unread filter
+      if (filter === "unread") {
+        result = result.filter((c) => c.unreadCount > 0);
+      }
+
+      // Sort by last message timestamp (most recent first)
+      result.sort((a, b) => {
+        const aTime = a.lastMessageAt?.getTime() ?? 0;
+        const bTime = b.lastMessageAt?.getTime() ?? 0;
+        return bTime - aTime;
+      });
+
+      return reply.status(200).send(result);
+    }
+  );
+
   /**
    * POST /chats/dm - Create or return existing DM with a user
    * Body: { user_id: string }
