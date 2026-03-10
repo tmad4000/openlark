@@ -1530,3 +1530,105 @@ Built the messenger frontend UI that was missing after T-023 (frontend shell):
 - T-003 subtask 4 (typing/presence UI) - backend done, UI pending
 
 ---
+
+## 2026-03-10 - Iteration 12 - REVIEW
+
+### Code quality observations
+
+**What looks good:**
+- Messenger frontend UI (ChatList, MessageList, MessageInput) is well-implemented:
+  - Proper loading/error/empty states in all components
+  - ChatList with type icons (DM, group, topic) and selection highlighting
+  - MessageList with cursor-based pagination and IntersectionObserver for infinite scroll
+  - MessageInput with auto-resize textarea, Enter to send, Shift+Enter for newline
+  - Message bubbles with sender attribution, timestamps, edited/recalled states
+  - Good accessibility (aria-labels, role="list")
+- useWebSocket hook is solid:
+  - JWT auth via query string with 4001 close code for auth failure
+  - Exponential backoff reconnection (max 5 attempts, cap at 30s)
+  - Clean event dispatch via optionsRef pattern (avoids stale closures)
+  - Status tracking (connecting/connected/disconnected/error)
+  - sendTyping method for typing indicators
+- Messenger page correctly wires components together:
+  - ChatList in sidebar, MessageList/MessageInput in main area
+  - WebSocket callbacks update MessageList via static methods
+  - Connection status indicator in header
+- Test coverage good: 75 frontend tests passing, 93 API tests passing
+- Build, lint, and all tests pass cleanly
+
+**Areas needing attention:**
+
+1. **Static method pattern is fragile** (`chat-list.tsx:51`, `message-list.tsx:118-120`): Setting `ChatList.addChat = addChat` inside the render body overwrites a static stub. If multiple ChatList instances exist, or component unmounts/remounts rapidly, the static reference becomes stale. Works for single messenger page but won't scale. Consider:
+   - useRef callback pattern with context
+   - Event emitter / pub-sub pattern
+   - React Query with WebSocket subscription invalidation
+
+2. **message-list.tsx:168-170**: `showSender` accesses `messages[index - 1]` without explicit bounds checking. The logic is correct (short-circuits on `index === 0`) but TypeScript doesn't fully track this. Minor defensive typing issue.
+
+3. **WebSocket token in query string** (`use-websocket.ts:78`): JWT passed via `?token=` is visible in browser history and server logs. Acceptable for WebSocket (no cookie/header option), but ensure:
+   - Production uses WSS (wss://) not WS
+   - Server logs don't include full query strings
+   - Tokens have reasonable expiry
+
+4. **message-list.tsx:236**: Sender shown as "User {senderId.slice(0, 8)}" - truncated UUID. Should fetch and display actual user displayName. This is a known placeholder but worth noting for UX polish.
+
+5. **No "create chat" UI** - ChatList has onCreateChat prop but messenger page doesn't provide it. Users can't create new chats from the UI yet. Not blocking but needed for full messenger functionality.
+
+### Commit history review
+- 20 commits total on branch
+- Recent 5 commits (since last review):
+  - `79092b5 docs: update progress log for iteration 11 (messenger frontend)`
+  - `eb0a3b3 feat(messenger): add frontend UI with chat list, messages, and WebSocket`
+  - `e061de6 feat(web): complete frontend shell with keyboard shortcuts and PWA (T-023)`
+  - `e705f4a docs: update progress log for iteration 9 (review)`
+  - `cebe448 docs: update progress log for iteration 8 (frontend shell T-023)`
+- Commits are atomic, well-scoped, follow conventional format
+- Clean history, no WIP or fixup commits
+- Feature commits are comprehensive (UI + tests in same commit)
+
+### Plan assessment
+
+**T-002 (in-progress):** +1 vote. Auth foundation stable. All security patterns working. Remaining subtasks (RLS, magic link, 2FA, departments, API keys) correctly deferred. Known limitation: login needs org context for multi-tenant.
+
+**T-003 (in-progress):** +1 vote. 4/6 subtasks complete. Frontend UI added with real-time WebSocket updates. Static method pattern works but has scalability concerns (see nudges). Remaining: subtask 3 (threads, rich text, forwarding) and subtask 4 (typing/presence UI).
+
+**T-023 (done):** +1 vote. All 4 subtasks complete. Frontend shell solid with auth screens, navigation rail, theme system, command palette, PWA manifest. Good foundation for future modules.
+
+**T-004 (open):** +1 vote. Calendar is the recommended next module per goal.md build order (Phase 1: Auth → Messenger → Calendar). Auth stable, Messenger has core functionality. Clear next priority.
+
+### Nudges left
+
+1. **T-003**: Static method pattern (`ChatList.addChat`, `MessageList.addMessage`) is fragile for multi-instance scenarios. Consider refactoring to context-based callbacks or event emitter before adding more messenger features.
+2. **T-003**: Message sender shows truncated UUID instead of displayName. Need user lookup or include sender info in message response.
+3. **T-003**: No "create chat" UI in messenger page. Add modal or flow to create DMs/groups.
+4. **T-003**: Ensure production uses WSS for WebSocket connections (security).
+
+### Tech debt items
+
+| Priority | Item | Location | Notes |
+|----------|------|----------|-------|
+| Medium | Static method pattern fragile | `chat-list.tsx:51`, `message-list.tsx:118` | Works but won't scale |
+| Medium | Sender shown as truncated UUID | `message-list.tsx:236` | Need user displayName |
+| Low | No create chat UI | messenger page | Users can't start conversations |
+| Low | Auto-generated tabs not implemented | messenger.service.ts | FR-2.15 partially done |
+| Low | Typing/presence tests skipped | websocket.integration.test.ts | Timing sensitivity |
+| Low | Login needs org context for multi-tenant | auth.service.ts:122 | Documented |
+| Low | PNG icons need generation | apps/web/public/icons/ | SVG placeholder exists |
+
+### Reinforced patterns
+
+From progress log that held true this iteration:
+- ✅ Frontend Structure (Iteration 8) - App Router with route groups, components/hooks/lib structure
+- ✅ UI Component Pattern (Iteration 8) - forwardRef, Radix primitives, CVA variants, cn utility
+- ✅ Auth Flow (Iteration 8) - localStorage token, only clear on 401, protected routes redirect
+- ✅ Frontend Testing (Iteration 8) - vitest + React Testing Library + jest-dom, co-located tests
+- ✅ API Error Handling (Iteration 10) - ApiError class with status, isUnauthorized() method
+- ✅ Keyboard Shortcuts (Iteration 10) - useKeyboardShortcut hook with meta modifier
+- ✅ WebSocket Pattern (Iteration 11) - JWT via query string, auth code 4001, separate pub/sub client
+- ✅ Module structure (backend) - consistent routes/service/schemas pattern
+
+### New pattern observed
+
+- **Component static methods for cross-component updates**: Pattern of setting `Component.staticMethod = instanceMethod` inside render to allow parent components to call child instance methods. Works in simple cases but couples components tightly and breaks with multiple instances. Prefer context or event-based patterns for production code.
+
+---

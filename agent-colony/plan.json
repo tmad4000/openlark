@@ -147,6 +147,12 @@
           "role": "reviewer",
           "value": 1,
           "reason": "Iter 9 review: Auth foundation stable, JWT_SECRET production validation complete. Subtasks 3-6 (RLS, magic link, 2FA, departments, API keys) are lower priority since core auth works and messenger/frontend are building on it. Known limitation: login needs org context for true multi-tenant (auth.service.ts:122)."
+        },
+        {
+          "iteration": 12,
+          "role": "reviewer",
+          "value": 1,
+          "reason": "Iter 12 review: Auth foundation remains stable. All security patterns in place. Remaining subtasks (RLS, magic link, 2FA, departments, API keys) are correctly deferred as lower priority. Known limitation: login needs org context for multi-tenant (auth.service.ts:122). No new concerns."
         }
       ],
       "comments": [
@@ -316,6 +322,12 @@
           "role": "implementer",
           "value": 1,
           "reason": "T-003 subtask 4 (reactions UX, typing indicators, presence) has backend done but no frontend integration. The critical missing piece is actually the messenger FRONTEND: chat list, message view, compose, WebSocket connection. This work needs to be done before typing/presence UI makes sense."
+        },
+        {
+          "iteration": 12,
+          "role": "reviewer",
+          "value": 1,
+          "reason": "Iter 12 review: 4/6 subtasks complete. Messenger frontend UI well-implemented with ChatList, MessageList, MessageInput, and WebSocket hook. Real-time message delivery working. Static method pattern for cross-component updates works but is fragile (see comment). Remaining: subtask 3 (threads, rich text) and subtask 4 (typing/presence UI)."
         }
       ],
       "comments": [
@@ -388,6 +400,21 @@
           "iteration": 11,
           "role": "implementer",
           "message": "Iteration 11: Built messenger frontend UI - ChatList, MessageList, MessageInput components and useWebSocket hook. The messenger page now has a functional chat list sidebar, message view with pagination, compose area with send, and real-time WebSocket connection. 25 new tests added. T-003 subtask 6 (frontend UI) complete. 4/6 subtasks now done."
+        },
+        {
+          "iteration": 12,
+          "role": "reviewer",
+          "message": "Iter 12 review: The static method pattern in ChatList/MessageList (e.g., ChatList.addChat = addChat inside render, overwriting a static stub) is fragile. If multiple instances exist or the component unmounts/remounts, the static reference points to stale state. Consider: (1) useRef callback pattern passed via context, (2) event emitter pattern, or (3) React Query with WebSocket subscription. Low priority - works for single messenger page but won't scale."
+        },
+        {
+          "iteration": 12,
+          "role": "reviewer",
+          "message": "Iter 12 review: message-list.tsx:168-170 showSender logic accesses messages[index - 1] without bounds checking - could be undefined. Currently works because it's inside a map starting at index 0, and the short-circuit (index === 0 || ...) handles it. But TypeScript doesn't catch this. Minor - code is correct, just not defensively typed."
+        },
+        {
+          "iteration": 12,
+          "role": "reviewer",
+          "message": "Iter 12 review: use-websocket.ts handles reconnection well (exponential backoff, max 5 attempts, skip on 4001 auth failure). Token passed via query string is acceptable for WebSocket but consider secure WebSocket (wss://) note for production deployment. NEXT_PUBLIC_WS_URL env var correctly used."
         }
       ],
       "status": "in-progress",
@@ -423,7 +450,14 @@
           "done": false
         }
       ],
-      "votes": [],
+      "votes": [
+        {
+          "iteration": 12,
+          "role": "reviewer",
+          "value": 1,
+          "reason": "Iter 12 review: T-004 is the recommended next major module per goal.md build order (Phase 1: Auth, Messenger, Calendar). Auth is stable, Messenger has core functionality, Calendar is the clear next priority to complete Phase 1. Frontend shell and patterns are in place to support Calendar UI."
+        }
+      ],
       "comments": [],
       "status": "open",
       "createdBy": {
@@ -1107,6 +1141,12 @@
           "role": "implementer",
           "value": 1,
           "reason": "Iter 10: 3/4 subtasks done. Reviewer feedback from iter 9 about use-auth.tsx clearing token on any error should be addressed. This is a medium priority security/UX issue - network errors shouldn't log users out."
+        },
+        {
+          "iteration": 12,
+          "role": "reviewer",
+          "value": 1,
+          "reason": "Iter 12 review: All 4 subtasks complete. T-023 done status confirmed. Frontend shell well-architected: auth screens, navigation rail, theme system, command palette with Cmd+K, PWA manifest, proper error handling. 75 frontend tests passing. Good foundation for future modules."
         }
       ],
       "comments": [
@@ -1160,7 +1200,7 @@
   ],
   "metadata": {
     "createdAt": "2026-03-04T21:00:00Z",
-    "totalIterations": 21,
+    "totalIterations": 22,
     "iterationLog": [
       {
         "iteration": 1,
@@ -1286,6 +1326,12 @@
         "iteration": 21,
         "role": "implementer",
         "taskWorked": "T-023",
+        "contextCompacted": false
+      },
+      {
+        "iteration": 22,
+        "role": "implementer",
+        "taskWorked": "T-003",
         "contextCompacted": false
       }
     ]
