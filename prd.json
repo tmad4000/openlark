@@ -387,8 +387,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 24,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created ChatView component with full message list UI. Header shows chat avatar, name, member count, and info button. Messages display sender avatar, display name, timestamp, and content (supports text, system, code, rich_text). Messages grouped by date with styled separators (Today, Yesterday, or full date). Auto-scroll to bottom on initial load and after sending messages. Infinite scroll loads older messages when scrolling near top (within 100px), with scroll position preservation. Message input with auto-resize textarea, Enter to send, Shift+Enter for newline. MessageBubble component with different styling for current user vs others. System messages rendered as centered pills. Typecheck passes."
     },
     {
       "id": "US-025",

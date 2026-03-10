@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
-import { Search, Plus, MessageCircle, Users, Bell, BellOff, AtSign } from "lucide-react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { Search, Plus, MessageCircle, Users, Bell, BellOff, AtSign, Info, Send } from "lucide-react";
 import * as Dialog from "@radix-ui/react-dialog";
 
 interface Chat {
@@ -88,6 +88,504 @@ function getMessagePreview(message: Chat["lastMessage"]): string {
   }
 
   return "Message";
+}
+
+interface Message {
+  id: string;
+  chatId: string;
+  senderId: string;
+  type: "text" | "rich_text" | "code" | "voice" | "card" | "system";
+  content: Record<string, unknown>;
+  threadId: string | null;
+  replyToId: string | null;
+  editedAt: string | null;
+  recalledAt: string | null;
+  scheduledFor: string | null;
+  createdAt: string;
+  sender: {
+    id: string;
+    displayName: string | null;
+    avatarUrl: string | null;
+  };
+}
+
+function formatMessageTime(dateStr: string): string {
+  const date = new Date(dateStr);
+  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function formatDateSeparator(dateStr: string): string {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+  const messageDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+
+  if (messageDate.getTime() === today.getTime()) {
+    return "Today";
+  } else if (messageDate.getTime() === yesterday.getTime()) {
+    return "Yesterday";
+  } else if (messageDate.getFullYear() === now.getFullYear()) {
+    return date.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
+  } else {
+    return date.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+  }
+}
+
+function getDateKey(dateStr: string): string {
+  const date = new Date(dateStr);
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+}
+
+function renderMessageContent(message: Message): React.ReactNode {
+  const { type, content, recalledAt } = message;
+
+  // Check if message was recalled/deleted
+  if (recalledAt) {
+    return <span className="italic text-gray-400">This message was deleted</span>;
+  }
+
+  if (type === "text" && content.text) {
+    return <span className="whitespace-pre-wrap break-words">{String(content.text)}</span>;
+  }
+
+  if (type === "system") {
+    const action = content.action;
+    if (action === "group_created") {
+      const createdBy = typeof content.createdBy === "string" ? content.createdBy : null;
+      return (
+        <span className="text-gray-500 text-sm italic">
+          {createdBy ? `${createdBy} created the group` : "Group created"}
+        </span>
+      );
+    }
+    if (action === "members_added") {
+      const members = content.memberNames as string[] | undefined;
+      const addedBy = typeof content.addedBy === "string" ? content.addedBy : "Someone";
+      return (
+        <span className="text-gray-500 text-sm italic">
+          {addedBy} added {members?.join(", ") || "new members"}
+        </span>
+      );
+    }
+    return <span className="text-gray-500 text-sm italic">System message</span>;
+  }
+
+  if (type === "code" && content.code) {
+    return (
+      <pre className="bg-gray-900 text-gray-100 p-3 rounded-md overflow-x-auto text-sm">
+        <code>{String(content.code)}</code>
+      </pre>
+    );
+  }
+
+  if (type === "rich_text" && Array.isArray(content.blocks)) {
+    // Simplified rich text rendering - just render text from blocks
+    return (
+      <div className="whitespace-pre-wrap break-words">
+        {(content.blocks as Array<{ type: string; text?: string }>).map((block, i) => (
+          <span key={i}>{block.text || ""}</span>
+        ))}
+      </div>
+    );
+  }
+
+  return <span className="text-gray-500 italic">[Message]</span>;
+}
+
+function MessageBubble({ message, isCurrentUser }: { message: Message; isCurrentUser: boolean }) {
+  const isSystem = message.type === "system";
+
+  if (isSystem) {
+    return (
+      <div className="flex justify-center py-2">
+        <div className="bg-gray-100 px-3 py-1 rounded-full text-gray-500 text-xs">
+          {renderMessageContent(message)}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`flex gap-2 py-1 ${isCurrentUser ? "flex-row-reverse" : ""}`}>
+      {/* Avatar */}
+      {!isCurrentUser && (
+        <div className="flex-shrink-0 w-8 h-8 rounded-full overflow-hidden bg-gray-200 self-end">
+          {message.sender.avatarUrl ? (
+            <img
+              src={message.sender.avatarUrl}
+              alt={message.sender.displayName || "User"}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center bg-blue-600 text-white text-xs font-medium">
+              {message.sender.displayName?.charAt(0).toUpperCase() || "?"}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Message content */}
+      <div className={`flex flex-col max-w-[70%] ${isCurrentUser ? "items-end" : "items-start"}`}>
+        {/* Sender name (only for group chats, not for current user) */}
+        {!isCurrentUser && (
+          <span className="text-xs text-gray-500 mb-0.5 px-1">
+            {message.sender.displayName || "Unknown"}
+          </span>
+        )}
+
+        <div
+          className={`px-3 py-2 rounded-2xl ${
+            isCurrentUser
+              ? "bg-blue-600 text-white rounded-br-md"
+              : "bg-gray-100 text-gray-900 rounded-bl-md"
+          }`}
+        >
+          {renderMessageContent(message)}
+        </div>
+
+        {/* Timestamp and edited indicator */}
+        <div className="flex items-center gap-1 px-1 mt-0.5">
+          <span className="text-[10px] text-gray-400">
+            {formatMessageTime(message.createdAt)}
+          </span>
+          {message.editedAt && (
+            <span className="text-[10px] text-gray-400">(edited)</span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ChatView({
+  chat,
+  currentUserId,
+}: {
+  chat: Chat;
+  currentUserId: string;
+}) {
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [inputValue, setInputValue] = useState("");
+  const [isSending, setIsSending] = useState(false);
+
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const isInitialLoadRef = useRef(true);
+  const prevScrollHeightRef = useRef<number>(0);
+
+  // Scroll to bottom
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = "auto") => {
+    messagesEndRef.current?.scrollIntoView({ behavior });
+  }, []);
+
+  // Load messages
+  const loadMessages = useCallback(async (cursor?: string) => {
+    const token = getCookie("session_token");
+    if (!token) return;
+
+    if (cursor) {
+      setIsLoadingMore(true);
+      // Store current scroll height before loading more
+      if (messagesContainerRef.current) {
+        prevScrollHeightRef.current = messagesContainerRef.current.scrollHeight;
+      }
+    } else {
+      setIsLoading(true);
+      isInitialLoadRef.current = true;
+    }
+    setError(null);
+
+    try {
+      const url = cursor
+        ? `/api/chats/${chat.id}/messages?cursor=${cursor}&limit=50`
+        : `/api/chats/${chat.id}/messages?limit=50`;
+
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to load messages");
+      }
+
+      const data = await res.json();
+      // API returns newest first, reverse for display (oldest at top)
+      const newMessages = (data.messages as Message[]).reverse();
+
+      if (cursor) {
+        // Prepend older messages
+        setMessages((prev) => [...newMessages, ...prev]);
+      } else {
+        setMessages(newMessages);
+      }
+
+      setNextCursor(data.nextCursor);
+      setHasMore(data.hasMore);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load messages");
+    } finally {
+      setIsLoading(false);
+      setIsLoadingMore(false);
+    }
+  }, [chat.id]);
+
+  // Initial load and reload when chat changes
+  useEffect(() => {
+    setMessages([]);
+    setNextCursor(null);
+    setHasMore(false);
+    loadMessages();
+  }, [chat.id, loadMessages]);
+
+  // Scroll to bottom on initial load
+  useEffect(() => {
+    if (!isLoading && isInitialLoadRef.current && messages.length > 0) {
+      scrollToBottom();
+      isInitialLoadRef.current = false;
+    }
+  }, [isLoading, messages.length, scrollToBottom]);
+
+  // Maintain scroll position after loading more messages
+  useEffect(() => {
+    if (!isLoadingMore && messagesContainerRef.current && prevScrollHeightRef.current > 0) {
+      const newScrollHeight = messagesContainerRef.current.scrollHeight;
+      const scrollDiff = newScrollHeight - prevScrollHeightRef.current;
+      messagesContainerRef.current.scrollTop = scrollDiff;
+      prevScrollHeightRef.current = 0;
+    }
+  }, [isLoadingMore, messages]);
+
+  // Handle scroll for infinite loading
+  const handleScroll = useCallback(() => {
+    if (!messagesContainerRef.current || isLoadingMore || !hasMore) return;
+
+    const { scrollTop } = messagesContainerRef.current;
+    // Load more when scrolled near the top (within 100px)
+    if (scrollTop < 100 && nextCursor) {
+      loadMessages(nextCursor);
+    }
+  }, [isLoadingMore, hasMore, nextCursor, loadMessages]);
+
+  // Send message
+  const handleSendMessage = async () => {
+    const text = inputValue.trim();
+    if (!text || isSending) return;
+
+    const token = getCookie("session_token");
+    if (!token) return;
+
+    setIsSending(true);
+
+    try {
+      const res = await fetch(`/api/chats/${chat.id}/messages`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          type: "text",
+          content: { text },
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to send message");
+      }
+
+      const newMessage = await res.json() as Message;
+      setMessages((prev) => [...prev, newMessage]);
+      setInputValue("");
+
+      // Scroll to bottom after sending
+      setTimeout(() => scrollToBottom("smooth"), 50);
+    } catch (err) {
+      console.error("Failed to send message:", err);
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  // Handle Enter key
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
+  };
+
+  // Group messages by date
+  const groupedMessages = useMemo(() => {
+    const groups: { date: string; dateLabel: string; messages: Message[] }[] = [];
+    let currentDateKey = "";
+
+    for (const message of messages) {
+      const dateKey = getDateKey(message.createdAt);
+
+      if (dateKey !== currentDateKey) {
+        currentDateKey = dateKey;
+        groups.push({
+          date: dateKey,
+          dateLabel: formatDateSeparator(message.createdAt),
+          messages: [message],
+        });
+      } else {
+        groups[groups.length - 1].messages.push(message);
+      }
+    }
+
+    return groups;
+  }, [messages]);
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Chat Header */}
+      <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-white">
+        <div className="flex items-center gap-3">
+          {/* Avatar */}
+          <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-200">
+            {chat.avatarUrl ? (
+              <img src={chat.avatarUrl} alt={chat.name || "Chat"} className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center bg-blue-600 text-white font-medium">
+                {chat.type === "dm" ? (
+                  chat.name?.charAt(0).toUpperCase() || "?"
+                ) : (
+                  <Users className="w-5 h-5" />
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Name and member count */}
+          <div>
+            <h2 className="font-semibold text-gray-900">{chat.name || "Chat"}</h2>
+            <p className="text-xs text-gray-500">
+              {chat.memberCount} member{chat.memberCount !== 1 ? "s" : ""}
+            </p>
+          </div>
+        </div>
+
+        {/* Info button */}
+        <button
+          className="p-2 rounded-full hover:bg-gray-100 text-gray-500 transition-colors"
+          title="Chat info"
+        >
+          <Info className="w-5 h-5" />
+        </button>
+      </div>
+
+      {/* Messages Area */}
+      <div
+        ref={messagesContainerRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-y-auto px-4 py-2 bg-gray-50"
+      >
+        {isLoading ? (
+          <div className="flex items-center justify-center h-full text-gray-500">
+            Loading messages...
+          </div>
+        ) : error ? (
+          <div className="flex items-center justify-center h-full text-red-500">
+            {error}
+          </div>
+        ) : messages.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full text-gray-500">
+            <MessageCircle className="w-12 h-12 mb-3 text-gray-300" />
+            <p className="text-sm">No messages yet</p>
+            <p className="text-xs mt-1">Send a message to start the conversation</p>
+          </div>
+        ) : (
+          <>
+            {/* Loading more indicator */}
+            {isLoadingMore && (
+              <div className="text-center py-2 text-gray-500 text-sm">
+                Loading older messages...
+              </div>
+            )}
+
+            {/* Load more button (if at top and has more) */}
+            {hasMore && !isLoadingMore && (
+              <div className="text-center py-2">
+                <button
+                  onClick={() => nextCursor && loadMessages(nextCursor)}
+                  className="text-blue-600 hover:text-blue-700 text-sm font-medium"
+                >
+                  Load older messages
+                </button>
+              </div>
+            )}
+
+            {/* Messages grouped by date */}
+            {groupedMessages.map((group) => (
+              <div key={group.date}>
+                {/* Date separator */}
+                <div className="flex items-center justify-center my-4">
+                  <div className="flex-1 h-px bg-gray-200" />
+                  <span className="px-3 text-xs text-gray-500 font-medium">
+                    {group.dateLabel}
+                  </span>
+                  <div className="flex-1 h-px bg-gray-200" />
+                </div>
+
+                {/* Messages for this date */}
+                {group.messages.map((message) => (
+                  <MessageBubble
+                    key={message.id}
+                    message={message}
+                    isCurrentUser={message.senderId === currentUserId}
+                  />
+                ))}
+              </div>
+            ))}
+
+            {/* Scroll anchor */}
+            <div ref={messagesEndRef} />
+          </>
+        )}
+      </div>
+
+      {/* Message Input */}
+      <div className="flex-shrink-0 border-t border-gray-200 bg-white p-3">
+        <div className="flex items-end gap-2">
+          <textarea
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Type a message..."
+            rows={1}
+            className="flex-1 resize-none px-4 py-2 border border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm max-h-32"
+            style={{
+              minHeight: "40px",
+              height: "auto",
+            }}
+            onInput={(e) => {
+              const target = e.target as HTMLTextAreaElement;
+              target.style.height = "auto";
+              target.style.height = `${Math.min(target.scrollHeight, 128)}px`;
+            }}
+          />
+          <button
+            onClick={handleSendMessage}
+            disabled={!inputValue.trim() || isSending}
+            className="p-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            <Send className="w-5 h-5" />
+          </button>
+        </div>
+        <p className="text-[10px] text-gray-400 mt-1 px-2">
+          Press Enter to send, Shift+Enter for new line
+        </p>
+      </div>
+    </div>
+  );
 }
 
 function ChatRow({
@@ -495,6 +993,30 @@ export default function MessengerPage() {
   const [activeFilter, setActiveFilter] = useState<FilterType>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [isNewChatDialogOpen, setIsNewChatDialogOpen] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+  // Fetch current user ID
+  useEffect(() => {
+    const fetchCurrentUser = async () => {
+      const token = getCookie("session_token");
+      if (!token) return;
+
+      try {
+        const res = await fetch("/api/auth/me", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          setCurrentUserId(data.user?.id || null);
+        }
+      } catch {
+        // Silent fail - user ID not critical for initial render
+      }
+    };
+
+    fetchCurrentUser();
+  }, []);
 
   useEffect(() => {
     const fetchChats = async () => {
@@ -649,24 +1171,20 @@ export default function MessengerPage() {
       </div>
 
       {/* Center Panel - Chat View */}
-      <div className="flex-1 flex items-center justify-center bg-gray-50">
-        {selectedChat ? (
-          <div className="text-center text-gray-500">
-            <h3 className="text-lg font-medium text-gray-900 mb-1">
-              {selectedChat.name || "Chat"}
-            </h3>
-            <p className="text-sm">
-              {selectedChat.memberCount} member{selectedChat.memberCount !== 1 ? "s" : ""}
-            </p>
-            <p className="text-sm mt-4 text-gray-400">
-              Message view coming in US-024
-            </p>
+      <div className="flex-1 flex flex-col bg-gray-50">
+        {selectedChat && currentUserId ? (
+          <ChatView chat={selectedChat} currentUserId={currentUserId} />
+        ) : selectedChat ? (
+          <div className="flex-1 flex items-center justify-center text-gray-500">
+            Loading...
           </div>
         ) : (
-          <div className="text-center text-gray-500">
-            <MessageCircle className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-            <h3 className="text-lg font-medium text-gray-700">Select a chat</h3>
-            <p className="text-sm mt-1">Choose a conversation from the list</p>
+          <div className="flex-1 flex items-center justify-center text-center text-gray-500">
+            <div>
+              <MessageCircle className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+              <h3 className="text-lg font-medium text-gray-700">Select a chat</h3>
+              <p className="text-sm mt-1">Choose a conversation from the list</p>
+            </div>
           </div>
         )}
       </div>
