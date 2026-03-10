@@ -255,8 +255,8 @@
         "Typecheck passes"
       ],
       "priority": 16,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented in apps/api/src/routes/contacts.ts. GET /contacts supports ?q for search, cursor-based pagination with ?cursor and ?limit params. GET /contacts/departments returns tree with memberCount per department. Both endpoints enforce org_id scoping."
     },
     {
       "id": "US-017",

@@ -4,6 +4,7 @@ import { authRoutes } from "./routes/auth";
 import { orgsRoutes } from "./routes/orgs";
 import { departmentsRoutes } from "./routes/departments";
 import { usersRoutes } from "./routes/users";
+import { contactsRoutes } from "./routes/contacts";
 
 const fastify = Fastify({
   logger: true,
@@ -18,6 +19,7 @@ await fastify.register(authRoutes);
 await fastify.register(orgsRoutes);
 await fastify.register(departmentsRoutes);
 await fastify.register(usersRoutes);
+await fastify.register(contactsRoutes);
 
 fastify.get("/", async () => {
   return { status: "ok", name: "OpenLark API" };
