@@ -30,3 +30,4 @@
 [2026-03-10 16:35] US-022 — Chat list API — PASS
 [2026-03-10 17:15] US-023 — Chat list UI sidebar — PASS
 [2026-03-10 16:29] US-024 — Chat view and message list UI — PASS
+[2026-03-10 22:35] US-025 — Message input with rich text formatting — PASS

@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { Search, Plus, MessageCircle, Users, Bell, BellOff, AtSign, Info, Send } from "lucide-react";
+import { Search, Plus, MessageCircle, Users, Bell, BellOff, AtSign, Info } from "lucide-react";
 import * as Dialog from "@radix-ui/react-dialog";
+import MessageInput from "@/components/MessageInput";
 
 interface Chat {
   id: string;
@@ -179,15 +180,26 @@ function renderMessageContent(message: Message): React.ReactNode {
     );
   }
 
-  if (type === "rich_text" && Array.isArray(content.blocks)) {
-    // Simplified rich text rendering - just render text from blocks
-    return (
-      <div className="whitespace-pre-wrap break-words">
-        {(content.blocks as Array<{ type: string; text?: string }>).map((block, i) => (
-          <span key={i}>{block.text || ""}</span>
-        ))}
-      </div>
-    );
+  if (type === "rich_text") {
+    // Handle HTML content from TipTap
+    if (typeof content.html === "string") {
+      return (
+        <div
+          className="prose prose-sm max-w-none break-words [&_a]:text-blue-600 [&_a]:underline [&_code]:bg-gray-100 [&_code]:px-1 [&_code]:rounded [&_blockquote]:border-l-2 [&_blockquote]:border-gray-300 [&_blockquote]:pl-3 [&_blockquote]:italic [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4"
+          dangerouslySetInnerHTML={{ __html: content.html as string }}
+        />
+      );
+    }
+    // Fallback for block-based rich text
+    if (Array.isArray(content.blocks)) {
+      return (
+        <div className="whitespace-pre-wrap break-words">
+          {(content.blocks as Array<{ type: string; text?: string }>).map((block, i) => (
+            <span key={i}>{block.text || ""}</span>
+          ))}
+        </div>
+      );
+    }
   }
 
   return <span className="text-gray-500 italic">[Message]</span>;
@@ -271,7 +283,6 @@ function ChatView({
   const [error, setError] = useState<string | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
-  const [inputValue, setInputValue] = useState("");
   const [isSending, setIsSending] = useState(false);
 
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -373,8 +384,8 @@ function ChatView({
   }, [isLoadingMore, hasMore, nextCursor, loadMessages]);
 
   // Send message
-  const handleSendMessage = async () => {
-    const text = inputValue.trim();
+  const handleSendMessage = useCallback(async (content: { html: string; text: string }) => {
+    const text = content.text.trim();
     if (!text || isSending) return;
 
     const token = getCookie("session_token");
@@ -383,6 +394,10 @@ function ChatView({
     setIsSending(true);
 
     try {
+      // Determine message type based on content
+      // If HTML has formatting beyond plain text, send as rich_text
+      const hasFormatting = content.html !== `<p>${content.text}</p>` && content.html !== content.text;
+
       const res = await fetch(`/api/chats/${chat.id}/messages`, {
         method: "POST",
         headers: {
@@ -390,8 +405,10 @@ function ChatView({
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          type: "text",
-          content: { text },
+          type: hasFormatting ? "rich_text" : "text",
+          content: hasFormatting
+            ? { html: content.html, text: content.text }
+            : { text },
         }),
       });
 
@@ -402,7 +419,6 @@ function ChatView({
 
       const newMessage = await res.json() as Message;
       setMessages((prev) => [...prev, newMessage]);
-      setInputValue("");
 
       // Scroll to bottom after sending
       setTimeout(() => scrollToBottom("smooth"), 50);
@@ -411,15 +427,7 @@ function ChatView({
     } finally {
       setIsSending(false);
     }
-  };
-
-  // Handle Enter key
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSendMessage();
-    }
-  };
+  }, [chat.id, isSending, scrollToBottom]);
 
   // Group messages by date
   const groupedMessages = useMemo(() => {
@@ -553,36 +561,13 @@ function ChatView({
       </div>
 
       {/* Message Input */}
-      <div className="flex-shrink-0 border-t border-gray-200 bg-white p-3">
-        <div className="flex items-end gap-2">
-          <textarea
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Type a message..."
-            rows={1}
-            className="flex-1 resize-none px-4 py-2 border border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm max-h-32"
-            style={{
-              minHeight: "40px",
-              height: "auto",
-            }}
-            onInput={(e) => {
-              const target = e.target as HTMLTextAreaElement;
-              target.style.height = "auto";
-              target.style.height = `${Math.min(target.scrollHeight, 128)}px`;
-            }}
-          />
-          <button
-            onClick={handleSendMessage}
-            disabled={!inputValue.trim() || isSending}
-            className="p-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            <Send className="w-5 h-5" />
-          </button>
-        </div>
-        <p className="text-[10px] text-gray-400 mt-1 px-2">
-          Press Enter to send, Shift+Enter for new line
-        </p>
+      <div className="flex-shrink-0 bg-white p-3">
+        <MessageInput
+          onSend={handleSendMessage}
+          isSending={isSending}
+          placeholder="Type a message..."
+          sendOnEnter={true}
+        />
       </div>
     </div>
   );
