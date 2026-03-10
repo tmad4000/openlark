@@ -831,3 +831,83 @@ Fixed critical bugs in WebSocket/Redis pub/sub that were causing tests to fail:
 - Consider per-test Redis subscriber isolation for more reliable tests
 
 ---
+
+## 2026-03-10 - Iteration 3 - REVIEW
+
+### Code quality observations
+
+**What looks good:**
+- WebSocket implementation (`websocket.ts`) is well-architected:
+  - JWT authentication via query string with session validation
+  - Lazy Redis subscriber initialization (avoids test conflicts)
+  - Proper connection tracking (userId → Set<WebSocket>) for multi-device support
+  - Chat subscription tracking (chatId → Set<userId>) for broadcast efficiency
+  - `resetWebSocketState()` for clean test isolation
+- Critical bug fix in `messenger.service.ts:138-154`:
+  - `getUserChats` now correctly returns all chats where user is MEMBER regardless of org
+  - This aligns with FR-2.29 (external groups with cross-org members)
+  - Security boundary is membership, not org — correctly implemented
+- `notifyUserJoinedChat` fix (`websocket.ts:161-183`):
+  - Now only tracks users if they're currently connected
+  - Prevents stale entries in `chatSubscribers` map
+  - Offline users get chats via `getUserChats` on reconnect
+- Test coverage is comprehensive: 68 passing unit tests, 44 integration tests (when DB available)
+- Build, lint, and tests all pass cleanly
+
+**Areas needing attention:**
+
+1. **config.ts:19** - `JWT_SECRET` default value (`dev-secret-change-in-production`) still present. **This is the 4th review flagging this.** Simple fix: add production validation in `loadConfig()`. Not blocking but should be addressed before any production exposure.
+
+2. **websocket.ts:218-244** - Presence broadcasts on connect iterate through all chatIds and broadcast to each separately. For users in 50+ chats, this creates many Redis publishes. Consider batching by collecting unique subscribers first. Low priority for now (unlikely to hit at current scale).
+
+3. **Skipped tests** - 5 typing/presence pub/sub tests skipped for CI reliability due to Redis timing sensitivity. Tests pass individually but fail in suite. Real fix: per-test Redis subscriber isolation. Documented as tech debt.
+
+4. **No web app tests yet** - `apps/web` has no tests. Frontend shell (T-023) should include test infrastructure when started.
+
+### Commit history review
+- 20 commits total on branch since initialization
+- Recent 5 commits (since last review):
+  - `d46b74e fix(messenger): fix WebSocket/Redis pub/sub bugs causing test failures`
+  - `6651aaa docs: update progress log for iteration 11 (WebSocket)`
+  - `a6a4d84 feat(messenger): add WebSocket server for real-time messaging`
+  - `3c4de64 chore: update plan with iteration 10 vote and claim`
+  - `b235f9f docs: update progress log for iteration 10`
+- Commits are atomic, well-scoped, follow conventional format
+- Bug fix commit (`d46b74e`) correctly describes the fix without overexplaining
+- Clean history, no WIP or fixup commits
+
+### Plan assessment
+
+**T-002 (in-progress):** +1 vote. 2/6 subtasks complete. Auth foundation is stable and has been battle-tested by T-003 (messenger module reuses auth patterns successfully). Remaining subtasks (RLS, magic link, 2FA, departments, API keys) are lower priority since core auth works. JWT_SECRET production validation should be addressed.
+
+**T-003 (in-progress):** +1 vote. 2/5 subtasks complete. WebSocket implementation is solid. Subtasks 3-5 (rich text, threads, reactions UX, pins/favorites UI) can proceed. Cross-org chat fix was a critical security boundary clarification — correctly implemented now.
+
+**T-023 (open):** +1 vote. Net votes now +3/-1. Backend API surface is sufficient for frontend shell to start. Auth routes stable, messenger CRUD + WebSocket working. Recommend starting with: auth screens (login/register), basic three-panel layout, messenger list view. Keep scope minimal.
+
+### Nudges left
+
+1. **T-002**: JWT_SECRET production validation has been flagged 4 times. Simple fix in `config.ts` `loadConfig()` function.
+2. **T-003**: Consider batching presence broadcasts for users in many chats (`websocket.ts:218-244`). Low priority.
+3. **T-003**: Flaky typing/presence tests could use per-test Redis subscriber isolation for full reliability.
+
+### Tech debt items
+
+| Priority | Item | Location | Notes |
+|----------|------|----------|-------|
+| Medium | JWT_SECRET default should fail in production | `config.ts:19` | Flagged 4× — simple fix |
+| Low | Presence broadcasts could be batched | `websocket.ts:218-244` | Scale concern only |
+| Low | Typing/presence tests skipped | `websocket.integration.test.ts` | Work manually |
+| Low | No web app tests | `apps/web` | Add when starting T-023 |
+| Low | Login needs org context for multi-tenant | `auth.service.ts:122` | Documented |
+
+### Reinforced patterns
+
+From progress log that held true this iteration:
+- ✅ Cross-Org Chat Pattern (Iteration 12) - chat membership is security boundary, not org membership
+- ✅ WebSocket Pattern (Iteration 11) - lazy Redis initialization, separate subscriber client
+- ✅ Integration Test Pattern (Iteration 10) - `resetWebSocketState()` in `beforeEach` for isolation
+- ✅ Module structure (`index.ts`, `routes.ts`, `service.ts`, `schemas.ts`) - consistent
+- ✅ Test pattern (skip integration tests when `SKIP_DB_TESTS=true`) - working correctly
+- ✅ `formatZodError` utility reuse across modules
+
+---
