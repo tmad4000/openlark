@@ -1819,3 +1819,80 @@ From progress log that held true this iteration:
 - ✅ Frontend Structure (Iteration 8) — co-located tests, hooks/components/lib organization
 
 ---
+
+## 2026-03-10 - Iteration 16 - T-004 (Calendar Module)
+
+### What was implemented
+Calendar module implementing goal.md Module 6 (FR-6.1 through FR-6.7):
+
+1. **Database schema** (`apps/api/src/db/schema/calendar.ts`):
+   - `calendars` table: personal, public, all_staff, shared calendar types
+   - `calendarSubscriptions` table: users subscribing to calendars
+   - `meetingRooms` table: room booking with capacity, equipment, location
+   - `calendarEvents` table: events with recurrence rules (RFC 5545), room booking, reminders
+   - `eventAttendees` table: attendees with RSVP status (pending, yes, no, maybe)
+   - Proper relations, indexes, and foreign keys
+
+2. **Zod validation schemas** (`calendar.schemas.ts`):
+   - Calendar CRUD schemas with hex color validation
+   - Meeting room schemas with capacity limits (1-1000)
+   - Event schemas with datetime validation, time order constraint
+   - RSVP and attendee schemas
+   - Query schemas for events, room search, availability
+
+3. **Service methods** (`calendar.service.ts`):
+   - Calendar: create, update, delete, list (owned + subscribed)
+   - Subscriptions: subscribe to public calendars, update, unsubscribe
+   - Meeting rooms: CRUD, search by capacity/floor
+   - Events: CRUD, list with date range filters, cursor pagination
+   - Attendees: add, remove, RSVP
+   - Availability: room availability checking, conflict detection, find free slots
+
+4. **API routes** (`calendar.routes.ts`):
+   - `/api/v1/calendar/calendars/*` - Calendar CRUD
+   - `/api/v1/calendar/subscriptions/*` - Subscription management
+   - `/api/v1/calendar/rooms/*` - Meeting room CRUD (admin-only create/update/delete)
+   - `/api/v1/calendar/events/*` - Event CRUD
+   - `/api/v1/calendar/events/:id/rsvp` - RSVP endpoint
+   - `/api/v1/calendar/events/:id/attendees/*` - Attendee management
+   - `/api/v1/calendar/availability` - Find available slots
+   - All routes require authentication via existing auth middleware
+
+### Files changed
+- `apps/api/src/db/schema/calendar.ts` - New (280+ lines)
+- `apps/api/src/db/schema/index.ts` - Export calendar schema
+- `apps/api/src/modules/calendar/calendar.schemas.ts` - New (170+ lines)
+- `apps/api/src/modules/calendar/calendar.service.ts` - New (950+ lines)
+- `apps/api/src/modules/calendar/calendar.routes.ts` - New (450+ lines)
+- `apps/api/src/modules/calendar/index.ts` - New (barrel exports)
+- `apps/api/src/__tests__/calendar.test.ts` - New (81 tests)
+- `apps/api/src/app.ts` - Register calendar routes
+
+### Tests added
+- **57 schema validation tests**: createCalendarSchema, updateCalendarSchema, createMeetingRoomSchema, updateMeetingRoomSchema, createEventSchema, updateEventSchema, rsvpSchema, addAttendeeSchema, subscribeCalendarSchema, updateSubscriptionSchema, eventsQuerySchema, roomSearchSchema, availabilitySearchSchema
+- **24 API auth requirement tests**: All calendar endpoints require authentication
+
+### Plan deviations
+- None - followed established module patterns exactly
+
+### Learnings for future iterations
+- **Pattern reinforced**: Module structure (index.ts, routes.ts, service.ts, schemas.ts) scales cleanly to new modules
+- **Pattern reinforced**: Reusing auth middleware from `modules/auth/middleware.ts` works across all modules
+- **Pattern reinforced**: Zod schemas with `.refine()` for cross-field validation (startTime < endTime)
+- **Pattern reinforced**: Use `.returning()` not `.rowCount` for delete/update result checking in Drizzle
+- **New pattern**: Admin-only endpoints use `{ preHandler: requireAdmin }` option on route registration
+- **Self-reflection**: The calendar module was a complete slice (schema → service → routes → tests) in one iteration because the patterns from auth and messenger were well-established
+
+### Tech debt addressed
+- ✅ T-004 subtasks 1-2 complete (entities + events CRUD with RSVP)
+
+### Tech debt remaining
+- T-004 subtasks 3-4 (room booking UI, shared calendars, iCal, drag-and-drop)
+- Static method pattern fragile (`chat-list.tsx:51`, `message-list.tsx:138`)
+- Raw UUID input for chat creation
+- Auto-generated tabs not implemented (FR-2.15 partial)
+- Typing/presence tests skipped
+- Login needs org context for multi-tenant
+- `next lint` deprecation warning
+
+---

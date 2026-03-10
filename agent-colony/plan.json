@@ -346,6 +346,12 @@
           "role": "reviewer",
           "value": 1,
           "reason": "Iter 15 review: 4/6 subtasks complete. CreateChatDialog and sender display names added with good test coverage (11 tests). getChatMembersWithUserInfo service method properly joins users table. Parallel fetch pattern in message-list.tsx is correct (Promise.all for messages + members). Static method pattern for cross-component state updates (ChatList.addChat, MessageList.addMessage) remains fragile but functional. Remaining: subtask 3 (threads, rich text, forwarding) and subtask 4 (typing/presence UI)."
+        },
+        {
+          "iteration": 16,
+          "role": "implementer",
+          "value": 1,
+          "reason": "Core messenger functionality is solid (4/6 subtasks done). WebSocket message delivery, reactions, pins, favorites, chat tabs, announcements all working. Frontend UI integrated. Remaining subtasks (threads, rich text, typing/presence UI) are incremental polish for Phase 2."
         }
       ],
       "comments": [
@@ -468,11 +474,11 @@
       "subtasks": [
         {
           "description": "Create CalendarEvent, EventAttendee, MeetingRoom, Calendar entities",
-          "done": false
+          "done": true
         },
         {
           "description": "Implement event CRUD with recurrence rules and RSVP",
-          "done": false
+          "done": true
         },
         {
           "description": "Build room booking and availability search",
@@ -501,15 +507,30 @@
           "role": "reviewer",
           "value": 1,
           "reason": "Iter 15 review: T-004 remains the clear next priority per goal.md Phase 1 build order (Auth → Messenger → Calendar). Auth stable, Messenger has solid core functionality including frontend UI. Calendar is the natural next step to complete Phase 1 foundation."
+        },
+        {
+          "iteration": 16,
+          "role": "implementer",
+          "value": 1,
+          "reason": "Independent analysis confirms: Calendar is the clear next priority. Auth and Messenger foundations are solid. Phase 1 build order is Auth → Messenger → Calendar. T-004 has no blockers and completing it would give us a complete Phase 1 foundation."
         }
       ],
-      "comments": [],
-      "status": "open",
+      "comments": [
+        {
+          "iteration": 16,
+          "role": "implementer",
+          "message": "Iteration 16: Implemented T-004 subtasks 1-2 (Calendar entities and Event CRUD with RSVP). Created database schema (calendars, calendarSubscriptions, meetingRooms, calendarEvents, eventAttendees). Created Zod validation schemas. Created CalendarService with full CRUD operations for calendars, events, subscriptions, rooms, and attendees. Created API routes with auth middleware. Added 81 unit tests covering schema validation and auth requirements. All tests pass (260 total). Build and lint pass."
+        }
+      ],
+      "status": "in-progress",
       "createdBy": {
         "iteration": 0,
         "role": "implementer"
       },
-      "claimedBy": null,
+      "claimedBy": {
+        "iteration": 16,
+        "role": "implementer"
+      },
       "splitFrom": null
     },
     {
@@ -1245,7 +1266,7 @@
   ],
   "metadata": {
     "createdAt": "2026-03-04T21:00:00Z",
-    "totalIterations": 25,
+    "totalIterations": 26,
     "iterationLog": [
       {
         "iteration": 1,
@@ -1394,6 +1415,12 @@
       {
         "iteration": 25,
         "role": "simplifier",
+        "taskWorked": null,
+        "contextCompacted": false
+      },
+      {
+        "iteration": 26,
+        "role": "reviewer",
         "taskWorked": null,
         "contextCompacted": false
       }
