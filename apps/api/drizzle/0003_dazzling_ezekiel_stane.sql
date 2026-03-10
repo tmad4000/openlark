@@ -1,0 +1,1 @@
+ALTER TABLE "organizations" ADD COLUMN "primary_admin_id" uuid;

@@ -193,8 +193,8 @@
         "Typecheck passes"
       ],
       "priority": 12,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created apps/api/src/routes/orgs.ts with three endpoints. POST /orgs creates organization with name and optional domain, sets current user as primaryAdminId, and updates user's orgId. GET /orgs/:id returns organization details (only accessible to members). PATCH /orgs/:id updates name, logo_url, industry, settings - restricted to primary admin or users with org.manage scope via API key. Added primaryAdminId field to organizations schema. Migration 0003_dazzling_ezekiel_stane.sql applied. Typecheck passes."
     },
     {
       "id": "US-013",

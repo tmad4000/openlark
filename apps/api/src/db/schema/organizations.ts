@@ -20,6 +20,7 @@ export const organizations = pgTable("organizations", {
   industry: varchar("industry", { length: 100 }),
   plan: planEnum("plan").notNull().default("starter"),
   settings: jsonb("settings").$type<Record<string, unknown>>().default({}),
+  primaryAdminId: uuid("primary_admin_id"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
