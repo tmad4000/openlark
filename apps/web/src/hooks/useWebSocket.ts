@@ -37,12 +37,21 @@ export interface ReadReceiptEvent {
   displayName: string;
 }
 
+export interface ReactionEvent {
+  messageId: string;
+  userId: string;
+  emoji: string;
+  action: "add" | "remove";
+  displayName: string;
+}
+
 interface UseWebSocketOptions {
   token: string | null;
   onMessage?: (message: WebSocketMessage) => void;
   onTyping?: (event: TypingEvent) => void;
   onPresence?: (event: PresenceEvent) => void;
   onReadReceipt?: (event: ReadReceiptEvent) => void;
+  onReaction?: (event: ReactionEvent) => void;
   onConnected?: (data: { userId: string; orgId: string | null }) => void;
   onDisconnected?: () => void;
 }
@@ -69,7 +78,7 @@ function getCookie(name: string): string | null {
 }
 
 export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
-  const { token, onMessage, onTyping, onPresence, onReadReceipt, onConnected, onDisconnected } = options;
+  const { token, onMessage, onTyping, onPresence, onReadReceipt, onReaction, onConnected, onDisconnected } = options;
 
   const [status, setStatus] = useState<ConnectionStatus>("disconnected");
   const wsRef = useRef<WebSocket | null>(null);
@@ -84,6 +93,7 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
   const onTypingRef = useRef(onTyping);
   const onPresenceRef = useRef(onPresence);
   const onReadReceiptRef = useRef(onReadReceipt);
+  const onReactionRef = useRef(onReaction);
   const onConnectedRef = useRef(onConnected);
   const onDisconnectedRef = useRef(onDisconnected);
 
@@ -92,9 +102,10 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
     onTypingRef.current = onTyping;
     onPresenceRef.current = onPresence;
     onReadReceiptRef.current = onReadReceipt;
+    onReactionRef.current = onReaction;
     onConnectedRef.current = onConnected;
     onDisconnectedRef.current = onDisconnected;
-  }, [onMessage, onTyping, onPresence, onReadReceipt, onConnected, onDisconnected]);
+  }, [onMessage, onTyping, onPresence, onReadReceipt, onReaction, onConnected, onDisconnected]);
 
   const cleanup = useCallback(() => {
     if (retryTimeoutRef.current) {
@@ -195,6 +206,22 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
             chatId: payload.chatId,
             userId: payload.userId,
             lastMessageId: payload.lastMessageId,
+            displayName: payload.displayName,
+          });
+        } else if (message.type === "reaction") {
+          // Handle reaction events
+          const payload = message.payload as {
+            messageId: string;
+            userId: string;
+            emoji: string;
+            action: "add" | "remove";
+            displayName: string;
+          };
+          onReactionRef.current?.({
+            messageId: payload.messageId,
+            userId: payload.userId,
+            emoji: payload.emoji,
+            action: payload.action,
             displayName: payload.displayName,
           });
         } else {

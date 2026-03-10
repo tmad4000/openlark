@@ -471,8 +471,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 29,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented emoji reactions with full API and UI support. API: POST /messages/:id/reactions adds reaction, DELETE /messages/:id/reactions/:emoji removes, GET /messages/:id/reactions returns grouped reactions with user info. Uses existing messageReactions table from US-018. UI: QuickReactionPicker component shows 5 frequent emojis (thumbs up, heart, laughing, surprised, sad) plus expand button for full emoji picker via @emoji-mart. ReactionDisplay component shows reactions below messages with counts; clicking toggles reaction. Reactions broadcast via WebSocket 'reaction' events (no notifications). Optimistic UI updates for instant feedback. Typecheck passes."
     },
     {
       "id": "US-030",

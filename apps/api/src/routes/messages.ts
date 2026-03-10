@@ -1,6 +1,6 @@
 import { FastifyInstance } from "fastify";
 import { db } from "../db";
-import { messages, chatMembers, chats, users, messageReadReceipts } from "../db/schema";
+import { messages, chatMembers, chats, users, messageReadReceipts, messageReactions } from "../db/schema";
 import { eq, and, desc, lt, gt, inArray, sql } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
 import { publish, getChatChannel } from "../lib/redis";
@@ -597,6 +597,292 @@ export async function messagesRoutes(fastify: FastifyInstance) {
         receipts: [...readReceipts, ...unreadReceipts],
         totalMembers,
         readCount: receipts.length,
+      });
+    }
+  );
+
+  /**
+   * POST /messages/:id/reactions - Add a reaction to a message
+   * Body: { emoji: string }
+   * Returns: { success: true, reaction: { messageId, userId, emoji, createdAt } }
+   */
+  fastify.post<{
+    Params: { id: string };
+    Body: { emoji: string };
+  }>(
+    "/messages/:id/reactions",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id: messageId } = request.params;
+      const { emoji } = request.body;
+
+      // Validate messageId format
+      if (!UUID_REGEX.test(messageId)) {
+        return reply.status(400).send({
+          error: "Invalid message ID format",
+        });
+      }
+
+      // Validate emoji is provided
+      if (!emoji || typeof emoji !== "string" || emoji.trim().length === 0) {
+        return reply.status(400).send({
+          error: "emoji is required",
+        });
+      }
+
+      // Validate emoji length (max 32 chars to match db schema)
+      if (emoji.length > 32) {
+        return reply.status(400).send({
+          error: "emoji must be 32 characters or fewer",
+        });
+      }
+
+      const currentUserId = request.user.id;
+
+      // Get the message and verify it exists
+      const [message] = await db
+        .select()
+        .from(messages)
+        .where(eq(messages.id, messageId))
+        .limit(1);
+
+      if (!message) {
+        return reply.status(404).send({
+          error: "Message not found",
+        });
+      }
+
+      // Check user is a member of the chat
+      if (!(await isChatMember(message.chatId, currentUserId))) {
+        return reply.status(403).send({
+          error: "You are not a member of this chat",
+        });
+      }
+
+      // Check if reaction already exists (toggle off)
+      const [existingReaction] = await db
+        .select()
+        .from(messageReactions)
+        .where(
+          and(
+            eq(messageReactions.messageId, messageId),
+            eq(messageReactions.userId, currentUserId),
+            eq(messageReactions.emoji, emoji)
+          )
+        )
+        .limit(1);
+
+      if (existingReaction) {
+        // Reaction already exists - this endpoint should add, not toggle
+        // Return the existing reaction
+        return reply.status(200).send({
+          success: true,
+          reaction: existingReaction,
+          alreadyExists: true,
+        });
+      }
+
+      // Insert the new reaction
+      const [newReaction] = await db
+        .insert(messageReactions)
+        .values({
+          messageId,
+          userId: currentUserId,
+          emoji,
+        })
+        .returning();
+
+      // Publish reaction event to WebSocket channel (without notification)
+      await publish(getChatChannel(message.chatId), {
+        type: "reaction",
+        payload: {
+          messageId,
+          userId: currentUserId,
+          emoji,
+          action: "add",
+          displayName: request.user.displayName,
+        },
+      });
+
+      return reply.status(201).send({
+        success: true,
+        reaction: newReaction,
+      });
+    }
+  );
+
+  /**
+   * DELETE /messages/:id/reactions/:emoji - Remove a reaction from a message
+   * Returns: { success: true }
+   */
+  fastify.delete<{
+    Params: { id: string; emoji: string };
+  }>(
+    "/messages/:id/reactions/:emoji",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id: messageId, emoji } = request.params;
+
+      // Validate messageId format
+      if (!UUID_REGEX.test(messageId)) {
+        return reply.status(400).send({
+          error: "Invalid message ID format",
+        });
+      }
+
+      // Validate emoji is provided
+      if (!emoji || emoji.trim().length === 0) {
+        return reply.status(400).send({
+          error: "emoji is required",
+        });
+      }
+
+      const currentUserId = request.user.id;
+
+      // Get the message and verify it exists
+      const [message] = await db
+        .select()
+        .from(messages)
+        .where(eq(messages.id, messageId))
+        .limit(1);
+
+      if (!message) {
+        return reply.status(404).send({
+          error: "Message not found",
+        });
+      }
+
+      // Check user is a member of the chat
+      if (!(await isChatMember(message.chatId, currentUserId))) {
+        return reply.status(403).send({
+          error: "You are not a member of this chat",
+        });
+      }
+
+      // Delete the reaction (only the current user's reaction with this emoji)
+      const result = await db
+        .delete(messageReactions)
+        .where(
+          and(
+            eq(messageReactions.messageId, messageId),
+            eq(messageReactions.userId, currentUserId),
+            eq(messageReactions.emoji, emoji)
+          )
+        )
+        .returning();
+
+      if (result.length === 0) {
+        return reply.status(404).send({
+          error: "Reaction not found",
+        });
+      }
+
+      // Publish reaction removal event to WebSocket channel
+      await publish(getChatChannel(message.chatId), {
+        type: "reaction",
+        payload: {
+          messageId,
+          userId: currentUserId,
+          emoji,
+          action: "remove",
+          displayName: request.user.displayName,
+        },
+      });
+
+      return reply.status(200).send({
+        success: true,
+      });
+    }
+  );
+
+  /**
+   * GET /messages/:id/reactions - Get all reactions for a message
+   * Returns: { reactions: Array<{ emoji, count, users: Array<{ userId, displayName, avatarUrl }> }> }
+   */
+  fastify.get<{
+    Params: { id: string };
+  }>(
+    "/messages/:id/reactions",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id: messageId } = request.params;
+
+      // Validate messageId format
+      if (!UUID_REGEX.test(messageId)) {
+        return reply.status(400).send({
+          error: "Invalid message ID format",
+        });
+      }
+
+      const currentUserId = request.user.id;
+
+      // Get the message and verify it exists
+      const [message] = await db
+        .select()
+        .from(messages)
+        .where(eq(messages.id, messageId))
+        .limit(1);
+
+      if (!message) {
+        return reply.status(404).send({
+          error: "Message not found",
+        });
+      }
+
+      // Check user is a member of the chat
+      if (!(await isChatMember(message.chatId, currentUserId))) {
+        return reply.status(403).send({
+          error: "You are not a member of this chat",
+        });
+      }
+
+      // Get all reactions for this message with user info
+      const reactions = await db
+        .select({
+          emoji: messageReactions.emoji,
+          userId: messageReactions.userId,
+          displayName: users.displayName,
+          avatarUrl: users.avatarUrl,
+          createdAt: messageReactions.createdAt,
+        })
+        .from(messageReactions)
+        .innerJoin(users, eq(messageReactions.userId, users.id))
+        .where(eq(messageReactions.messageId, messageId))
+        .orderBy(messageReactions.createdAt);
+
+      // Group reactions by emoji
+      const reactionGroups: Record<
+        string,
+        {
+          emoji: string;
+          count: number;
+          users: Array<{ userId: string; displayName: string | null; avatarUrl: string | null }>;
+          hasCurrentUser: boolean;
+        }
+      > = {};
+
+      for (const r of reactions) {
+        if (!reactionGroups[r.emoji]) {
+          reactionGroups[r.emoji] = {
+            emoji: r.emoji,
+            count: 0,
+            users: [],
+            hasCurrentUser: false,
+          };
+        }
+        reactionGroups[r.emoji].count++;
+        reactionGroups[r.emoji].users.push({
+          userId: r.userId,
+          displayName: r.displayName,
+          avatarUrl: r.avatarUrl,
+        });
+        if (r.userId === currentUserId) {
+          reactionGroups[r.emoji].hasCurrentUser = true;
+        }
+      }
+
+      return reply.status(200).send({
+        reactions: Object.values(reactionGroups),
       });
     }
   );

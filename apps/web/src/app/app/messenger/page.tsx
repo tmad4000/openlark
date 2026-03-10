@@ -1,10 +1,12 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { Search, Plus, MessageCircle, Users, Bell, BellOff, AtSign, Info, Wifi, WifiOff, Loader2, Check, CheckCheck, Circle } from "lucide-react";
+import { Search, Plus, MessageCircle, Users, Bell, BellOff, AtSign, Info, Wifi, WifiOff, Loader2, Check, CheckCheck, Circle, Smile, MoreHorizontal } from "lucide-react";
 import * as Dialog from "@radix-ui/react-dialog";
 import MessageInput from "@/components/MessageInput";
-import { useWebSocket, ConnectionStatus, WebSocketMessage, TypingEvent, PresenceEvent, ReadReceiptEvent } from "@/hooks/useWebSocket";
+import { useWebSocket, ConnectionStatus, WebSocketMessage, TypingEvent, PresenceEvent, ReadReceiptEvent, ReactionEvent } from "@/hooks/useWebSocket";
+import data from "@emoji-mart/data";
+import Picker from "@emoji-mart/react";
 import * as Popover from "@radix-ui/react-popover";
 
 interface Chat {
@@ -93,6 +95,13 @@ function getMessagePreview(message: Chat["lastMessage"]): string {
   return "Message";
 }
 
+interface Reaction {
+  emoji: string;
+  count: number;
+  hasCurrentUser: boolean;
+  users: Array<{ userId: string; displayName: string | null; avatarUrl: string | null }>;
+}
+
 interface Message {
   id: string;
   chatId: string;
@@ -110,6 +119,7 @@ interface Message {
     displayName: string | null;
     avatarUrl: string | null;
   };
+  reactions?: Reaction[];
 }
 
 interface ReadReceipt {
@@ -219,6 +229,73 @@ function renderMessageContent(message: Message): React.ReactNode {
   }
 
   return <span className="text-gray-500 italic">[Message]</span>;
+}
+
+// Frequently used emojis for quick reaction picker
+const QUICK_EMOJIS = ["👍", "❤️", "😂", "😮", "😢"];
+
+interface EmojiData {
+  native: string;
+}
+
+function QuickReactionPicker({
+  onSelect,
+  onOpenFull,
+}: {
+  onSelect: (emoji: string) => void;
+  onOpenFull: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-0.5 bg-white border border-gray-200 rounded-full shadow-lg px-1.5 py-0.5">
+      {QUICK_EMOJIS.map((emoji) => (
+        <button
+          key={emoji}
+          onClick={() => onSelect(emoji)}
+          className="w-7 h-7 flex items-center justify-center hover:bg-gray-100 rounded-full transition-colors text-base"
+          title={`React with ${emoji}`}
+        >
+          {emoji}
+        </button>
+      ))}
+      <button
+        onClick={onOpenFull}
+        className="w-7 h-7 flex items-center justify-center hover:bg-gray-100 rounded-full transition-colors text-gray-500"
+        title="More reactions"
+      >
+        <MoreHorizontal className="w-4 h-4" />
+      </button>
+    </div>
+  );
+}
+
+function ReactionDisplay({
+  reactions,
+  onToggleReaction,
+}: {
+  reactions: Reaction[];
+  onToggleReaction: (emoji: string) => void;
+}) {
+  if (!reactions || reactions.length === 0) return null;
+
+  return (
+    <div className="flex flex-wrap gap-1 mt-1">
+      {reactions.map((reaction) => (
+        <button
+          key={reaction.emoji}
+          onClick={() => onToggleReaction(reaction.emoji)}
+          className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-xs rounded-full border transition-colors ${
+            reaction.hasCurrentUser
+              ? "bg-blue-50 border-blue-200 text-blue-700"
+              : "bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100"
+          }`}
+          title={reaction.users.map(u => u.displayName || "Unknown").join(", ")}
+        >
+          <span>{reaction.emoji}</span>
+          <span className="font-medium">{reaction.count}</span>
+        </button>
+      ))}
+    </div>
+  );
 }
 
 function ReadStatusIcon({
@@ -424,14 +501,52 @@ function MessageBubble({
   isCurrentUser,
   readStatus,
   onShowReadReceipts,
+  onToggleReaction,
 }: {
   message: Message;
   isCurrentUser: boolean;
   readStatus?: { totalMembers: number; readCount: number };
   onShowReadReceipts?: (messageId: string) => void;
+  onToggleReaction?: (messageId: string, emoji: string) => void;
 }) {
+  const [showReactionPicker, setShowReactionPicker] = useState(false);
+  const [showFullPicker, setShowFullPicker] = useState(false);
+  const pickerRef = useRef<HTMLDivElement>(null);
+  const fullPickerRef = useRef<HTMLDivElement>(null);
+
   const isSystem = message.type === "system";
   const isPending = message.id.startsWith("pending-");
+
+  // Close pickers when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        pickerRef.current &&
+        !pickerRef.current.contains(event.target as Node)
+      ) {
+        setShowReactionPicker(false);
+      }
+      if (
+        fullPickerRef.current &&
+        !fullPickerRef.current.contains(event.target as Node)
+      ) {
+        setShowFullPicker(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleReaction = (emoji: string) => {
+    onToggleReaction?.(message.id, emoji);
+    setShowReactionPicker(false);
+    setShowFullPicker(false);
+  };
+
+  const handleEmojiSelect = (emojiData: EmojiData) => {
+    handleReaction(emojiData.native);
+  };
 
   if (isSystem) {
     return (
@@ -444,7 +559,11 @@ function MessageBubble({
   }
 
   return (
-    <div className={`flex gap-2 py-1 ${isCurrentUser ? "flex-row-reverse" : ""}`}>
+    <div
+      className={`group flex gap-2 py-1 ${isCurrentUser ? "flex-row-reverse" : ""}`}
+      onMouseEnter={() => !isPending && setShowReactionPicker(true)}
+      onMouseLeave={() => !showFullPicker && setShowReactionPicker(false)}
+    >
       {/* Avatar */}
       {!isCurrentUser && (
         <div className="flex-shrink-0 w-8 h-8 rounded-full overflow-hidden bg-gray-200 self-end">
@@ -471,17 +590,67 @@ function MessageBubble({
           </span>
         )}
 
-        <div
-          className={`px-3 py-2 rounded-2xl ${
-            isCurrentUser
-              ? isPending
-                ? "bg-blue-400 text-white rounded-br-md"
-                : "bg-blue-600 text-white rounded-br-md"
-              : "bg-gray-100 text-gray-900 rounded-bl-md"
-          }`}
-        >
-          {renderMessageContent(message)}
+        <div className="relative">
+          <div
+            className={`px-3 py-2 rounded-2xl ${
+              isCurrentUser
+                ? isPending
+                  ? "bg-blue-400 text-white rounded-br-md"
+                  : "bg-blue-600 text-white rounded-br-md"
+                : "bg-gray-100 text-gray-900 rounded-bl-md"
+            }`}
+          >
+            {renderMessageContent(message)}
+          </div>
+
+          {/* Quick reaction picker - shows on hover */}
+          {showReactionPicker && !isPending && (
+            <div
+              ref={pickerRef}
+              className={`absolute z-20 ${
+                isCurrentUser
+                  ? "right-0 -top-10"
+                  : "left-0 -top-10"
+              }`}
+            >
+              <QuickReactionPicker
+                onSelect={handleReaction}
+                onOpenFull={() => {
+                  setShowFullPicker(true);
+                  setShowReactionPicker(false);
+                }}
+              />
+            </div>
+          )}
+
+          {/* Full emoji picker */}
+          {showFullPicker && (
+            <div
+              ref={fullPickerRef}
+              className={`absolute z-30 ${
+                isCurrentUser
+                  ? "right-0 bottom-full mb-2"
+                  : "left-0 bottom-full mb-2"
+              }`}
+            >
+              <Picker
+                data={data}
+                onEmojiSelect={handleEmojiSelect}
+                theme="light"
+                previewPosition="none"
+                skinTonePosition="none"
+              />
+            </div>
+          )}
         </div>
+
+        {/* Reactions display */}
+        {message.reactions && message.reactions.length > 0 && (
+          <ReactionDisplay
+            reactions={message.reactions}
+            onToggleReaction={(emoji) => handleReaction(emoji)}
+          />
+        )}
 
         {/* Timestamp, pending indicator, edited indicator, and read status */}
         <div className="flex items-center gap-1 px-1 mt-0.5">
@@ -589,6 +758,7 @@ function ChatView({
   onTypingStop,
   onlineUsers,
   onReadReceiptUpdate,
+  reactionEvent,
 }: {
   chat: Chat;
   currentUserId: string;
@@ -598,6 +768,7 @@ function ChatView({
   onTypingStop: () => void;
   onlineUsers: Set<string>;
   onReadReceiptUpdate?: (event: ReadReceiptEvent) => void;
+  reactionEvent?: ReactionEvent | null;
 }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [pendingMessages, setPendingMessages] = useState<PendingMessage[]>([]);
@@ -612,6 +783,9 @@ function ChatView({
   const [messageReadStatus, setMessageReadStatus] = useState<Record<string, { totalMembers: number; readCount: number }>>({});
   const [selectedMessageForReceipts, setSelectedMessageForReceipts] = useState<string | null>(null);
   const lastMarkedReadRef = useRef<string | null>(null);
+
+  // Reactions state
+  const [messageReactions, setMessageReactions] = useState<Record<string, Reaction[]>>({});
 
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -647,6 +821,134 @@ function ChatView({
       // Silent fail - marking as read is not critical
     }
   }, [chat.id]);
+
+  // Toggle reaction on a message
+  const toggleReaction = useCallback(async (messageId: string, emoji: string) => {
+    const token = getCookie("session_token");
+    if (!token) return;
+
+    // Check if current user already has this reaction
+    const currentReactions = messageReactions[messageId] || [];
+    const existingReaction = currentReactions.find(r => r.emoji === emoji);
+    const hasReaction = existingReaction?.hasCurrentUser;
+
+    // Optimistic update
+    setMessageReactions((prev) => {
+      const reactions = [...(prev[messageId] || [])];
+      const idx = reactions.findIndex(r => r.emoji === emoji);
+
+      if (hasReaction) {
+        // Remove reaction
+        if (idx >= 0) {
+          if (reactions[idx].count <= 1) {
+            reactions.splice(idx, 1);
+          } else {
+            reactions[idx] = {
+              ...reactions[idx],
+              count: reactions[idx].count - 1,
+              hasCurrentUser: false,
+              users: reactions[idx].users.filter(u => u.userId !== currentUserId),
+            };
+          }
+        }
+      } else {
+        // Add reaction
+        if (idx >= 0) {
+          reactions[idx] = {
+            ...reactions[idx],
+            count: reactions[idx].count + 1,
+            hasCurrentUser: true,
+            users: [...reactions[idx].users, { userId: currentUserId, displayName: null, avatarUrl: null }],
+          };
+        } else {
+          reactions.push({
+            emoji,
+            count: 1,
+            hasCurrentUser: true,
+            users: [{ userId: currentUserId, displayName: null, avatarUrl: null }],
+          });
+        }
+      }
+
+      return { ...prev, [messageId]: reactions };
+    });
+
+    try {
+      if (hasReaction) {
+        // Remove reaction
+        await fetch(`/api/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`, {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      } else {
+        // Add reaction
+        await fetch(`/api/messages/${messageId}/reactions`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ emoji }),
+        });
+      }
+    } catch {
+      // Revert optimistic update on error - reload reactions
+      const res = await fetch(`/api/messages/${messageId}/reactions`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setMessageReactions((prev) => ({ ...prev, [messageId]: data.reactions || [] }));
+      }
+    }
+  }, [messageReactions, currentUserId]);
+
+  // Handle incoming reaction events from WebSocket
+  useEffect(() => {
+    if (!reactionEvent) return;
+
+    setMessageReactions((prev) => {
+      const reactions = [...(prev[reactionEvent.messageId] || [])];
+      const idx = reactions.findIndex(r => r.emoji === reactionEvent.emoji);
+
+      if (reactionEvent.action === "add") {
+        if (idx >= 0) {
+          // Don't add duplicate if it's the current user (already added optimistically)
+          const userExists = reactions[idx].users.some(u => u.userId === reactionEvent.userId);
+          if (!userExists) {
+            reactions[idx] = {
+              ...reactions[idx],
+              count: reactions[idx].count + 1,
+              users: [...reactions[idx].users, { userId: reactionEvent.userId, displayName: reactionEvent.displayName, avatarUrl: null }],
+              hasCurrentUser: reactions[idx].hasCurrentUser || reactionEvent.userId === currentUserId,
+            };
+          }
+        } else {
+          reactions.push({
+            emoji: reactionEvent.emoji,
+            count: 1,
+            hasCurrentUser: reactionEvent.userId === currentUserId,
+            users: [{ userId: reactionEvent.userId, displayName: reactionEvent.displayName, avatarUrl: null }],
+          });
+        }
+      } else if (reactionEvent.action === "remove") {
+        if (idx >= 0) {
+          if (reactions[idx].count <= 1) {
+            reactions.splice(idx, 1);
+          } else {
+            reactions[idx] = {
+              ...reactions[idx],
+              count: reactions[idx].count - 1,
+              users: reactions[idx].users.filter(u => u.userId !== reactionEvent.userId),
+              hasCurrentUser: reactionEvent.userId === currentUserId ? false : reactions[idx].hasCurrentUser,
+            };
+          }
+        }
+      }
+
+      return { ...prev, [reactionEvent.messageId]: reactions };
+    });
+  }, [reactionEvent, currentUserId]);
 
   // Load messages
   const loadMessages = useCallback(async (cursor?: string) => {
@@ -706,6 +1008,7 @@ function ChatView({
     setNextCursor(null);
     setHasMore(false);
     setMessageReadStatus({});
+    setMessageReactions({});
     setSelectedMessageForReceipts(null);
     lastMarkedReadRef.current = null;
     loadMessages();
@@ -1070,24 +1373,32 @@ function ChatView({
                 </div>
 
                 {/* Messages for this date */}
-                {group.messages.map((message) => (
-                  <div key={message.id} className="relative">
-                    <MessageBubble
-                      message={message}
-                      isCurrentUser={message.senderId === currentUserId}
-                      readStatus={messageReadStatus[message.id]}
-                      onShowReadReceipts={setSelectedMessageForReceipts}
-                    />
-                    {/* Read receipts popover */}
-                    {selectedMessageForReceipts === message.id && (
-                      <ReadReceiptsPopover
-                        messageId={message.id}
-                        isOpen={true}
-                        onClose={() => setSelectedMessageForReceipts(null)}
+                {group.messages.map((message) => {
+                  // Merge message reactions from state
+                  const messageWithReactions = {
+                    ...message,
+                    reactions: messageReactions[message.id] || message.reactions || [],
+                  };
+                  return (
+                    <div key={message.id} className="relative">
+                      <MessageBubble
+                        message={messageWithReactions}
+                        isCurrentUser={message.senderId === currentUserId}
+                        readStatus={messageReadStatus[message.id]}
+                        onShowReadReceipts={setSelectedMessageForReceipts}
+                        onToggleReaction={toggleReaction}
                       />
-                    )}
-                  </div>
-                ))}
+                      {/* Read receipts popover */}
+                      {selectedMessageForReceipts === message.id && (
+                        <ReadReceiptsPopover
+                          messageId={message.id}
+                          isOpen={true}
+                          onClose={() => setSelectedMessageForReceipts(null)}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             ))}
 
@@ -1648,6 +1959,9 @@ export default function MessengerPage() {
   // Track last read receipt event for the current chat
   const [lastReadReceiptEvent, setLastReadReceiptEvent] = useState<ReadReceiptEvent | null>(null);
 
+  // Track last reaction event for the current chat
+  const [lastReactionEvent, setLastReactionEvent] = useState<ReactionEvent | null>(null);
+
   // Handle read receipt events
   const handleReadReceiptEvent = useCallback((event: ReadReceiptEvent) => {
     // Update the state so ChatView can react to it
@@ -1674,6 +1988,12 @@ export default function MessengerPage() {
     }
   }, [currentUserId]);
 
+  // Handle reaction events
+  const handleReactionEvent = useCallback((event: ReactionEvent) => {
+    // Pass reaction events to ChatView
+    setLastReactionEvent(event);
+  }, []);
+
   // WebSocket connection
   const { status: wsStatus, reconnect, sendTypingStart, sendTypingStop } = useWebSocket({
     token: null, // Will use cookie
@@ -1681,6 +2001,7 @@ export default function MessengerPage() {
     onTyping: handleTypingEvent,
     onPresence: handlePresenceEvent,
     onReadReceipt: handleReadReceiptEvent,
+    onReaction: handleReactionEvent,
   });
 
   // Fetch current user ID
@@ -1882,6 +2203,7 @@ export default function MessengerPage() {
             onTypingStart={() => sendTypingStart(selectedChat.id)}
             onTypingStop={() => sendTypingStop(selectedChat.id)}
             onlineUsers={onlineUsers}
+            reactionEvent={lastReactionEvent}
           />
         ) : selectedChat ? (
           <div className="flex-1 flex items-center justify-center text-gray-500">
