@@ -422,8 +422,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 26,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented useWebSocket hook (apps/web/src/hooks/useWebSocket.ts) with exponential backoff reconnection (1s-30s, max 10 retries). MessengerPage subscribes to WebSocket, passes incoming messages to ChatView for real-time updates. Optimistic UI shows pending messages with lighter blue color and 'Sending...' indicator. Connection status indicator shows connected/connecting/reconnecting/disconnected states with reconnect button."
     },
     {
       "id": "US-027",

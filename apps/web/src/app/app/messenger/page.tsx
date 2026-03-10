@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { Search, Plus, MessageCircle, Users, Bell, BellOff, AtSign, Info } from "lucide-react";
+import { Search, Plus, MessageCircle, Users, Bell, BellOff, AtSign, Info, Wifi, WifiOff, Loader2 } from "lucide-react";
 import * as Dialog from "@radix-ui/react-dialog";
 import MessageInput from "@/components/MessageInput";
+import { useWebSocket, ConnectionStatus, WebSocketMessage } from "@/hooks/useWebSocket";
 
 interface Chat {
   id: string;
@@ -207,6 +208,7 @@ function renderMessageContent(message: Message): React.ReactNode {
 
 function MessageBubble({ message, isCurrentUser }: { message: Message; isCurrentUser: boolean }) {
   const isSystem = message.type === "system";
+  const isPending = message.id.startsWith("pending-");
 
   if (isSystem) {
     return (
@@ -249,20 +251,31 @@ function MessageBubble({ message, isCurrentUser }: { message: Message; isCurrent
         <div
           className={`px-3 py-2 rounded-2xl ${
             isCurrentUser
-              ? "bg-blue-600 text-white rounded-br-md"
+              ? isPending
+                ? "bg-blue-400 text-white rounded-br-md"
+                : "bg-blue-600 text-white rounded-br-md"
               : "bg-gray-100 text-gray-900 rounded-bl-md"
           }`}
         >
           {renderMessageContent(message)}
         </div>
 
-        {/* Timestamp and edited indicator */}
+        {/* Timestamp, pending indicator, and edited indicator */}
         <div className="flex items-center gap-1 px-1 mt-0.5">
-          <span className="text-[10px] text-gray-400">
-            {formatMessageTime(message.createdAt)}
-          </span>
-          {message.editedAt && (
-            <span className="text-[10px] text-gray-400">(edited)</span>
+          {isPending ? (
+            <span className="text-[10px] text-gray-400 flex items-center gap-1">
+              <Loader2 className="w-2.5 h-2.5 animate-spin" />
+              Sending...
+            </span>
+          ) : (
+            <>
+              <span className="text-[10px] text-gray-400">
+                {formatMessageTime(message.createdAt)}
+              </span>
+              {message.editedAt && (
+                <span className="text-[10px] text-gray-400">(edited)</span>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -270,14 +283,32 @@ function MessageBubble({ message, isCurrentUser }: { message: Message; isCurrent
   );
 }
 
+interface PendingMessage {
+  tempId: string;
+  chatId: string;
+  senderId: string;
+  type: "text" | "rich_text";
+  content: Record<string, unknown>;
+  createdAt: string;
+  sender: {
+    id: string;
+    displayName: string | null;
+    avatarUrl: string | null;
+  };
+  isPending: true;
+}
+
 function ChatView({
   chat,
   currentUserId,
+  incomingMessage,
 }: {
   chat: Chat;
   currentUserId: string;
+  incomingMessage: Message | null;
 }) {
   const [messages, setMessages] = useState<Message[]>([]);
+  const [pendingMessages, setPendingMessages] = useState<PendingMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -349,10 +380,38 @@ function ChatView({
   // Initial load and reload when chat changes
   useEffect(() => {
     setMessages([]);
+    setPendingMessages([]);
     setNextCursor(null);
     setHasMore(false);
     loadMessages();
   }, [chat.id, loadMessages]);
+
+  // Handle incoming WebSocket messages
+  useEffect(() => {
+    if (!incomingMessage || incomingMessage.chatId !== chat.id) return;
+
+    setMessages((prev) => {
+      // Check if message already exists (to avoid duplicates)
+      if (prev.some((m) => m.id === incomingMessage.id)) {
+        return prev;
+      }
+      return [...prev, incomingMessage];
+    });
+
+    // Clear any matching pending messages (optimistic UI confirmation)
+    setPendingMessages((prev) =>
+      prev.filter((p) => {
+        // Match by content similarity (simple heuristic)
+        if (incomingMessage.senderId !== p.senderId) return true;
+        const incomingText = (incomingMessage.content?.text as string) || "";
+        const pendingText = (p.content?.text as string) || "";
+        return incomingText !== pendingText;
+      })
+    );
+
+    // Scroll to bottom for new messages
+    setTimeout(() => scrollToBottom("smooth"), 50);
+  }, [incomingMessage, chat.id, scrollToBottom]);
 
   // Scroll to bottom on initial load
   useEffect(() => {
@@ -383,21 +442,45 @@ function ChatView({
     }
   }, [isLoadingMore, hasMore, nextCursor, loadMessages]);
 
-  // Send message
+  // Send message with optimistic UI
   const handleSendMessage = useCallback(async (content: { html: string; text: string }) => {
     const text = content.text.trim();
-    if (!text || isSending) return;
+    if (!text) return;
 
     const token = getCookie("session_token");
     if (!token) return;
 
+    // Determine message type based on content
+    const hasFormatting = content.html !== `<p>${content.text}</p>` && content.html !== content.text;
+    const messageType = hasFormatting ? "rich_text" : "text";
+    const messageContent = hasFormatting
+      ? { html: content.html, text: content.text }
+      : { text };
+
+    // Create optimistic pending message
+    const tempId = `pending-${Date.now()}-${Math.random().toString(36).substring(2)}`;
+    const pendingMessage: PendingMessage = {
+      tempId,
+      chatId: chat.id,
+      senderId: currentUserId,
+      type: messageType as "text" | "rich_text",
+      content: messageContent,
+      createdAt: new Date().toISOString(),
+      sender: {
+        id: currentUserId,
+        displayName: null, // Will appear as current user anyway
+        avatarUrl: null,
+      },
+      isPending: true,
+    };
+
+    // Add to pending messages immediately (optimistic)
+    setPendingMessages((prev) => [...prev, pendingMessage]);
+    setTimeout(() => scrollToBottom("smooth"), 50);
+
     setIsSending(true);
 
     try {
-      // Determine message type based on content
-      // If HTML has formatting beyond plain text, send as rich_text
-      const hasFormatting = content.html !== `<p>${content.text}</p>` && content.html !== content.text;
-
       const res = await fetch(`/api/chats/${chat.id}/messages`, {
         method: "POST",
         headers: {
@@ -405,10 +488,8 @@ function ChatView({
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          type: hasFormatting ? "rich_text" : "text",
-          content: hasFormatting
-            ? { html: content.html, text: content.text }
-            : { text },
+          type: messageType,
+          content: messageContent,
         }),
       });
 
@@ -417,24 +498,52 @@ function ChatView({
         throw new Error(data.error || "Failed to send message");
       }
 
-      const newMessage = await res.json() as Message;
-      setMessages((prev) => [...prev, newMessage]);
+      // Message sent successfully - WebSocket will deliver the confirmed message
+      // Remove the pending message since the real one will arrive via WebSocket
+      setPendingMessages((prev) => prev.filter((p) => p.tempId !== tempId));
 
-      // Scroll to bottom after sending
-      setTimeout(() => scrollToBottom("smooth"), 50);
+      // Also add to local state in case WebSocket is delayed
+      const newMessage = await res.json() as Message;
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === newMessage.id)) {
+          return prev;
+        }
+        return [...prev, newMessage];
+      });
     } catch (err) {
       console.error("Failed to send message:", err);
+      // Remove the pending message on failure
+      setPendingMessages((prev) => prev.filter((p) => p.tempId !== tempId));
     } finally {
       setIsSending(false);
     }
-  }, [chat.id, isSending, scrollToBottom]);
+  }, [chat.id, currentUserId, scrollToBottom]);
+
+  // Combine regular messages with pending messages for display
+  const allMessages = useMemo(() => {
+    const pendingAsMessages: Message[] = pendingMessages.map((p) => ({
+      id: p.tempId,
+      chatId: p.chatId,
+      senderId: p.senderId,
+      type: p.type,
+      content: p.content,
+      threadId: null,
+      replyToId: null,
+      editedAt: null,
+      recalledAt: null,
+      scheduledFor: null,
+      createdAt: p.createdAt,
+      sender: p.sender,
+    }));
+    return [...messages, ...pendingAsMessages];
+  }, [messages, pendingMessages]);
 
   // Group messages by date
   const groupedMessages = useMemo(() => {
     const groups: { date: string; dateLabel: string; messages: Message[] }[] = [];
     let currentDateKey = "";
 
-    for (const message of messages) {
+    for (const message of allMessages) {
       const dateKey = getDateKey(message.createdAt);
 
       if (dateKey !== currentDateKey) {
@@ -450,7 +559,7 @@ function ChatView({
     }
 
     return groups;
-  }, [messages]);
+  }, [allMessages]);
 
   return (
     <div className="flex flex-col h-full">
@@ -970,6 +1079,33 @@ function NewChatDialog({
   );
 }
 
+function ConnectionStatusIndicator({ status }: { status: ConnectionStatus }) {
+  if (status === "connected") {
+    return (
+      <div className="flex items-center gap-1.5 text-xs text-green-600">
+        <Wifi className="w-3.5 h-3.5" />
+        <span>Connected</span>
+      </div>
+    );
+  }
+
+  if (status === "connecting" || status === "reconnecting") {
+    return (
+      <div className="flex items-center gap-1.5 text-xs text-amber-600">
+        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+        <span>{status === "reconnecting" ? "Reconnecting..." : "Connecting..."}</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-1.5 text-xs text-red-500">
+      <WifiOff className="w-3.5 h-3.5" />
+      <span>Disconnected</span>
+    </div>
+  );
+}
+
 export default function MessengerPage() {
   const [chats, setChats] = useState<Chat[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -979,6 +1115,46 @@ export default function MessengerPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isNewChatDialogOpen, setIsNewChatDialogOpen] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [incomingMessage, setIncomingMessage] = useState<Message | null>(null);
+
+  // Handle incoming WebSocket messages
+  const handleWebSocketMessage = useCallback((message: WebSocketMessage) => {
+    if (message.type === "message" && message.payload) {
+      const payload = message.payload as Message;
+      setIncomingMessage(payload);
+
+      // Update chat list with new last message
+      setChats((prevChats) =>
+        prevChats.map((chat) => {
+          if (chat.id === payload.chatId) {
+            return {
+              ...chat,
+              lastMessage: {
+                id: payload.id,
+                type: payload.type,
+                content: payload.content,
+                createdAt: payload.createdAt,
+                senderName: payload.sender?.displayName || null,
+              },
+              lastMessageAt: payload.createdAt,
+              // Increment unread count only if not from current user
+              unreadCount:
+                payload.senderId !== currentUserId
+                  ? chat.unreadCount + 1
+                  : chat.unreadCount,
+            };
+          }
+          return chat;
+        })
+      );
+    }
+  }, [currentUserId]);
+
+  // WebSocket connection
+  const { status: wsStatus, reconnect } = useWebSocket({
+    token: null, // Will use cookie
+    onMessage: handleWebSocketMessage,
+  });
 
   // Fetch current user ID
   useEffect(() => {
@@ -1074,7 +1250,7 @@ export default function MessengerPage() {
       <div className="w-80 border-r border-gray-200 bg-white flex flex-col h-full">
         {/* Header */}
         <div className="flex-shrink-0 p-4 border-b border-gray-200">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-2">
             <h2 className="text-lg font-semibold text-gray-900">Messenger</h2>
             <button
               onClick={() => setIsNewChatDialogOpen(true)}
@@ -1083,6 +1259,18 @@ export default function MessengerPage() {
             >
               <Plus className="w-5 h-5" />
             </button>
+          </div>
+          {/* Connection Status */}
+          <div className="flex items-center justify-between mb-3">
+            <ConnectionStatusIndicator status={wsStatus} />
+            {wsStatus === "disconnected" && (
+              <button
+                onClick={reconnect}
+                className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+              >
+                Reconnect
+              </button>
+            )}
           </div>
 
           {/* Search */}
@@ -1158,7 +1346,11 @@ export default function MessengerPage() {
       {/* Center Panel - Chat View */}
       <div className="flex-1 flex flex-col bg-gray-50">
         {selectedChat && currentUserId ? (
-          <ChatView chat={selectedChat} currentUserId={currentUserId} />
+          <ChatView
+            chat={selectedChat}
+            currentUserId={currentUserId}
+            incomingMessage={incomingMessage}
+          />
         ) : selectedChat ? (
           <div className="flex-1 flex items-center justify-center text-gray-500">
             Loading...
