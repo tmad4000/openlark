@@ -226,8 +226,8 @@
         "Typecheck passes"
       ],
       "priority": 14,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created apps/api/src/routes/departments.ts with 6 endpoints. GET /orgs/:id/departments returns hierarchical department tree for the organization. POST /orgs/:id/departments creates department with name and optional parent_id. PATCH /departments/:id updates name or moves to new parent (with circular reference detection). DELETE /departments/:id removes department only if no members or child departments. POST /departments/:id/members adds user to department with role (head/member). DELETE /departments/:id/members/:userId removes user from department. All endpoints validate UUID formats and organization membership. Typecheck passes."
     },
     {
       "id": "US-015",

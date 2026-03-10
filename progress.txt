@@ -19,3 +19,4 @@
 [2026-03-05 03:58] US-011 — App shell layout with navigation rail — PASS
 [2026-03-10 15:48] US-012 — Organization creation and settings API — PASS
 [2026-03-10 15:52] US-013 — User invitation API — PASS
+[2026-03-10 15:54] US-014 — Department management API — PASS
