@@ -125,6 +125,33 @@ Started: Wed Mar  4 13:58:43 MST 2026
 - Chat membership is the security boundary, NOT org membership
 - A user in org A can be a member of a chat created in org B
 
+### Frontend Structure (Iteration 8)
+- App Router: `apps/web/src/app/` with route groups for auth protection
+- Route groups: `(app)/` wraps authenticated routes with AppShell layout
+- Components: `src/components/ui/` (primitives), `src/components/layout/` (shell)
+- Hooks: `src/hooks/use-auth.tsx`, `src/hooks/use-theme.tsx`
+- Utilities: `src/lib/utils.ts` (cn), `src/lib/api.ts` (API client)
+- Tests: `src/test/setup.ts` for jest-dom matchers, co-located `.test.tsx` files
+
+### Frontend Testing (Iteration 8)
+- vitest + React Testing Library + jest-dom
+- vitest.config.ts: `globals: true`, `setupFiles: ["./src/test/setup.ts"]`
+- Component tests: use `render`, `screen`, `fireEvent` from @testing-library/react
+- Test file location: co-located with components (e.g., `button.test.tsx` next to `button.tsx`)
+
+### UI Component Pattern (Iteration 8)
+- Use `type X = React.ComponentProps<...>` not `interface X extends {} {}` (ESLint rule)
+- forwardRef for all DOM-exposing components
+- Radix UI primitives for accessible unstyled components
+- `cn()` utility for conditional class merging with tailwind-merge
+- CVA (class-variance-authority) for variant-based styling
+
+### Auth Flow (Frontend, Iteration 8)
+- API client stores JWT in localStorage via `api.setToken()`
+- AuthProvider checks localStorage on mount, calls `/auth/me` to validate
+- Protected routes in `(app)/` layout redirect to `/login` if not authenticated
+- Login/register forms call API, store token, then redirect to `/messenger`
+
 ---
 
 ## 2026-03-05 - Iteration 1 - T-001
@@ -1118,6 +1145,84 @@ From progress log that held true this iteration:
 
 ### New pattern observed
 - **Author-or-admin permission** (`messenger.service.ts:1038-1045`): For announcements, either the author OR an admin can update. This is distinct from admin-only (tabs) and provides a flexible permission model for user-created content.
+
+---
+
+## 2026-03-10 - Iteration 8 - T-023 (Frontend Shell)
+
+### What was implemented
+Frontend shell with three-panel layout matching Lark (T-023 subtasks 1-3):
+
+1. **Test infrastructure** (`apps/web/src/test/setup.ts`):
+   - vitest + React Testing Library + jest-dom matchers
+   - Updated vitest.config.ts with setup file, globals, test includes
+   - 23 tests for components and utilities
+
+2. **Three-panel layout** (`apps/web/src/components/layout/`):
+   - `NavigationRail`: Vertical icon bar with module links (Messenger, Calendar, Docs, etc.)
+   - `AppShell`: Wraps authenticated routes with navigation rail + optional sidebars
+   - Uses Radix UI Tooltip for accessible hover labels
+
+3. **Auth screens** (`apps/web/src/app/login/`, `register/`):
+   - Login page: email + password form, error handling, redirect to /messenger
+   - Register page: org name, display name, email, password with validation hints
+   - Connected to API via `src/lib/api.ts` client
+
+4. **Theme system** (`apps/web/src/hooks/use-theme.tsx`):
+   - Light/dark mode with `system` option for OS preference detection
+   - Theme persisted to localStorage
+   - Applied via `html.dark` class toggle
+
+5. **Auth context** (`apps/web/src/hooks/use-auth.tsx`):
+   - AuthProvider manages user/org state with JWT token
+   - Auto-refresh user on mount from localStorage token
+   - login/register/logout methods connected to API
+
+6. **API client** (`apps/web/src/lib/api.ts`):
+   - TypeScript types for User, Organization, Chat, Message
+   - Auth endpoints: register, login, logout, me
+   - Messenger endpoints: getChats, createChat, getMessages, sendMessage
+   - Auto-attaches Authorization header when token present
+
+7. **UI components** (`apps/web/src/components/ui/`):
+   - Button with variants (default, secondary, outline, ghost, link) and sizes
+   - Input with dark mode support
+   - Label for form fields
+   - Card with header/content/footer sections
+   - Tooltip (Radix UI based)
+
+### Files changed
+- `apps/web/package.json` - Added Radix UI, testing-library, lucide-react deps
+- `apps/web/vitest.config.ts` - Updated for React testing
+- `apps/web/src/app/layout.tsx` - Added providers wrapper
+- `apps/web/src/app/page.tsx` - Redirect to login/messenger
+- `apps/web/src/app/globals.css` - Added dark mode and animation keyframes
+- 22 new files in apps/web/src/
+
+### Tests added
+- **9 Button tests**: variants, sizes, disabled, asChild
+- **7 Input tests**: value changes, types, disabled, placeholder
+- **7 cn utility tests**: class merging, conditionals, tailwind-merge
+
+### Plan deviations
+- Subtask 4 (keyboard shortcuts + PWA) deferred - core shell is functional
+
+### Learnings for future iterations
+- **Pattern reinforced**: Radix UI primitives provide accessible, unstyled components to build on
+- **Pattern reinforced**: forwardRef for all UI components enables composition
+- **New pattern**: Client-only providers wrapped in a `providers.tsx` file for clean server/client boundary
+- **New pattern**: Auth protection via route group layout `(app)/layout.tsx`
+- **Gotcha**: ESLint no-empty-object-type requires `type X = ...` instead of `interface X {}`
+- **Self-reflection**: Frontend setup took one iteration because of established patterns from shadcn/ui
+
+### Tech debt addressed
+- ✅ Web app tests (was "No web app tests" from iteration 6)
+
+### Tech debt remaining
+- Auto-generated tabs not implemented (FR-2.15 partial)
+- Typing/presence tests skipped (timing sensitivity)
+- Login needs org context for multi-tenant (auth.service.ts:122)
+- T-023 subtask 4: keyboard shortcuts (Cmd+K) and PWA manifest
 
 ---
 
