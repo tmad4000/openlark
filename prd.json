@@ -506,8 +506,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 31,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented @mention autocomplete using TipTap Mention extension with custom suggestion UI. Added GET /chats/:id/members endpoint to fetch chat members for autocomplete (filters out current user). MessageInput now accepts members prop, shows dropdown on @ with filtered results, inserts styled mention node (blue background). Mentions stored in message content.mentions array as {id, displayName}. API publishes mention notifications to user presence channels. TypeScript passes."
     },
     {
       "id": "US-032",

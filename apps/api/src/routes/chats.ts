@@ -620,6 +620,59 @@ export async function chatsRoutes(fastify: FastifyInstance) {
   );
 
   /**
+   * GET /chats/:id/members - Get members of a chat
+   * Returns: Array of chat members with user info
+   */
+  fastify.get<{ Params: { id: string } }>(
+    "/chats/:id/members",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id } = request.params;
+
+      // Validate UUID format
+      if (!UUID_REGEX.test(id)) {
+        return reply.status(400).send({
+          error: "Invalid chat ID format",
+        });
+      }
+
+      // Verify user is a member of this chat
+      const [membership] = await db
+        .select()
+        .from(chatMembers)
+        .where(
+          and(
+            eq(chatMembers.chatId, id),
+            eq(chatMembers.userId, request.user.id)
+          )
+        )
+        .limit(1);
+
+      if (!membership) {
+        return reply.status(403).send({
+          error: "Access denied - not a member of this chat",
+        });
+      }
+
+      // Get all members with user info
+      const members = await db
+        .select({
+          userId: chatMembers.userId,
+          role: chatMembers.role,
+          joinedAt: chatMembers.joinedAt,
+          displayName: users.displayName,
+          avatarUrl: users.avatarUrl,
+          email: users.email,
+        })
+        .from(chatMembers)
+        .innerJoin(users, eq(chatMembers.userId, users.id))
+        .where(eq(chatMembers.chatId, id));
+
+      return reply.status(200).send({ members });
+    }
+  );
+
+  /**
    * GET /chats/:id/typing - Get users currently typing in a chat
    * Returns: Array of typing users
    */

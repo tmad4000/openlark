@@ -3,7 +3,7 @@ import { db } from "../db";
 import { messages, chatMembers, chats, users, messageReadReceipts, messageReactions } from "../db/schema";
 import { eq, and, desc, lt, gt, inArray, sql } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
-import { publish, getChatChannel } from "../lib/redis";
+import { publish, getChatChannel, getUserPresenceChannel } from "../lib/redis";
 
 // UUID validation regex
 const UUID_REGEX =
@@ -212,6 +212,37 @@ export async function messagesRoutes(fastify: FastifyInstance) {
           },
         },
       });
+
+      // Publish mention notifications for mentioned users
+      const mentions = content.mentions as Array<{ id: string; displayName: string }> | undefined;
+      if (mentions && mentions.length > 0) {
+        // Get chat name for the notification
+        const [chatInfo] = await db
+          .select({ name: chats.name, type: chats.type })
+          .from(chats)
+          .where(eq(chats.id, chatId))
+          .limit(1);
+
+        for (const mention of mentions) {
+          // Don't notify the sender if they mention themselves
+          if (mention.id === currentUserId) continue;
+
+          await publish(getUserPresenceChannel(mention.id), {
+            type: "mention",
+            payload: {
+              messageId: newMessage.id,
+              chatId,
+              chatName: chatInfo?.name || "Chat",
+              chatType: chatInfo?.type || "group",
+              senderId: request.user.id,
+              senderName: request.user.displayName,
+              mentionedUserId: mention.id,
+              text: content.text || "",
+              createdAt: newMessage.createdAt,
+            },
+          });
+        }
+      }
 
       // Return message with sender info
       return reply.status(201).send({

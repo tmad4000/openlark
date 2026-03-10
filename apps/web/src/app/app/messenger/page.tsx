@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { Search, Plus, MessageCircle, Users, Bell, BellOff, AtSign, Info, Wifi, WifiOff, Loader2, Check, CheckCheck, Circle, Smile, MoreHorizontal, Reply, X, MessageSquare } from "lucide-react";
+import { Search, Plus, MessageCircle, Users, Bell, BellOff, AtSign, Info, Wifi, WifiOff, Loader2, Check, CheckCheck, Circle, MoreHorizontal, Reply, X, MessageSquare } from "lucide-react";
 import * as Dialog from "@radix-ui/react-dialog";
-import MessageInput from "@/components/MessageInput";
+import MessageInput, { MentionUser } from "@/components/MessageInput";
 import { useWebSocket, ConnectionStatus, WebSocketMessage, TypingEvent, PresenceEvent, ReadReceiptEvent, ReactionEvent } from "@/hooks/useWebSocket";
 import data from "@emoji-mart/data";
 import Picker from "@emoji-mart/react";
@@ -788,6 +788,7 @@ interface ThreadPanelProps {
   onTypingStop: () => void;
   onToggleReaction: (messageId: string, emoji: string) => void;
   incomingMessage: Message | null;
+  members: MentionUser[];
 }
 
 function ThreadPanel({
@@ -799,6 +800,7 @@ function ThreadPanel({
   onTypingStop,
   onToggleReaction,
   incomingMessage,
+  members,
 }: ThreadPanelProps) {
   const [parentMessage, setParentMessage] = useState<Message | null>(null);
   const [replies, setReplies] = useState<Message[]>([]);
@@ -883,7 +885,7 @@ function ThreadPanel({
   }, [incomingMessage, parentMessageId, scrollToBottom]);
 
   // Send reply
-  const handleSendReply = useCallback(async (content: { html: string; text: string }) => {
+  const handleSendReply = useCallback(async (content: { html: string; text: string; mentions?: Array<{ id: string; displayName: string }> }) => {
     const text = content.text.trim();
     if (!text) return;
 
@@ -893,8 +895,8 @@ function ThreadPanel({
     const hasFormatting = content.html !== `<p>${content.text}</p>` && content.html !== content.text;
     const messageType = hasFormatting ? "rich_text" : "text";
     const messageContent = hasFormatting
-      ? { html: content.html, text: content.text }
-      : { text };
+      ? { html: content.html, text: content.text, mentions: content.mentions }
+      : { text, mentions: content.mentions };
 
     setIsSending(true);
 
@@ -1025,6 +1027,7 @@ function ThreadPanel({
           isSending={isSending}
           placeholder="Reply in thread..."
           sendOnEnter={true}
+          members={members}
         />
       </div>
     </div>
@@ -1071,6 +1074,9 @@ function ChatView({
 
   // Thread panel state
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+
+  // Chat members for @mention autocomplete
+  const [chatMembers, setChatMembers] = useState<MentionUser[]>([]);
 
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -1300,6 +1306,37 @@ function ChatView({
     loadMessages();
   }, [chat.id, loadMessages]);
 
+  // Fetch chat members for @mention autocomplete
+  useEffect(() => {
+    const fetchMembers = async () => {
+      const token = getCookie("session_token");
+      if (!token) return;
+
+      try {
+        const res = await fetch(`/api/chats/${chat.id}/members`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          // Filter out current user from mention suggestions
+          const members = (data.members || [])
+            .filter((m: { userId: string }) => m.userId !== currentUserId)
+            .map((m: { userId: string; displayName: string | null; avatarUrl: string | null }) => ({
+              id: m.userId,
+              displayName: m.displayName,
+              avatarUrl: m.avatarUrl,
+            }));
+          setChatMembers(members);
+        }
+      } catch {
+        // Silent fail - mentions are not critical
+      }
+    };
+
+    fetchMembers();
+  }, [chat.id, currentUserId]);
+
   // Handle incoming read receipt events
   useEffect(() => {
     if (!onReadReceiptUpdate) return;
@@ -1443,7 +1480,7 @@ function ChatView({
   }, [isLoadingMore, hasMore, nextCursor, loadMessages]);
 
   // Send message with optimistic UI
-  const handleSendMessage = useCallback(async (content: { html: string; text: string }) => {
+  const handleSendMessage = useCallback(async (content: { html: string; text: string; mentions?: Array<{ id: string; displayName: string }> }) => {
     const text = content.text.trim();
     if (!text) return;
 
@@ -1454,8 +1491,8 @@ function ChatView({
     const hasFormatting = content.html !== `<p>${content.text}</p>` && content.html !== content.text;
     const messageType = hasFormatting ? "rich_text" : "text";
     const messageContent = hasFormatting
-      ? { html: content.html, text: content.text }
-      : { text };
+      ? { html: content.html, text: content.text, mentions: content.mentions }
+      : { text, mentions: content.mentions };
 
     // Create optimistic pending message
     const tempId = `pending-${Date.now()}-${Math.random().toString(36).substring(2)}`;
@@ -1725,6 +1762,7 @@ function ChatView({
             isSending={isSending}
             placeholder="Type a message..."
             sendOnEnter={true}
+            members={chatMembers}
           />
         </div>
       </div>
@@ -1740,6 +1778,7 @@ function ChatView({
           onTypingStop={onTypingStop}
           onToggleReaction={toggleReaction}
           incomingMessage={incomingMessage}
+          members={chatMembers}
         />
       )}
     </div>

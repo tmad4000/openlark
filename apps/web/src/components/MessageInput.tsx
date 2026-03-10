@@ -1,11 +1,14 @@
 "use client";
 
-import { useCallback, useRef, useState, useEffect } from "react";
-import { useEditor, EditorContent, Editor } from "@tiptap/react";
+import { useCallback, useRef, useState, useEffect, forwardRef, useImperativeHandle, useMemo } from "react";
+import { useEditor, EditorContent, ReactRenderer } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
 import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
+import Mention from "@tiptap/extension-mention";
+import { SuggestionProps, SuggestionKeyDownProps } from "@tiptap/suggestion";
+import tippy, { Instance as TippyInstance } from "tippy.js";
 import {
   Bold,
   Italic,
@@ -26,13 +29,20 @@ import {
 import data from "@emoji-mart/data";
 import Picker from "@emoji-mart/react";
 
+export interface MentionUser {
+  id: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+}
+
 interface MessageInputProps {
-  onSend: (content: { html: string; text: string }) => void;
+  onSend: (content: { html: string; text: string; mentions?: Array<{ id: string; displayName: string }> }) => void;
   onTypingStart?: () => void;
   onTypingStop?: () => void;
   isSending?: boolean;
   placeholder?: string;
   sendOnEnter?: boolean;
+  members?: MentionUser[];
 }
 
 interface FormatButtonProps {
@@ -128,6 +138,174 @@ interface EmojiData {
   native: string;
 }
 
+// Mention suggestion list component
+interface MentionListProps {
+  items: MentionUser[];
+  command: (item: { id: string; label: string }) => void;
+}
+
+interface MentionListRef {
+  onKeyDown: (props: SuggestionKeyDownProps) => boolean;
+}
+
+const MentionList = forwardRef<MentionListRef, MentionListProps>(
+  ({ items, command }, ref) => {
+    const [selectedIndex, setSelectedIndex] = useState(0);
+
+    const selectItem = useCallback(
+      (index: number) => {
+        const item = items[index];
+        if (item) {
+          command({ id: item.id, label: item.displayName || item.id });
+        }
+      },
+      [items, command]
+    );
+
+    useEffect(() => {
+      setSelectedIndex(0);
+    }, [items]);
+
+    useImperativeHandle(ref, () => ({
+      onKeyDown: ({ event }: SuggestionKeyDownProps) => {
+        if (event.key === "ArrowUp") {
+          setSelectedIndex((prev) => (prev + items.length - 1) % items.length);
+          return true;
+        }
+
+        if (event.key === "ArrowDown") {
+          setSelectedIndex((prev) => (prev + 1) % items.length);
+          return true;
+        }
+
+        if (event.key === "Enter") {
+          selectItem(selectedIndex);
+          return true;
+        }
+
+        return false;
+      },
+    }));
+
+    if (items.length === 0) {
+      return (
+        <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-2 text-sm text-gray-500">
+          No users found
+        </div>
+      );
+    }
+
+    return (
+      <div className="bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden max-h-60 overflow-y-auto">
+        {items.map((item, index) => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => selectItem(index)}
+            className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm transition-colors ${
+              index === selectedIndex
+                ? "bg-blue-50 text-blue-700"
+                : "text-gray-700 hover:bg-gray-50"
+            }`}
+          >
+            <div className="w-6 h-6 rounded-full overflow-hidden bg-gray-200 flex-shrink-0">
+              {item.avatarUrl ? (
+                <img
+                  src={item.avatarUrl}
+                  alt={item.displayName || "User"}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center bg-blue-600 text-white text-xs font-medium">
+                  {item.displayName?.charAt(0).toUpperCase() || "?"}
+                </div>
+              )}
+            </div>
+            <span className="truncate">{item.displayName || "Unknown"}</span>
+          </button>
+        ))}
+      </div>
+    );
+  }
+);
+
+MentionList.displayName = "MentionList";
+
+// Create suggestion configuration
+function createSuggestion(members: MentionUser[]) {
+  return {
+    items: ({ query }: { query: string }): MentionUser[] => {
+      const lowerQuery = query.toLowerCase();
+      return members
+        .filter((member) =>
+          member.displayName?.toLowerCase().includes(lowerQuery) ||
+          member.id.toLowerCase().includes(lowerQuery)
+        )
+        .slice(0, 5);
+    },
+
+    render: () => {
+      let component: ReactRenderer<MentionListRef, MentionListProps> | null = null;
+      let popup: TippyInstance[] | null = null;
+
+      return {
+        onStart: (props: SuggestionProps<MentionUser>) => {
+          component = new ReactRenderer(MentionList, {
+            props: {
+              items: props.items,
+              command: props.command,
+            },
+            editor: props.editor,
+          });
+
+          if (!props.clientRect) {
+            return;
+          }
+
+          popup = tippy("body", {
+            getReferenceClientRect: props.clientRect as () => DOMRect,
+            appendTo: () => document.body,
+            content: component.element,
+            showOnCreate: true,
+            interactive: true,
+            trigger: "manual",
+            placement: "bottom-start",
+          });
+        },
+
+        onUpdate: (props: SuggestionProps<MentionUser>) => {
+          component?.updateProps({
+            items: props.items,
+            command: props.command,
+          });
+
+          if (!props.clientRect) {
+            return;
+          }
+
+          popup?.[0]?.setProps({
+            getReferenceClientRect: props.clientRect as () => DOMRect,
+          });
+        },
+
+        onKeyDown: (props: SuggestionKeyDownProps) => {
+          if (props.event.key === "Escape") {
+            popup?.[0]?.hide();
+            return true;
+          }
+
+          return component?.ref?.onKeyDown(props) || false;
+        },
+
+        onExit: () => {
+          popup?.[0]?.destroy();
+          component?.destroy();
+        },
+      };
+    },
+  };
+}
+
 export default function MessageInput({
   onSend,
   onTypingStart,
@@ -135,6 +313,7 @@ export default function MessageInput({
   isSending = false,
   placeholder = "Type a message...",
   sendOnEnter = true,
+  members = [],
 }: MessageInputProps) {
   const [showToolbar, setShowToolbar] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
@@ -181,6 +360,9 @@ export default function MessageInput({
     };
   }, [onTypingStop]);
 
+  // Memoize the suggestion config so it updates when members change
+  const suggestion = useMemo(() => createSuggestion(members), [members]);
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -198,6 +380,12 @@ export default function MessageInput({
       }),
       Placeholder.configure({
         placeholder,
+      }),
+      Mention.configure({
+        HTMLAttributes: {
+          class: "mention bg-blue-100 text-blue-700 px-1 rounded font-medium",
+        },
+        suggestion,
       }),
     ],
     editorProps: {
@@ -221,7 +409,7 @@ export default function MessageInput({
       // Trigger typing indicator on content change
       handleTypingChange();
     },
-  });
+  }, [suggestion]);
 
   // Close emoji picker when clicking outside
   useEffect(() => {
@@ -241,6 +429,34 @@ export default function MessageInput({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [showEmojiPicker]);
 
+  // Extract mentions from the editor content
+  const extractMentions = useCallback((): Array<{ id: string; displayName: string }> => {
+    if (!editor) return [];
+
+    const mentions: Array<{ id: string; displayName: string }> = [];
+    const json = editor.getJSON();
+
+    function traverse(node: Record<string, unknown>) {
+      if (node.type === "mention" && node.attrs) {
+        const attrs = node.attrs as { id?: string; label?: string };
+        if (attrs.id) {
+          mentions.push({
+            id: attrs.id,
+            displayName: attrs.label || attrs.id,
+          });
+        }
+      }
+      if (Array.isArray(node.content)) {
+        for (const child of node.content) {
+          traverse(child as Record<string, unknown>);
+        }
+      }
+    }
+
+    traverse(json as Record<string, unknown>);
+    return mentions;
+  }, [editor]);
+
   const handleSend = useCallback(() => {
     if (!editor || isSending) return;
 
@@ -259,9 +475,12 @@ export default function MessageInput({
       onTypingStop?.();
     }
 
-    onSend({ html, text });
+    // Extract mentions from the content
+    const mentions = extractMentions();
+
+    onSend({ html, text, mentions: mentions.length > 0 ? mentions : undefined });
     editor.commands.clearContent();
-  }, [editor, isSending, onSend, onTypingStop]);
+  }, [editor, isSending, onSend, onTypingStop, extractMentions]);
 
   const handleEmojiSelect = useCallback(
     (emoji: EmojiData) => {
@@ -481,8 +700,8 @@ export default function MessageInput({
         <div className="px-3 py-1 bg-gray-50 border-t border-gray-100">
           <p className="text-[10px] text-gray-400">
             {sendOnEnter
-              ? "Press Enter to send, Shift+Enter for new line"
-              : "Press Cmd+Enter to send, Enter for new line"}
+              ? "Press Enter to send, Shift+Enter for new line. Type @ to mention."
+              : "Press Cmd+Enter to send, Enter for new line. Type @ to mention."}
           </p>
         </div>
       </div>
