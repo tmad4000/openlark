@@ -1453,3 +1453,80 @@ Completed T-023 by addressing reviewer feedback and implementing subtask 4:
 - PNG icons need to be generated from SVG placeholder
 
 ---
+
+## 2026-03-10 - Iteration 11 - T-003 (Messenger Frontend UI)
+
+### What was implemented
+Built the messenger frontend UI that was missing after T-023 (frontend shell):
+
+1. **ChatList component** (`apps/web/src/components/messenger/chat-list.tsx`):
+   - Fetches chats from API on mount
+   - Displays chat list with type icons (DM, group, topic)
+   - Highlights selected chat with blue background
+   - Shows loading, empty, and error states
+   - Static `addChat` method for external updates
+
+2. **MessageList component** (`apps/web/src/components/messenger/message-list.tsx`):
+   - Fetches messages with cursor-based pagination
+   - Infinite scroll (IntersectionObserver) to load older messages
+   - Auto-scrolls to bottom on new messages
+   - Message bubbles with sender attribution, timestamps, edited/recalled states
+   - Static `addMessage`, `updateMessage`, `removeMessage` methods
+
+3. **MessageInput component** (`apps/web/src/components/messenger/message-input.tsx`):
+   - Auto-resizing textarea (max 150px height)
+   - Enter to send, Shift+Enter for newline
+   - Loading state during send, error display
+   - Disabled state support
+
+4. **useWebSocket hook** (`apps/web/src/hooks/use-websocket.ts`):
+   - Connects with JWT token from API client
+   - Auto-reconnect with exponential backoff
+   - Event handlers: onMessage, onMessageEdited, onMessageRecalled, onTyping, onPresence
+   - `sendTyping(chatId, isTyping)` method for typing indicators
+   - Status indicator (connecting/connected/disconnected/error)
+
+5. **Messenger page wiring** (`apps/web/src/app/(app)/messenger/page.tsx`):
+   - ChatList in AppShell sidebar
+   - Message view when chat selected
+   - WebSocket status indicator in header
+   - Real-time message updates via WebSocket callbacks
+
+### Files changed
+- `apps/web/src/components/messenger/chat-list.tsx` - New
+- `apps/web/src/components/messenger/message-list.tsx` - New
+- `apps/web/src/components/messenger/message-input.tsx` - New
+- `apps/web/src/components/messenger/index.ts` - New (barrel file)
+- `apps/web/src/hooks/use-websocket.ts` - New
+- `apps/web/src/app/(app)/messenger/page.tsx` - Updated (wired components)
+- `apps/web/src/components/messenger/chat-list.test.tsx` - New (7 tests)
+- `apps/web/src/components/messenger/message-input.test.tsx` - New (9 tests)
+- `apps/web/src/hooks/use-websocket.test.ts` - New (9 tests)
+
+### Tests added
+- **7 ChatList tests**: loading state, empty state, renders items, selection, error, create button
+- **9 MessageInput tests**: render, disabled states, send click, Enter key, Shift+Enter, clear after send, error
+- **9 useWebSocket tests**: no token, connecting, connected, message events (3), typing events, disconnect
+
+### Plan deviations
+- None - identified and filled a gap between T-023 (shell) and T-003 (backend)
+
+### Learnings for future iterations
+- **Gap identified**: Frontend shell (T-023) and messenger backend (T-003) were both "done" but no task covered wiring them together. Added subtask to T-003.
+- **Pattern reinforced**: useWebSocket hook follows same pattern as useAuth - context-free, API-client dependent
+- **Pattern reinforced**: Static methods on components (MessageList.addMessage) allow parent to update child state
+- **Pattern established**: WebSocket hook uses fake timers in tests for reliable async control
+- **Self-reflection**: The messenger page went from a static placeholder to a functional UI in one iteration. This was the critical missing piece.
+
+### Tech debt addressed
+- ✅ Messenger frontend now wired to backend API and WebSocket
+
+### Tech debt remaining
+- Auto-generated tabs not implemented (FR-2.15 partial)
+- Typing/presence tests skipped (timing sensitivity)
+- Login needs org context for multi-tenant (auth.service.ts:122)
+- PNG icons need to be generated from SVG placeholder
+- T-003 subtask 3 (threads, rich text, forwarding) still pending
+- T-003 subtask 4 (typing/presence UI) - backend done, UI pending
+
+---

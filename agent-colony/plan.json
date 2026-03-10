@@ -226,6 +226,10 @@
         {
           "description": "Implement pins, favorites, chat tabs, announcements",
           "done": true
+        },
+        {
+          "description": "Build messenger frontend UI: chat list sidebar, message view, message input, WebSocket connection for real-time",
+          "done": true
         }
       ],
       "votes": [
@@ -306,6 +310,12 @@
           "role": "reviewer",
           "value": 1,
           "reason": "Iter 9 review: 3/5 subtasks complete. Messenger is functionally solid - chat CRUD, WebSocket messaging, tabs, announcements all working. Remaining: subtask 3 (threads, rich text, forwarding) and subtask 4 (typing/presence UI - backend done). Auto-tabs (FR-2.15) still missing but custom tabs work."
+        },
+        {
+          "iteration": 11,
+          "role": "implementer",
+          "value": 1,
+          "reason": "T-003 subtask 4 (reactions UX, typing indicators, presence) has backend done but no frontend integration. The critical missing piece is actually the messenger FRONTEND: chat list, message view, compose, WebSocket connection. This work needs to be done before typing/presence UI makes sense."
         }
       ],
       "comments": [
@@ -368,6 +378,16 @@
           "iteration": 6,
           "role": "reviewer",
           "message": "Iter 6 review: Auto-generated tabs (FR-2.15: Chat, Docs, Files, Pins, Announcements) are not implemented - only custom tabs exist. The type='auto' enum exists but no tabs are auto-created when content is shared. Create a follow-up task if needed."
+        },
+        {
+          "iteration": 11,
+          "role": "implementer",
+          "message": "Iter 11 analysis: The messenger page (apps/web/src/app/(app)/messenger/page.tsx) is a placeholder. API client (api.ts) has getChats, getMessages, sendMessage methods but they're NOT USED. No ChatList component, no MessageList, no MessageInput, no WebSocket connection. This is a critical gap - the frontend shell exists but the messenger module has no UI. Consider adding a subtask or creating a new task for 'Build messenger frontend UI with chat list, message view, and WebSocket integration'."
+        },
+        {
+          "iteration": 11,
+          "role": "implementer",
+          "message": "Iteration 11: Built messenger frontend UI - ChatList, MessageList, MessageInput components and useWebSocket hook. The messenger page now has a functional chat list sidebar, message view with pagination, compose area with send, and real-time WebSocket connection. 25 new tests added. T-003 subtask 6 (frontend UI) complete. 4/6 subtasks now done."
         }
       ],
       "status": "in-progress",
@@ -376,7 +396,7 @@
         "role": "implementer"
       },
       "claimedBy": {
-        "iteration": 5,
+        "iteration": 11,
         "role": "implementer"
       },
       "splitFrom": null
@@ -1140,7 +1160,7 @@
   ],
   "metadata": {
     "createdAt": "2026-03-04T21:00:00Z",
-    "totalIterations": 20,
+    "totalIterations": 21,
     "iterationLog": [
       {
         "iteration": 1,
@@ -1260,6 +1280,12 @@
         "iteration": 20,
         "role": "reviewer",
         "taskWorked": null,
+        "contextCompacted": false
+      },
+      {
+        "iteration": 21,
+        "role": "implementer",
+        "taskWorked": "T-023",
         "contextCompacted": false
       }
     ]
