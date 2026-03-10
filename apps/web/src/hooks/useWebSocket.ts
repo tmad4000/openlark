@@ -9,11 +9,32 @@ export interface WebSocketMessage {
   payload?: unknown;
   userId?: string;
   orgId?: string | null;
+  // For typing events
+  chatId?: string;
+  displayName?: string;
+  isTyping?: boolean;
+  // For presence events
+  isOnline?: boolean;
+}
+
+export interface TypingEvent {
+  chatId: string;
+  userId: string;
+  displayName: string;
+  isTyping: boolean;
+}
+
+export interface PresenceEvent {
+  userId: string;
+  displayName: string;
+  isOnline: boolean;
 }
 
 interface UseWebSocketOptions {
   token: string | null;
   onMessage?: (message: WebSocketMessage) => void;
+  onTyping?: (event: TypingEvent) => void;
+  onPresence?: (event: PresenceEvent) => void;
   onConnected?: (data: { userId: string; orgId: string | null }) => void;
   onDisconnected?: () => void;
 }
@@ -22,6 +43,9 @@ interface UseWebSocketReturn {
   status: ConnectionStatus;
   send: (message: unknown) => void;
   reconnect: () => void;
+  sendTypingStart: (chatId: string) => void;
+  sendTypingStop: (chatId: string) => void;
+  sendHeartbeat: () => void;
 }
 
 const INITIAL_RETRY_DELAY = 1000; // 1 second
@@ -37,25 +61,30 @@ function getCookie(name: string): string | null {
 }
 
 export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
-  const { token, onMessage, onConnected, onDisconnected } = options;
+  const { token, onMessage, onTyping, onPresence, onConnected, onDisconnected } = options;
 
   const [status, setStatus] = useState<ConnectionStatus>("disconnected");
   const wsRef = useRef<WebSocket | null>(null);
   const retryCountRef = useRef(0);
   const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const isUnmountingRef = useRef(false);
 
   // Store callbacks in refs to avoid reconnection on callback change
   const onMessageRef = useRef(onMessage);
+  const onTypingRef = useRef(onTyping);
+  const onPresenceRef = useRef(onPresence);
   const onConnectedRef = useRef(onConnected);
   const onDisconnectedRef = useRef(onDisconnected);
 
   useEffect(() => {
     onMessageRef.current = onMessage;
+    onTypingRef.current = onTyping;
+    onPresenceRef.current = onPresence;
     onConnectedRef.current = onConnected;
     onDisconnectedRef.current = onDisconnected;
-  }, [onMessage, onConnected, onDisconnected]);
+  }, [onMessage, onTyping, onPresence, onConnected, onDisconnected]);
 
   const cleanup = useCallback(() => {
     if (retryTimeoutRef.current) {
@@ -65,6 +94,10 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
     if (pingIntervalRef.current) {
       clearInterval(pingIntervalRef.current);
       pingIntervalRef.current = null;
+    }
+    if (heartbeatIntervalRef.current) {
+      clearInterval(heartbeatIntervalRef.current);
+      heartbeatIntervalRef.current = null;
     }
     if (wsRef.current) {
       wsRef.current.close();
@@ -104,6 +137,13 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
           ws.send(JSON.stringify({ type: "ping" }));
         }
       }, 30000); // Ping every 30 seconds
+
+      // Set up heartbeat interval for presence (every 30 seconds)
+      heartbeatIntervalRef.current = setInterval(() => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: "heartbeat" }));
+        }
+      }, 30000);
     };
 
     ws.onmessage = (event) => {
@@ -116,8 +156,23 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
             userId: message.userId || "",
             orgId: message.orgId ?? null,
           });
-        } else if (message.type === "pong") {
-          // Ignore pong responses
+        } else if (message.type === "pong" || message.type === "heartbeat_ack") {
+          // Ignore pong and heartbeat_ack responses
+        } else if (message.type === "typing") {
+          // Handle typing events
+          onTypingRef.current?.({
+            chatId: message.chatId || "",
+            userId: message.userId || "",
+            displayName: message.displayName || "Unknown",
+            isTyping: message.isTyping ?? false,
+          });
+        } else if (message.type === "presence") {
+          // Handle presence events
+          onPresenceRef.current?.({
+            userId: message.userId || "",
+            displayName: message.displayName || "Unknown",
+            isOnline: message.isOnline ?? false,
+          });
         } else {
           // Forward other messages to the handler
           onMessageRef.current?.(message);
@@ -131,6 +186,10 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
       if (pingIntervalRef.current) {
         clearInterval(pingIntervalRef.current);
         pingIntervalRef.current = null;
+      }
+      if (heartbeatIntervalRef.current) {
+        clearInterval(heartbeatIntervalRef.current);
+        heartbeatIntervalRef.current = null;
       }
 
       if (isUnmountingRef.current) {
@@ -176,6 +235,24 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
     }
   }, []);
 
+  const sendTypingStart = useCallback((chatId: string) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: "typing_start", chatId }));
+    }
+  }, []);
+
+  const sendTypingStop = useCallback((chatId: string) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: "typing_stop", chatId }));
+    }
+  }, []);
+
+  const sendHeartbeat = useCallback(() => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: "heartbeat" }));
+    }
+  }, []);
+
   const reconnect = useCallback(() => {
     retryCountRef.current = 0;
     connect();
@@ -192,5 +269,5 @@ export function useWebSocket(options: UseWebSocketOptions): UseWebSocketReturn {
     };
   }, [connect, cleanup]);
 
-  return { status, send, reconnect };
+  return { status, send, reconnect, sendTypingStart, sendTypingStop, sendHeartbeat };
 }

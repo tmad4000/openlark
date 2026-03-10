@@ -4,6 +4,7 @@ import { chats, chatMembers, users, messages } from "../db/schema";
 import { eq, and, or, inArray, desc, gt, sql, isNull } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
 import { createSystemMessage } from "./messages";
+import { getTypingUsers, getOnlineUsers } from "../lib/redis";
 
 interface GetChatsQuery {
   filter?: "dm" | "group" | "unread" | "muted";
@@ -615,6 +616,105 @@ export async function chatsRoutes(fastify: FastifyInstance) {
 
       const chatWithMembers = await getChatWithMembers(newChat.id);
       return reply.status(201).send(chatWithMembers);
+    }
+  );
+
+  /**
+   * GET /chats/:id/typing - Get users currently typing in a chat
+   * Returns: Array of typing users
+   */
+  fastify.get<{ Params: { id: string } }>(
+    "/chats/:id/typing",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id } = request.params;
+
+      // Validate UUID format
+      if (!UUID_REGEX.test(id)) {
+        return reply.status(400).send({
+          error: "Invalid chat ID format",
+        });
+      }
+
+      // Verify user is a member of this chat
+      const [membership] = await db
+        .select()
+        .from(chatMembers)
+        .where(
+          and(
+            eq(chatMembers.chatId, id),
+            eq(chatMembers.userId, request.user.id)
+          )
+        )
+        .limit(1);
+
+      if (!membership) {
+        return reply.status(403).send({
+          error: "Access denied - not a member of this chat",
+        });
+      }
+
+      const typingUsers = await getTypingUsers(id);
+
+      // Filter out the current user from typing list
+      const filteredTyping = typingUsers.filter(
+        (t) => t.userId !== request.user.id
+      );
+
+      return reply.status(200).send({ typing: filteredTyping });
+    }
+  );
+
+  /**
+   * GET /chats/:id/members/presence - Get online presence for chat members
+   * Returns: Map of userId to isOnline boolean
+   */
+  fastify.get<{ Params: { id: string } }>(
+    "/chats/:id/members/presence",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id } = request.params;
+
+      // Validate UUID format
+      if (!UUID_REGEX.test(id)) {
+        return reply.status(400).send({
+          error: "Invalid chat ID format",
+        });
+      }
+
+      // Verify user is a member of this chat
+      const [membership] = await db
+        .select()
+        .from(chatMembers)
+        .where(
+          and(
+            eq(chatMembers.chatId, id),
+            eq(chatMembers.userId, request.user.id)
+          )
+        )
+        .limit(1);
+
+      if (!membership) {
+        return reply.status(403).send({
+          error: "Access denied - not a member of this chat",
+        });
+      }
+
+      // Get all member IDs
+      const members = await db
+        .select({ userId: chatMembers.userId })
+        .from(chatMembers)
+        .where(eq(chatMembers.chatId, id));
+
+      const memberIds = members.map((m) => m.userId);
+      const onlineSet = await getOnlineUsers(memberIds);
+
+      const presence: Record<string, boolean> = {};
+      for (const memberId of memberIds) {
+        presence[memberId] = onlineSet.has(memberId);
+      }
+
+      return reply.status(200).send({ presence });
     }
   );
 }

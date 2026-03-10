@@ -3,6 +3,7 @@ import { db } from "../db";
 import { users, departments, departmentMembers } from "../db/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
+import { getOnlineUsers, isUserOnline } from "../lib/redis";
 
 interface UserParams {
   id: string;
@@ -260,15 +261,64 @@ export async function usersRoutes(fastify: FastifyInstance) {
         role: row.role,
       }));
 
+      // Check online presence
+      const isOnline = await isUserOnline(user.id);
+
       return reply.status(200).send({
         user: {
           id: user.id,
           displayName: user.displayName,
           avatarUrl: user.avatarUrl,
           status: user.status,
+          isOnline,
           departments: userDepartments,
         },
       });
+    }
+  );
+
+  /**
+   * POST /users/presence - Get online presence for multiple users
+   */
+  fastify.post<{ Body: { user_ids: string[] } }>(
+    "/users/presence",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { user_ids } = request.body;
+
+      if (!Array.isArray(user_ids)) {
+        return reply.status(400).send({
+          error: "user_ids must be an array",
+        });
+      }
+
+      if (user_ids.length === 0) {
+        return reply.status(200).send({ presence: {} });
+      }
+
+      if (user_ids.length > 100) {
+        return reply.status(400).send({
+          error: "Maximum 100 user IDs allowed",
+        });
+      }
+
+      // Validate all UUIDs
+      for (const id of user_ids) {
+        if (!UUID_REGEX.test(id)) {
+          return reply.status(400).send({
+            error: `Invalid user ID format: ${id}`,
+          });
+        }
+      }
+
+      const onlineSet = await getOnlineUsers(user_ids);
+
+      const presence: Record<string, boolean> = {};
+      for (const userId of user_ids) {
+        presence[userId] = onlineSet.has(userId);
+      }
+
+      return reply.status(200).send({ presence });
     }
   );
 }

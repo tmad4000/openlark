@@ -32,3 +32,4 @@
 [2026-03-10 16:29] US-024 — Chat view and message list UI — PASS
 [2026-03-10 22:35] US-025 — Message input with rich text formatting — PASS
 [2026-03-10 16:40] US-026 — Real-time message delivery via WebSocket — PASS
+[2026-03-10 16:48] US-027 — Typing indicators and online presence — PASS

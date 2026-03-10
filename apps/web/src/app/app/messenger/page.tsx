@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { Search, Plus, MessageCircle, Users, Bell, BellOff, AtSign, Info, Wifi, WifiOff, Loader2 } from "lucide-react";
 import * as Dialog from "@radix-ui/react-dialog";
 import MessageInput from "@/components/MessageInput";
-import { useWebSocket, ConnectionStatus, WebSocketMessage } from "@/hooks/useWebSocket";
+import { useWebSocket, ConnectionStatus, WebSocketMessage, TypingEvent, PresenceEvent } from "@/hooks/useWebSocket";
 
 interface Chat {
   id: string;
@@ -298,14 +298,68 @@ interface PendingMessage {
   isPending: true;
 }
 
+interface TypingUser {
+  userId: string;
+  displayName: string;
+}
+
+function TypingIndicator({ typingUsers }: { typingUsers: TypingUser[] }) {
+  if (typingUsers.length === 0) return null;
+
+  const names = typingUsers.map((u) => u.displayName);
+  let text: string;
+
+  if (names.length === 1) {
+    text = `${names[0]} is typing`;
+  } else if (names.length === 2) {
+    text = `${names[0]} and ${names[1]} are typing`;
+  } else if (names.length === 3) {
+    text = `${names[0]}, ${names[1]}, and ${names[2]} are typing`;
+  } else {
+    text = `${names[0]}, ${names[1]}, and ${names.length - 2} others are typing`;
+  }
+
+  return (
+    <div className="flex items-center gap-2 px-4 py-1 text-xs text-gray-500">
+      <div className="flex gap-0.5">
+        <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+        <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+        <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+      </div>
+      <span>{text}...</span>
+    </div>
+  );
+}
+
+function OnlineIndicator({ isOnline, size = "md" }: { isOnline: boolean; size?: "sm" | "md" }) {
+  if (!isOnline) return null;
+
+  const sizeClasses = size === "sm" ? "w-2.5 h-2.5" : "w-3 h-3";
+
+  return (
+    <span
+      className={`${sizeClasses} bg-green-500 rounded-full border-2 border-white absolute bottom-0 right-0`}
+      title="Online"
+    />
+  );
+}
+
 function ChatView({
   chat,
   currentUserId,
   incomingMessage,
+  typingUsers,
+  onTypingStart,
+  onTypingStop,
+  onlineUsers,
 }: {
   chat: Chat;
   currentUserId: string;
   incomingMessage: Message | null;
+  typingUsers: TypingUser[];
+  onTypingStart: () => void;
+  onTypingStop: () => void;
+  onlineUsers: Set<string>;
 }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [pendingMessages, setPendingMessages] = useState<PendingMessage[]>([]);
@@ -561,31 +615,50 @@ function ChatView({
     return groups;
   }, [allMessages]);
 
+  // For DMs, count online members (excluding current user)
+  const onlineMemberCount = useMemo(() => {
+    // We don't have member IDs in the chat object, but for DMs we can check presence
+    // For group chats, this would need member list from API
+    return 0; // Will be populated when we have member data
+  }, [onlineUsers]);
+
   return (
     <div className="flex flex-col h-full">
       {/* Chat Header */}
       <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-white">
         <div className="flex items-center gap-3">
-          {/* Avatar */}
-          <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-200">
-            {chat.avatarUrl ? (
-              <img src={chat.avatarUrl} alt={chat.name || "Chat"} className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center bg-blue-600 text-white font-medium">
-                {chat.type === "dm" ? (
-                  chat.name?.charAt(0).toUpperCase() || "?"
-                ) : (
-                  <Users className="w-5 h-5" />
-                )}
-              </div>
+          {/* Avatar with online indicator */}
+          <div className="relative w-10 h-10">
+            <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-200">
+              {chat.avatarUrl ? (
+                <img src={chat.avatarUrl} alt={chat.name || "Chat"} className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center bg-blue-600 text-white font-medium">
+                  {chat.type === "dm" ? (
+                    chat.name?.charAt(0).toUpperCase() || "?"
+                  ) : (
+                    <Users className="w-5 h-5" />
+                  )}
+                </div>
+              )}
+            </div>
+            {/* For DMs, show online indicator if the other user is online */}
+            {chat.type === "dm" && typingUsers.length === 0 && (
+              <OnlineIndicator isOnline={onlineUsers.size > 0} />
             )}
           </div>
 
-          {/* Name and member count */}
+          {/* Name and status */}
           <div>
             <h2 className="font-semibold text-gray-900">{chat.name || "Chat"}</h2>
             <p className="text-xs text-gray-500">
-              {chat.memberCount} member{chat.memberCount !== 1 ? "s" : ""}
+              {typingUsers.length > 0 ? (
+                <span className="text-blue-600">typing...</span>
+              ) : chat.type === "dm" ? (
+                onlineUsers.size > 0 ? "Online" : "Offline"
+              ) : (
+                `${chat.memberCount} member${chat.memberCount !== 1 ? "s" : ""}`
+              )}
             </p>
           </div>
         </div>
@@ -669,10 +742,18 @@ function ChatView({
         )}
       </div>
 
+      {/* Typing Indicator */}
+      <TypingIndicator typingUsers={typingUsers} />
+
       {/* Message Input */}
       <div className="flex-shrink-0 bg-white p-3">
         <MessageInput
-          onSend={handleSendMessage}
+          onSend={(content) => {
+            onTypingStop();
+            handleSendMessage(content);
+          }}
+          onTypingStart={onTypingStart}
+          onTypingStop={onTypingStop}
           isSending={isSending}
           placeholder="Type a message..."
           sendOnEnter={true}
@@ -685,11 +766,13 @@ function ChatView({
 function ChatRow({
   chat,
   isSelected,
-  onClick
+  onClick,
+  isOnline,
 }: {
   chat: Chat;
   isSelected: boolean;
   onClick: () => void;
+  isOnline?: boolean;
 }) {
   const preview = getMessagePreview(chat.lastMessage);
   const timestamp = chat.lastMessage ? formatTimestamp(chat.lastMessage.createdAt) : formatTimestamp(chat.createdAt);
@@ -701,19 +784,22 @@ function ChatRow({
         isSelected ? "bg-blue-50 hover:bg-blue-100" : ""
       }`}
     >
-      {/* Avatar */}
-      <div className="flex-shrink-0 w-10 h-10 rounded-full overflow-hidden bg-gray-200">
-        {chat.avatarUrl ? (
-          <img src={chat.avatarUrl} alt={chat.name || "Chat"} className="w-full h-full object-cover" />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center bg-blue-600 text-white text-sm font-medium">
-            {chat.type === "dm" ? (
-              chat.name?.charAt(0).toUpperCase() || "?"
-            ) : (
-              <Users className="w-5 h-5" />
-            )}
-          </div>
-        )}
+      {/* Avatar with online indicator */}
+      <div className="relative flex-shrink-0 w-10 h-10">
+        <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-200">
+          {chat.avatarUrl ? (
+            <img src={chat.avatarUrl} alt={chat.name || "Chat"} className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center bg-blue-600 text-white text-sm font-medium">
+              {chat.type === "dm" ? (
+                chat.name?.charAt(0).toUpperCase() || "?"
+              ) : (
+                <Users className="w-5 h-5" />
+              )}
+            </div>
+          )}
+        </div>
+        {chat.type === "dm" && <OnlineIndicator isOnline={isOnline ?? false} size="sm" />}
       </div>
 
       {/* Content */}
@@ -1117,11 +1203,26 @@ export default function MessengerPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [incomingMessage, setIncomingMessage] = useState<Message | null>(null);
 
+  // Typing indicators - track who is typing in each chat
+  const [typingByChat, setTypingByChat] = useState<Record<string, TypingUser[]>>({});
+
+  // Online presence - track who is online
+  const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
+
   // Handle incoming WebSocket messages
   const handleWebSocketMessage = useCallback((message: WebSocketMessage) => {
     if (message.type === "message" && message.payload) {
       const payload = message.payload as Message;
       setIncomingMessage(payload);
+
+      // Clear typing indicator for the sender when they send a message
+      setTypingByChat((prev) => {
+        const chatTyping = prev[payload.chatId];
+        if (!chatTyping) return prev;
+        const updated = chatTyping.filter((t) => t.userId !== payload.senderId);
+        if (updated.length === chatTyping.length) return prev;
+        return { ...prev, [payload.chatId]: updated };
+      });
 
       // Update chat list with new last message
       setChats((prevChats) =>
@@ -1150,10 +1251,51 @@ export default function MessengerPage() {
     }
   }, [currentUserId]);
 
+  // Handle typing events
+  const handleTypingEvent = useCallback((event: TypingEvent) => {
+    // Ignore own typing events
+    if (event.userId === currentUserId) return;
+
+    setTypingByChat((prev) => {
+      const chatTyping = prev[event.chatId] || [];
+
+      if (event.isTyping) {
+        // Add user to typing list if not already there
+        if (chatTyping.some((t) => t.userId === event.userId)) {
+          return prev;
+        }
+        return {
+          ...prev,
+          [event.chatId]: [...chatTyping, { userId: event.userId, displayName: event.displayName }],
+        };
+      } else {
+        // Remove user from typing list
+        const updated = chatTyping.filter((t) => t.userId !== event.userId);
+        if (updated.length === chatTyping.length) return prev;
+        return { ...prev, [event.chatId]: updated };
+      }
+    });
+  }, [currentUserId]);
+
+  // Handle presence events
+  const handlePresenceEvent = useCallback((event: PresenceEvent) => {
+    setOnlineUsers((prev) => {
+      const next = new Set(prev);
+      if (event.isOnline) {
+        next.add(event.userId);
+      } else {
+        next.delete(event.userId);
+      }
+      return next;
+    });
+  }, []);
+
   // WebSocket connection
-  const { status: wsStatus, reconnect } = useWebSocket({
+  const { status: wsStatus, reconnect, sendTypingStart, sendTypingStop } = useWebSocket({
     token: null, // Will use cookie
     onMessage: handleWebSocketMessage,
+    onTyping: handleTypingEvent,
+    onPresence: handlePresenceEvent,
   });
 
   // Fetch current user ID
@@ -1336,6 +1478,7 @@ export default function MessengerPage() {
                   chat={chat}
                   isSelected={chat.id === selectedChatId}
                   onClick={() => setSelectedChatId(chat.id)}
+                  isOnline={chat.type === "dm" ? onlineUsers.has(chat.id) : undefined}
                 />
               ))}
             </div>
@@ -1350,6 +1493,10 @@ export default function MessengerPage() {
             chat={selectedChat}
             currentUserId={currentUserId}
             incomingMessage={incomingMessage}
+            typingUsers={typingByChat[selectedChat.id] || []}
+            onTypingStart={() => sendTypingStart(selectedChat.id)}
+            onTypingStop={() => sendTypingStop(selectedChat.id)}
+            onlineUsers={onlineUsers}
           />
         ) : selectedChat ? (
           <div className="flex-1 flex items-center justify-center text-gray-500">

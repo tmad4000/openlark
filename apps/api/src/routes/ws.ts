@@ -4,7 +4,17 @@ import crypto from "crypto";
 import { db } from "../db";
 import { sessions, users, organizations, chatMembers } from "../db/schema";
 import { eq, and, gt } from "drizzle-orm";
-import { subscribe, getChatChannel } from "../lib/redis";
+import {
+  subscribe,
+  publish,
+  getChatChannel,
+  setTyping,
+  clearTyping,
+  getTypingUsers,
+  updatePresence,
+  removePresence,
+  cleanupExpiredPresence,
+} from "../lib/redis";
 import type { User, Organization } from "../db/schema";
 
 // Track active WebSocket connections by user ID
@@ -126,6 +136,71 @@ async function cleanupConnection(socket: WebSocket, userId: string): Promise<voi
     connections.delete(socket);
     if (connections.size === 0) {
       userConnections.delete(userId);
+      // User has no more connections - remove presence
+      await removePresence(userId);
+    }
+  }
+}
+
+/**
+ * Get chat member IDs for broadcasting typing events
+ */
+async function getChatMemberIds(chatId: string): Promise<string[]> {
+  const members = await db
+    .select({ userId: chatMembers.userId })
+    .from(chatMembers)
+    .where(eq(chatMembers.chatId, chatId));
+  return members.map((m) => m.userId);
+}
+
+/**
+ * Broadcast typing indicator to chat members
+ */
+async function broadcastTypingEvent(
+  chatId: string,
+  userId: string,
+  displayName: string,
+  isTyping: boolean
+): Promise<void> {
+  const event = {
+    type: "typing",
+    chatId,
+    userId,
+    displayName,
+    isTyping,
+  };
+
+  // Publish to the chat channel so all subscribers receive it
+  await publish(getChatChannel(chatId), event);
+}
+
+/**
+ * Broadcast presence update to all connected users in the org
+ */
+async function broadcastPresenceEvent(
+  userId: string,
+  displayName: string,
+  isOnline: boolean,
+  orgId: string | null
+): Promise<void> {
+  const event = {
+    type: "presence",
+    userId,
+    displayName,
+    isOnline,
+  };
+
+  // Broadcast to all connected users (they'll filter by relevance on the client)
+  // In production, you might want to be more selective (e.g., only users in same org or chats)
+  const eventStr = JSON.stringify(event);
+  for (const [connectedUserId, connections] of userConnections) {
+    // Skip the user themselves
+    if (connectedUserId === userId) continue;
+
+    for (const socket of connections) {
+      if (socket.readyState === socket.OPEN) {
+        socket.send(eventStr);
+      }
     }
   }
 }
@@ -164,6 +239,12 @@ export async function wsRoutes(fastify: FastifyInstance): Promise<void> {
       const unsubscribers = await subscribeToUserChats(user.id, socket);
       connectionSubscriptions.set(socket, unsubscribers);
 
+      // Set initial presence
+      await updatePresence(user.id);
+
+      // Broadcast that user is now online
+      await broadcastPresenceEvent(user.id, user.displayName || "Unknown", true, org?.id || null);
+
       // Send connection success message
       socket.send(
         JSON.stringify({
@@ -173,14 +254,48 @@ export async function wsRoutes(fastify: FastifyInstance): Promise<void> {
         })
       );
 
-      // Handle incoming messages (for future use - ping/pong, typing indicators, etc.)
-      socket.on("message", (data: Buffer | ArrayBuffer | Buffer[]) => {
+      // Handle incoming messages
+      socket.on("message", async (data: Buffer | ArrayBuffer | Buffer[]) => {
         try {
           const message = JSON.parse(data.toString());
 
           // Handle ping messages to keep connection alive
           if (message.type === "ping") {
             socket.send(JSON.stringify({ type: "pong" }));
+          }
+
+          // Handle heartbeat for presence
+          if (message.type === "heartbeat") {
+            await updatePresence(user.id);
+            socket.send(JSON.stringify({ type: "heartbeat_ack" }));
+          }
+
+          // Handle typing start
+          if (message.type === "typing_start" && message.chatId) {
+            const chatId = message.chatId as string;
+            // Verify user is member of this chat
+            const [membership] = await db
+              .select()
+              .from(chatMembers)
+              .where(
+                and(
+                  eq(chatMembers.chatId, chatId),
+                  eq(chatMembers.userId, user.id)
+                )
+              )
+              .limit(1);
+
+            if (membership) {
+              await setTyping(chatId, user.id, user.displayName || "Unknown");
+              await broadcastTypingEvent(chatId, user.id, user.displayName || "Unknown", true);
+            }
+          }
+
+          // Handle typing stop
+          if (message.type === "typing_stop" && message.chatId) {
+            const chatId = message.chatId as string;
+            await clearTyping(chatId, user.id);
+            await broadcastTypingEvent(chatId, user.id, user.displayName || "Unknown", false);
           }
         } catch {
           // Ignore invalid JSON
@@ -189,6 +304,11 @@ export async function wsRoutes(fastify: FastifyInstance): Promise<void> {
 
       // Handle disconnect
       socket.on("close", async () => {
+        // Broadcast that user is going offline (if this was their last connection)
+        const connections = userConnections.get(user.id);
+        if (!connections || connections.size <= 1) {
+          await broadcastPresenceEvent(user.id, user.displayName || "Unknown", false, org?.id || null);
+        }
         await cleanupConnection(socket, user.id);
       });
 
@@ -198,6 +318,20 @@ export async function wsRoutes(fastify: FastifyInstance): Promise<void> {
       });
     }
   );
+
+  // Periodic cleanup of expired presence entries (every 30 seconds)
+  const cleanupInterval = setInterval(async () => {
+    try {
+      await cleanupExpiredPresence();
+    } catch (err) {
+      console.error("Error cleaning up expired presence:", err);
+    }
+  }, 30000);
+
+  // Clean up on server shutdown
+  fastify.addHook("onClose", async () => {
+    clearInterval(cleanupInterval);
+  });
 }
 
 /**

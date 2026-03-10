@@ -28,6 +28,8 @@ import Picker from "@emoji-mart/react";
 
 interface MessageInputProps {
   onSend: (content: { html: string; text: string }) => void;
+  onTypingStart?: () => void;
+  onTypingStop?: () => void;
   isSending?: boolean;
   placeholder?: string;
   sendOnEnter?: boolean;
@@ -128,6 +130,8 @@ interface EmojiData {
 
 export default function MessageInput({
   onSend,
+  onTypingStart,
+  onTypingStop,
   isSending = false,
   placeholder = "Type a message...",
   sendOnEnter = true,
@@ -137,6 +141,45 @@ export default function MessageInput({
   const [showLinkDialog, setShowLinkDialog] = useState(false);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
   const emojiButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Track typing state for debounced events
+  const isTypingRef = useRef(false);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Handle typing indicators with debouncing
+  const handleTypingChange = useCallback(() => {
+    if (!onTypingStart || !onTypingStop) return;
+
+    // Clear existing timeout
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    // If not currently typing, send typing start
+    if (!isTypingRef.current) {
+      isTypingRef.current = true;
+      onTypingStart();
+    }
+
+    // Set timeout to send typing stop after 2.5 seconds of inactivity
+    // (slightly less than 3s TTL so we can re-send before it expires)
+    typingTimeoutRef.current = setTimeout(() => {
+      isTypingRef.current = false;
+      onTypingStop();
+    }, 2500);
+  }, [onTypingStart, onTypingStop]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+      if (isTypingRef.current && onTypingStop) {
+        onTypingStop();
+      }
+    };
+  }, [onTypingStop]);
 
   const editor = useEditor({
     extensions: [
@@ -174,6 +217,10 @@ export default function MessageInput({
       },
     },
     immediatelyRender: false,
+    onUpdate: () => {
+      // Trigger typing indicator on content change
+      handleTypingChange();
+    },
   });
 
   // Close emoji picker when clicking outside
@@ -202,9 +249,19 @@ export default function MessageInput({
 
     if (!text.trim()) return;
 
+    // Clear typing state when sending
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = null;
+    }
+    if (isTypingRef.current) {
+      isTypingRef.current = false;
+      onTypingStop?.();
+    }
+
     onSend({ html, text });
     editor.commands.clearContent();
-  }, [editor, isSending, onSend]);
+  }, [editor, isSending, onSend, onTypingStop]);
 
   const handleEmojiSelect = useCallback(
     (emoji: EmojiData) => {

@@ -438,8 +438,8 @@
         "Typecheck passes"
       ],
       "priority": 27,
-      "passes": false,
-      "notes": "Typing indicators are ephemeral - not persisted to database."
+      "passes": true,
+      "notes": "Typing indicators are ephemeral - not persisted to database. Backend: Redis lib extended with setTyping/clearTyping/getTypingUsers (3s TTL hash storage) and updatePresence/removePresence/isUserOnline/getOnlineUsers (Redis sorted set with 60s expiry). WebSocket handles typing_start/typing_stop messages and broadcasts to chat channels. Heartbeat every 30s updates presence, cleanup runs every 30s. Frontend: useWebSocket hook extended with onTyping/onPresence callbacks and sendTypingStart/sendTypingStop methods. MessageInput triggers typing with 2.5s debounce. TypingIndicator component shows animated dots with 'X is typing...' text. OnlineIndicator component shows green dot on avatars. Typecheck passes."
     },
     {
       "id": "US-028",
