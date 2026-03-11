@@ -5,6 +5,7 @@ import { Search, Plus, MessageCircle, Users, Bell, BellOff, AtSign, Info, Wifi, 
 import * as Dialog from "@radix-ui/react-dialog";
 import * as ContextMenu from "@radix-ui/react-context-menu";
 import MessageInput, { MentionUser } from "@/components/MessageInput";
+import { CodeBlockRenderer } from "@/components/CodeBlockRenderer";
 import { useWebSocket, ConnectionStatus, WebSocketMessage, TypingEvent, PresenceEvent, ReadReceiptEvent, ReactionEvent } from "@/hooks/useWebSocket";
 import data from "@emoji-mart/data";
 import Picker from "@emoji-mart/react";
@@ -285,9 +286,11 @@ function BundledMessageContent({ bundle }: { bundle: BundledMessage[] }) {
             {msg.content.text && typeof msg.content.text === "string" ? (
               <span className="whitespace-pre-wrap break-words">{msg.content.text}</span>
             ) : msg.type === "code" && msg.content.code ? (
-              <pre className="bg-gray-900 text-gray-100 p-2 rounded text-xs overflow-x-auto">
-                <code>{String(msg.content.code)}</code>
-              </pre>
+              <CodeBlockRenderer
+                code={String(msg.content.code)}
+                language={typeof msg.content.language === "string" ? msg.content.language : "plaintext"}
+                className="text-xs"
+              />
             ) : msg.type === "rich_text" && typeof msg.content.html === "string" ? (
               <div
                 className="prose prose-sm max-w-none"
@@ -353,10 +356,12 @@ function renderMessageContent(message: Message): React.ReactNode {
     }
 
     if (type === "code" && content.code) {
+      const language = typeof content.language === "string" ? content.language : "plaintext";
       return (
-        <pre className="bg-gray-900 text-gray-100 p-3 rounded-md overflow-x-auto text-sm">
-          <code>{String(content.code)}</code>
-        </pre>
+        <CodeBlockRenderer
+          code={String(content.code)}
+          language={language}
+        />
       );
     }
 

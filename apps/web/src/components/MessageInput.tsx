@@ -1,12 +1,14 @@
 "use client";
 
 import { useCallback, useRef, useState, useEffect, forwardRef, useImperativeHandle, useMemo } from "react";
-import { useEditor, EditorContent, ReactRenderer } from "@tiptap/react";
+import { useEditor, EditorContent, ReactRenderer, ReactNodeViewRenderer } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
 import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
 import Mention from "@tiptap/extension-mention";
+import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
+import { common, createLowlight } from "lowlight";
 import { SuggestionProps, SuggestionKeyDownProps } from "@tiptap/suggestion";
 import tippy, { Instance as TippyInstance } from "tippy.js";
 import {
@@ -18,6 +20,7 @@ import {
   ListOrdered,
   Quote,
   Code,
+  Code2,
   Link as LinkIcon,
   Smile,
   Paperclip,
@@ -28,6 +31,10 @@ import {
 } from "lucide-react";
 import data from "@emoji-mart/data";
 import Picker from "@emoji-mart/react";
+import { CodeBlockNode } from "./CodeBlock";
+
+// Create lowlight instance with common languages
+const lowlight = createLowlight(common);
 
 export interface MentionUser {
   id: string;
@@ -374,6 +381,7 @@ export default function MessageInput({
         horizontalRule: false,
         dropcursor: false,
         gapcursor: false,
+        codeBlock: false, // Disable default codeBlock, we use CodeBlockLowlight
       }),
       Underline,
       Link.configure({
@@ -391,6 +399,23 @@ export default function MessageInput({
         },
         suggestion,
       }),
+      CodeBlockLowlight.extend({
+        addNodeView() {
+          return ReactNodeViewRenderer(CodeBlockNode);
+        },
+        addKeyboardShortcuts() {
+          return {
+            // Cmd+Option+C (Mac) or Ctrl+Alt+C (Windows/Linux) to insert code block
+            "Mod-Alt-c": () => this.editor.commands.toggleCodeBlock(),
+          };
+        },
+      }).configure({
+        lowlight,
+        defaultLanguage: "javascript",
+        HTMLAttributes: {
+          class: "code-block",
+        },
+      }),
     ],
     editorProps: {
       attributes: {
@@ -399,7 +424,16 @@ export default function MessageInput({
       },
       handleKeyDown: (_view, event) => {
         // Enter to send (if enabled and not Shift+Enter)
+        // Don't send on Enter if we're inside a code block
         if (event.key === "Enter" && sendOnEnter && !event.shiftKey && !event.metaKey && !event.ctrlKey) {
+          // Check if cursor is in a code block
+          const { state } = _view;
+          const { $from } = state.selection;
+          const nodeType = $from.parent.type.name;
+          if (nodeType === "codeBlock") {
+            // Let default behavior handle Enter in code blocks (new line)
+            return false;
+          }
           event.preventDefault();
           handleSend();
           return true;
@@ -642,6 +676,12 @@ export default function MessageInput({
               title="Inline Code"
               isActive={editor.isActive("code")}
               onClick={() => editor.chain().focus().toggleCode().run()}
+            />
+            <FormatButton
+              icon={Code2}
+              title="Code Block (Cmd+Option+C)"
+              isActive={editor.isActive("codeBlock")}
+              onClick={() => editor.chain().focus().toggleCodeBlock().run()}
             />
             <FormatButton
               icon={LinkIcon}

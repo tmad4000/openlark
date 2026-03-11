@@ -1,9 +1,97 @@
 @import "tailwindcss";
 
+/* Highlight.js theme - GitHub Dark */
+@import "highlight.js/styles/github-dark.css";
+
 @theme {
   /* OpenLark brand colors */
   --color-primary: #1a73e8;
   --color-primary-hover: #1557b0;
   --color-error: #dc2626;
   --color-error-bg: #fef2f2;
+}
+
+/* Code block styles in TipTap editor */
+.ProseMirror pre {
+  background: #0d1117;
+  border-radius: 0.5rem;
+  color: #c9d1d9;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  padding: 0.75rem 1rem;
+  margin: 0.5rem 0;
+}
+
+.ProseMirror pre code {
+  background: none;
+  color: inherit;
+  font-size: 0.875rem;
+  padding: 0;
+}
+
+/* Syntax highlighting classes */
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-built_in,
+.hljs-name,
+.hljs-tag {
+  color: #ff7b72;
+}
+
+.hljs-string,
+.hljs-title,
+.hljs-section,
+.hljs-attribute,
+.hljs-literal,
+.hljs-template-tag,
+.hljs-template-variable,
+.hljs-type,
+.hljs-addition {
+  color: #a5d6ff;
+}
+
+.hljs-deletion,
+.hljs-selector-attr,
+.hljs-selector-pseudo,
+.hljs-meta {
+  color: #ffa657;
+}
+
+.hljs-doctag {
+  color: #8b949e;
+}
+
+.hljs-attr {
+  color: #79c0ff;
+}
+
+.hljs-symbol,
+.hljs-bullet,
+.hljs-link,
+.hljs-subst,
+.hljs-regexp {
+  color: #7ee787;
+}
+
+.hljs-title.class_,
+.hljs-class .hljs-title {
+  color: #f0883e;
+}
+
+.hljs-number {
+  color: #79c0ff;
+}
+
+.hljs-comment,
+.hljs-quote {
+  color: #8b949e;
+  font-style: italic;
+}
+
+.hljs-variable,
+.hljs-params {
+  color: #c9d1d9;
+}
+
+.hljs-function {
+  color: #d2a8ff;
 }

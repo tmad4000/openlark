@@ -627,8 +627,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 38,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented code blocks using @tiptap/extension-code-block-lowlight with highlight.js integration. Created CodeBlock.tsx node view component with language selector dropdown (26 languages: JavaScript, TypeScript, Python, Go, Rust, Java, C++, C, C#, Ruby, PHP, Swift, Kotlin, Scala, HTML, CSS, SCSS, JSON, YAML, XML, Markdown, SQL, Bash, Shell, Dockerfile, Plain Text) and copy button. Added Cmd+Option+C (Mod-Alt-c) keyboard shortcut. Created CodeBlockRenderer.tsx for displaying code in messages with syntax highlighting and copy functionality. Markdown triple-backtick syntax supported via TipTap StarterKit codeBlock parsing. Added highlight.js GitHub Dark theme CSS to globals.css. Typecheck passes."
     },
     {
       "id": "US-039",
