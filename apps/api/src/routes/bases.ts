@@ -1298,4 +1298,305 @@ export async function basesRoutes(fastify: FastifyInstance) {
       return reply.status(200).send({ success: true });
     }
   );
+
+  /**
+   * POST /tables/:id/views - Create a new view
+   * Body: { name: string, type: 'grid' | 'kanban' | 'calendar' | 'gantt' | 'gallery' | 'form', config?: object }
+   * Returns: Created view
+   */
+  fastify.post<{
+    Params: { id: string };
+    Body: { name: string; type: string; config?: Record<string, unknown> };
+  }>(
+    "/tables/:id/views",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id } = request.params;
+      const { name, type, config } = request.body;
+
+      // Validate UUID format
+      if (!UUID_REGEX.test(id)) {
+        return reply.status(400).send({
+          error: "Invalid table ID format",
+        });
+      }
+
+      // Validate name
+      if (!name || typeof name !== "string" || name.trim().length === 0) {
+        return reply.status(400).send({
+          error: "name is required and must be a non-empty string",
+        });
+      }
+
+      if (name.length > 255) {
+        return reply.status(400).send({
+          error: "name must be at most 255 characters",
+        });
+      }
+
+      // Validate type
+      const validTypes = ["grid", "kanban", "calendar", "gantt", "gallery", "form"];
+      if (!type || !validTypes.includes(type)) {
+        return reply.status(400).send({
+          error: `type must be one of: ${validTypes.join(", ")}`,
+        });
+      }
+
+      // User must belong to an organization
+      if (!request.user.orgId) {
+        return reply.status(400).send({
+          error: "User must belong to an organization",
+        });
+      }
+
+      const orgId = request.user.orgId;
+
+      // Get the table with base info
+      const [table] = await db
+        .select({
+          id: baseTables.id,
+          baseId: baseTables.baseId,
+          baseOrgId: bases.orgId,
+        })
+        .from(baseTables)
+        .innerJoin(bases, eq(baseTables.baseId, bases.id))
+        .where(eq(baseTables.id, id))
+        .limit(1);
+
+      if (!table) {
+        return reply.status(404).send({
+          error: "Table not found",
+        });
+      }
+
+      // Check org access
+      if (table.baseOrgId !== orgId) {
+        return reply.status(403).send({
+          error: "Access denied",
+        });
+      }
+
+      // Get max position
+      const [maxPos] = await db
+        .select({ max: sql<number>`coalesce(max(position), -1)::int` })
+        .from(baseViews)
+        .where(eq(baseViews.tableId, id));
+
+      const newPosition = (maxPos?.max ?? -1) + 1;
+
+      // Create the view
+      const [newView] = await db
+        .insert(baseViews)
+        .values({
+          tableId: id,
+          name: name.trim(),
+          type: type as "grid" | "kanban" | "calendar" | "gantt" | "gallery" | "form",
+          config: config || {},
+          position: newPosition,
+        })
+        .returning();
+
+      // Update base's updatedAt
+      await db
+        .update(bases)
+        .set({ updatedAt: new Date() })
+        .where(eq(bases.id, table.baseId));
+
+      return reply.status(201).send({
+        id: newView.id,
+        tableId: newView.tableId,
+        name: newView.name,
+        type: newView.type,
+        config: newView.config,
+        position: newView.position,
+      });
+    }
+  );
+
+  /**
+   * PATCH /views/:id - Update a view
+   * Body: { name?: string, config?: object }
+   * Returns: Updated view
+   */
+  fastify.patch<{
+    Params: { id: string };
+    Body: { name?: string; config?: Record<string, unknown> };
+  }>(
+    "/views/:id",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id } = request.params;
+      const { name, config } = request.body;
+
+      // Validate UUID format
+      if (!UUID_REGEX.test(id)) {
+        return reply.status(400).send({
+          error: "Invalid view ID format",
+        });
+      }
+
+      // User must belong to an organization
+      if (!request.user.orgId) {
+        return reply.status(400).send({
+          error: "User must belong to an organization",
+        });
+      }
+
+      const orgId = request.user.orgId;
+
+      // Get the view with table and base info
+      const [view] = await db
+        .select({
+          id: baseViews.id,
+          tableId: baseViews.tableId,
+          name: baseViews.name,
+          type: baseViews.type,
+          config: baseViews.config,
+          position: baseViews.position,
+          baseId: baseTables.baseId,
+          baseOrgId: bases.orgId,
+        })
+        .from(baseViews)
+        .innerJoin(baseTables, eq(baseViews.tableId, baseTables.id))
+        .innerJoin(bases, eq(baseTables.baseId, bases.id))
+        .where(eq(baseViews.id, id))
+        .limit(1);
+
+      if (!view) {
+        return reply.status(404).send({
+          error: "View not found",
+        });
+      }
+
+      // Check org access
+      if (view.baseOrgId !== orgId) {
+        return reply.status(403).send({
+          error: "Access denied",
+        });
+      }
+
+      // Build update object
+      const updates: Record<string, unknown> = {};
+
+      if (name !== undefined) {
+        if (typeof name !== "string" || name.trim().length === 0) {
+          return reply.status(400).send({
+            error: "name must be a non-empty string",
+          });
+        }
+        if (name.length > 255) {
+          return reply.status(400).send({
+            error: "name must be at most 255 characters",
+          });
+        }
+        updates.name = name.trim();
+      }
+
+      if (config !== undefined) {
+        // Merge with existing config
+        const existingConfig = (view.config ?? {}) as Record<string, unknown>;
+        updates.config = { ...existingConfig, ...config };
+      }
+
+      // If no updates, return current view
+      if (Object.keys(updates).length === 0) {
+        return reply.status(200).send({
+          id: view.id,
+          tableId: view.tableId,
+          name: view.name,
+          type: view.type,
+          config: view.config,
+          position: view.position,
+        });
+      }
+
+      // Update the view
+      const [updatedView] = await db
+        .update(baseViews)
+        .set(updates)
+        .where(eq(baseViews.id, id))
+        .returning();
+
+      // Update base's updatedAt
+      await db
+        .update(bases)
+        .set({ updatedAt: new Date() })
+        .where(eq(bases.id, view.baseId));
+
+      return reply.status(200).send({
+        id: updatedView.id,
+        tableId: updatedView.tableId,
+        name: updatedView.name,
+        type: updatedView.type,
+        config: updatedView.config,
+        position: updatedView.position,
+      });
+    }
+  );
+
+  /**
+   * DELETE /views/:id - Delete a view
+   * Returns: { success: true }
+   */
+  fastify.delete<{ Params: { id: string } }>(
+    "/views/:id",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id } = request.params;
+
+      // Validate UUID format
+      if (!UUID_REGEX.test(id)) {
+        return reply.status(400).send({
+          error: "Invalid view ID format",
+        });
+      }
+
+      // User must belong to an organization
+      if (!request.user.orgId) {
+        return reply.status(400).send({
+          error: "User must belong to an organization",
+        });
+      }
+
+      const orgId = request.user.orgId;
+
+      // Get the view with table and base info
+      const [view] = await db
+        .select({
+          id: baseViews.id,
+          tableId: baseViews.tableId,
+          baseId: baseTables.baseId,
+          baseOrgId: bases.orgId,
+        })
+        .from(baseViews)
+        .innerJoin(baseTables, eq(baseViews.tableId, baseTables.id))
+        .innerJoin(bases, eq(baseTables.baseId, bases.id))
+        .where(eq(baseViews.id, id))
+        .limit(1);
+
+      if (!view) {
+        return reply.status(404).send({
+          error: "View not found",
+        });
+      }
+
+      // Check org access
+      if (view.baseOrgId !== orgId) {
+        return reply.status(403).send({
+          error: "Access denied",
+        });
+      }
+
+      // Delete the view
+      await db.delete(baseViews).where(eq(baseViews.id, id));
+
+      // Update base's updatedAt
+      await db
+        .update(bases)
+        .set({ updatedAt: new Date() })
+        .where(eq(bases.id, view.baseId));
+
+      return reply.status(200).send({ success: true });
+    }
+  );
 }

@@ -1094,8 +1094,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 65,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented Kanban view with @dnd-kit for drag-and-drop. Added KanbanView, KanbanColumn, and KanbanCard components. Records can be dragged between columns to update the grouping field value. Added RecordDetailPanel that opens on card/row click. Added views API endpoints (POST /tables/:id/views, PATCH /views/:id, DELETE /views/:id). Group by field picker in Kanban toolbar."
     },
     {
       "id": "US-066",

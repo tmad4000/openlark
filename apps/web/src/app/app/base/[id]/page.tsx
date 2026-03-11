@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   Plus,
@@ -8,7 +8,6 @@ import {
   Grid3X3,
   Kanban,
   Calendar,
-  MoreHorizontal,
   X,
   Check,
   Type,
@@ -23,11 +22,25 @@ import {
   User,
   Paperclip,
   List,
+  GripVertical,
 } from "lucide-react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import * as Dialog from "@radix-ui/react-dialog";
-import * as Popover from "@radix-ui/react-popover";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import {
+  DndContext,
+  DragOverlay,
+  closestCorners,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragStartEvent,
+  DragEndEvent,
+  useDroppable,
+  useDraggable,
+} from "@dnd-kit/core";
+import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 
 // Types
 interface BaseData {
@@ -55,8 +68,24 @@ interface ViewData {
   id: string;
   name: string;
   type: "grid" | "kanban" | "calendar" | "gantt" | "gallery" | "form";
-  config: Record<string, unknown>;
+  config: ViewConfig;
   position: number;
+}
+
+interface ViewConfig {
+  groupByFieldId?: string;
+  filters?: Array<{ fieldId: string; op: string; value: unknown }>;
+  sorts?: Array<{ fieldId: string; direction: "asc" | "desc" }>;
+  hiddenFields?: string[];
+  fieldOrder?: string[];
+  rowHeight?: "short" | "medium" | "tall" | "extra_tall";
+  columnWidths?: Record<string, number>;
+  dateFieldId?: string;
+  endDateFieldId?: string;
+  startDateFieldId?: string;
+  durationFieldId?: string;
+  coverFieldId?: string;
+  showTitleOnly?: boolean;
 }
 
 interface RecordData {
@@ -203,7 +232,7 @@ function CellEditor({
       );
 
     case "single_select":
-      const options = ((field.config?.options as string[]) || []);
+      const options = (field.config?.options as string[]) || [];
       return (
         <select
           ref={inputRef as unknown as React.RefObject<HTMLSelectElement>}
@@ -345,7 +374,6 @@ function ColumnHeader({
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(field.name);
-  const [isResizing, setIsResizing] = useState(false);
   const Icon = FIELD_TYPE_ICONS[field.type] || Type;
 
   const handleSaveName = () => {
@@ -358,7 +386,6 @@ function ColumnHeader({
   const handleResizeStart = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setIsResizing(true);
     const startX = e.clientX;
     const startWidth = width;
 
@@ -368,7 +395,6 @@ function ColumnHeader({
     };
 
     const handleMouseUp = () => {
-      setIsResizing(false);
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
     };
@@ -482,6 +508,7 @@ function GridView({
   onFieldDelete,
   columnWidths,
   onColumnResize,
+  onRecordClick,
 }: {
   table: TableWithDetails;
   records: RecordData[];
@@ -496,6 +523,7 @@ function GridView({
   onFieldDelete: (fieldId: string) => void;
   columnWidths: Record<string, number>;
   onColumnResize: (fieldId: string, width: number) => void;
+  onRecordClick: (record: RecordData) => void;
 }) {
   const [editingCell, setEditingCell] = useState<{ recordId: string; fieldId: string } | null>(null);
   const parentRef = useRef<HTMLDivElement>(null);
@@ -590,7 +618,7 @@ function GridView({
                 </div>
 
                 {/* Data cells */}
-                {table.fields.map((field) => {
+                {table.fields.map((field, fieldIndex) => {
                   const isEditing =
                     editingCell?.recordId === record.id && editingCell?.fieldId === field.id;
                   const value = record.data[field.id];
@@ -601,6 +629,16 @@ function GridView({
                       className="border-r border-gray-100 flex items-center cursor-pointer"
                       style={{ width: getColumnWidth(field.id), minWidth: getColumnWidth(field.id) }}
                       onClick={() => {
+                        if (!isEditing) {
+                          // First column click opens detail panel
+                          if (fieldIndex === 0) {
+                            onRecordClick(record);
+                          } else {
+                            setEditingCell({ recordId: record.id, fieldId: field.id });
+                          }
+                        }
+                      }}
+                      onDoubleClick={() => {
                         if (!isEditing) {
                           setEditingCell({ recordId: record.id, fieldId: field.id });
                         }
@@ -646,6 +684,432 @@ function GridView({
   );
 }
 
+// Kanban Card Component
+function KanbanCard({
+  record,
+  fields,
+  titleField,
+  displayFields,
+  isDragging,
+  onClick,
+}: {
+  record: RecordData;
+  fields: FieldData[];
+  titleField: FieldData | null;
+  displayFields: FieldData[];
+  isDragging?: boolean;
+  onClick: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform } = useDraggable({
+    id: record.id,
+    data: { record },
+  });
+
+  const style = transform
+    ? {
+        transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
+      }
+    : undefined;
+
+  const titleValue = titleField ? record.data[titleField.id] : null;
+  const title = titleValue ? String(titleValue) : "Untitled";
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...listeners}
+      {...attributes}
+      onClick={onClick}
+      className={`bg-white border border-gray-200 rounded-lg p-3 mb-2 cursor-pointer hover:border-blue-300 hover:shadow-sm transition-all ${
+        isDragging ? "opacity-50 shadow-lg ring-2 ring-blue-500" : ""
+      }`}
+    >
+      <div className="flex items-start gap-2">
+        <GripVertical className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0 cursor-grab" />
+        <div className="flex-1 min-w-0">
+          <h4 className="font-medium text-gray-900 truncate mb-1">{title}</h4>
+          {displayFields.slice(0, 3).map((field) => {
+            const value = record.data[field.id];
+            if (value === null || value === undefined || value === "") return null;
+            return (
+              <div key={field.id} className="flex items-center gap-2 text-sm text-gray-600 mt-1">
+                <span className="text-gray-400 text-xs truncate max-w-[60px]">{field.name}:</span>
+                <div className="truncate flex-1">
+                  <CellDisplay field={field} value={value} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Kanban Column Component
+function KanbanColumn({
+  columnValue,
+  records,
+  fields,
+  titleField,
+  displayFields,
+  groupField,
+  onRecordClick,
+  onAddRecord,
+}: {
+  columnValue: string;
+  records: RecordData[];
+  fields: FieldData[];
+  titleField: FieldData | null;
+  displayFields: FieldData[];
+  groupField: FieldData;
+  onRecordClick: (record: RecordData) => void;
+  onAddRecord: (columnValue: string) => void;
+}) {
+  const { isOver, setNodeRef } = useDroppable({
+    id: columnValue || "__empty__",
+    data: { columnValue },
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={`flex flex-col w-72 flex-shrink-0 bg-gray-100 rounded-lg ${
+        isOver ? "ring-2 ring-blue-500 ring-opacity-50" : ""
+      }`}
+    >
+      {/* Column header */}
+      <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200">
+        <div className="flex items-center gap-2">
+          {columnValue ? (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+              {columnValue}
+            </span>
+          ) : (
+            <span className="text-sm text-gray-500">No {groupField.name}</span>
+          )}
+          <span className="text-xs text-gray-400">({records.length})</span>
+        </div>
+      </div>
+
+      {/* Cards container */}
+      <div className="flex-1 overflow-y-auto p-2 min-h-[200px]">
+        {records.map((record) => (
+          <KanbanCard
+            key={record.id}
+            record={record}
+            fields={fields}
+            titleField={titleField}
+            displayFields={displayFields}
+            onClick={() => onRecordClick(record)}
+          />
+        ))}
+      </div>
+
+      {/* Add card button */}
+      <button
+        onClick={() => onAddRecord(columnValue)}
+        className="flex items-center gap-2 px-3 py-2 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded-b-lg transition-colors"
+      >
+        <Plus className="w-4 h-4" />
+        <span className="text-sm">Add card</span>
+      </button>
+    </div>
+  );
+}
+
+// Kanban View Component
+function KanbanView({
+  table,
+  records,
+  view,
+  onCellEdit,
+  onAddRecord,
+  onRecordClick,
+  onUpdateViewConfig,
+}: {
+  table: TableWithDetails;
+  records: RecordData[];
+  view: ViewData;
+  onCellEdit: (recordId: string, fieldId: string, value: unknown) => void;
+  onAddRecord: (initialData?: Record<string, unknown>) => void;
+  onRecordClick: (record: RecordData) => void;
+  onUpdateViewConfig: (config: Partial<ViewConfig>) => void;
+}) {
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [showGroupByPicker, setShowGroupByPicker] = useState(false);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  // Find the grouping field (single_select or user type)
+  const groupByFieldId = view.config?.groupByFieldId;
+  const groupField = groupByFieldId
+    ? table.fields.find((f) => f.id === groupByFieldId)
+    : table.fields.find((f) => f.type === "single_select" || f.type === "user");
+
+  // Get title field (first text field)
+  const titleField = table.fields.find((f) => f.type === "text") || table.fields[0] || null;
+
+  // Get display fields (exclude title and group field)
+  const displayFields = table.fields.filter(
+    (f) => f.id !== titleField?.id && f.id !== groupField?.id
+  );
+
+  // Group records by the grouping field
+  const groupedRecords = useMemo(() => {
+    if (!groupField) {
+      return { "": records };
+    }
+
+    const groups: Record<string, RecordData[]> = {};
+
+    // Get possible values for single_select
+    const options = (groupField.config?.options as string[]) || [];
+
+    // Initialize groups with empty arrays for all options
+    options.forEach((opt) => {
+      groups[opt] = [];
+    });
+
+    // Also add empty group for records without a value
+    groups[""] = [];
+
+    // Distribute records to groups
+    records.forEach((record) => {
+      const value = String(record.data[groupField.id] || "");
+      if (!groups[value]) {
+        groups[value] = [];
+      }
+      groups[value].push(record);
+    });
+
+    return groups;
+  }, [records, groupField]);
+
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(event.active.id as string);
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveId(null);
+
+    if (!over || !groupField) return;
+
+    const recordId = active.id as string;
+    const newColumnValue = over.data.current?.columnValue ?? "";
+
+    // Only update if the column changed
+    const record = records.find((r) => r.id === recordId);
+    if (record) {
+      const currentValue = String(record.data[groupField.id] || "");
+      if (currentValue !== newColumnValue) {
+        onCellEdit(recordId, groupField.id, newColumnValue || null);
+      }
+    }
+  };
+
+  const handleAddRecord = (columnValue: string) => {
+    if (groupField) {
+      onAddRecord({ [groupField.id]: columnValue || null });
+    } else {
+      onAddRecord();
+    }
+  };
+
+  const activeRecord = activeId ? records.find((r) => r.id === activeId) : null;
+
+  // Show field picker if no group field is selected
+  const selectableFields = table.fields.filter(
+    (f) => f.type === "single_select" || f.type === "user"
+  );
+
+  if (!groupField && selectableFields.length === 0) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-8">
+        <div className="text-center">
+          <Kanban className="w-16 h-16 mx-auto text-gray-300 mb-4" />
+          <p className="text-gray-500 mb-4">
+            Kanban view requires a Single Select or User field to group records.
+          </p>
+          <p className="text-sm text-gray-400">
+            Add a Single Select field to your table to use Kanban view.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Kanban toolbar */}
+      <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-200 bg-white">
+        <span className="text-sm text-gray-500">Group by:</span>
+        <DropdownMenu.Root open={showGroupByPicker} onOpenChange={setShowGroupByPicker}>
+          <DropdownMenu.Trigger asChild>
+            <button className="flex items-center gap-1 px-2 py-1 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded">
+              {groupField?.name || "Select field"}
+              <ChevronDown className="w-3 h-3" />
+            </button>
+          </DropdownMenu.Trigger>
+          <DropdownMenu.Portal>
+            <DropdownMenu.Content
+              className="bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[180px] z-50"
+              sideOffset={4}
+            >
+              {selectableFields.map((field) => (
+                <DropdownMenu.Item
+                  key={field.id}
+                  className="px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer focus:outline-none flex items-center gap-2"
+                  onSelect={() => {
+                    onUpdateViewConfig({ groupByFieldId: field.id });
+                    setShowGroupByPicker(false);
+                  }}
+                >
+                  <List className="w-4 h-4 text-gray-500" />
+                  {field.name}
+                  {field.id === groupField?.id && <Check className="w-4 h-4 text-blue-600 ml-auto" />}
+                </DropdownMenu.Item>
+              ))}
+            </DropdownMenu.Content>
+          </DropdownMenu.Portal>
+        </DropdownMenu.Root>
+      </div>
+
+      {/* Kanban board */}
+      <div className="flex-1 overflow-x-auto p-4">
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCorners}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+        >
+          <div className="flex gap-4 h-full">
+            {Object.entries(groupedRecords).map(([columnValue, columnRecords]) => (
+              <KanbanColumn
+                key={columnValue || "__empty__"}
+                columnValue={columnValue}
+                records={columnRecords}
+                fields={table.fields}
+                titleField={titleField}
+                displayFields={displayFields}
+                groupField={groupField!}
+                onRecordClick={onRecordClick}
+                onAddRecord={handleAddRecord}
+              />
+            ))}
+          </div>
+
+          <DragOverlay>
+            {activeRecord && groupField ? (
+              <div className="bg-white border border-blue-500 rounded-lg p-3 shadow-xl">
+                <KanbanCard
+                  record={activeRecord}
+                  fields={table.fields}
+                  titleField={titleField}
+                  displayFields={displayFields}
+                  isDragging
+                  onClick={() => {}}
+                />
+              </div>
+            ) : null}
+          </DragOverlay>
+        </DndContext>
+      </div>
+    </div>
+  );
+}
+
+// Record Detail Panel Component
+function RecordDetailPanel({
+  record,
+  fields,
+  onClose,
+  onCellEdit,
+}: {
+  record: RecordData;
+  fields: FieldData[];
+  onClose: () => void;
+  onCellEdit: (fieldId: string, value: unknown) => void;
+}) {
+  const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
+
+  return (
+    <div className="w-96 border-l border-gray-200 bg-white flex flex-col h-full">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+        <h3 className="font-semibold text-gray-900">Record Details</h3>
+        <button
+          onClick={onClose}
+          className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded"
+        >
+          <X className="w-5 h-5" />
+        </button>
+      </div>
+
+      {/* Fields */}
+      <div className="flex-1 overflow-y-auto p-4">
+        <div className="space-y-4">
+          {fields.map((field) => {
+            const value = record.data[field.id];
+            const isEditing = editingFieldId === field.id;
+            const Icon = FIELD_TYPE_ICONS[field.type] || Type;
+
+            return (
+              <div key={field.id} className="space-y-1">
+                <label className="flex items-center gap-1.5 text-sm font-medium text-gray-500">
+                  <Icon className="w-4 h-4" />
+                  {field.name}
+                </label>
+                <div
+                  className="min-h-[36px] px-3 py-2 border border-gray-200 rounded-lg cursor-pointer hover:border-gray-300 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500"
+                  onClick={() => {
+                    if (!isEditing) {
+                      setEditingFieldId(field.id);
+                    }
+                  }}
+                >
+                  {isEditing ? (
+                    <CellEditor
+                      field={field}
+                      value={value}
+                      onSave={(newValue) => {
+                        onCellEdit(field.id, newValue);
+                        setEditingFieldId(null);
+                      }}
+                      onCancel={() => setEditingFieldId(null)}
+                    />
+                  ) : value !== null && value !== undefined && value !== "" ? (
+                    <CellDisplay field={field} value={value} />
+                  ) : (
+                    <span className="text-gray-400">Empty</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="px-4 py-3 border-t border-gray-200 text-xs text-gray-400">
+        <div>Created: {new Date(record.createdAt).toLocaleString()}</div>
+        <div>Updated: {new Date(record.updatedAt).toLocaleString()}</div>
+      </div>
+    </div>
+  );
+}
+
 // Main Base Page Component
 export default function BasePage() {
   const params = useParams();
@@ -660,6 +1124,7 @@ export default function BasePage() {
   const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedRecord, setSelectedRecord] = useState<RecordData | null>(null);
 
   // Dialog states
   const [isAddTableOpen, setIsAddTableOpen] = useState(false);
@@ -667,8 +1132,14 @@ export default function BasePage() {
   const [isAddFieldOpen, setIsAddFieldOpen] = useState(false);
   const [newFieldName, setNewFieldName] = useState("");
   const [newFieldType, setNewFieldType] = useState("text");
+  const [isAddViewOpen, setIsAddViewOpen] = useState(false);
+  const [newViewName, setNewViewName] = useState("");
+  const [newViewType, setNewViewType] = useState<"grid" | "kanban">("grid");
 
   const getToken = () => getCookie("session_token");
+
+  // Get active view
+  const activeView = activeTable?.views.find((v) => v.id === activeViewId) || activeTable?.views[0];
 
   // Fetch base data
   const fetchBase = useCallback(async () => {
@@ -813,8 +1284,64 @@ export default function BasePage() {
     }
   };
 
+  // Add new view
+  const addView = async () => {
+    if (!newViewName.trim() || !activeTableId) return;
+
+    const token = getToken();
+    if (!token) return;
+
+    try {
+      const res = await fetch(`/api/tables/${activeTableId}/views`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: newViewName.trim(),
+          type: newViewType,
+          config: {},
+        }),
+      });
+
+      if (res.ok) {
+        const newView = await res.json();
+        fetchTable();
+        setActiveViewId(newView.id);
+        setIsAddViewOpen(false);
+        setNewViewName("");
+        setNewViewType("grid");
+      }
+    } catch (error) {
+      console.error("Failed to create view:", error);
+    }
+  };
+
+  // Update view config
+  const updateViewConfig = async (config: Partial<ViewConfig>) => {
+    if (!activeView) return;
+
+    const token = getToken();
+    if (!token) return;
+
+    try {
+      await fetch(`/api/views/${activeView.id}`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ config }),
+      });
+      fetchTable();
+    } catch (error) {
+      console.error("Failed to update view config:", error);
+    }
+  };
+
   // Add new record
-  const addRecord = async () => {
+  const addRecord = async (initialData?: Record<string, unknown>) => {
     if (!activeTableId) return;
 
     const token = getToken();
@@ -827,7 +1354,7 @@ export default function BasePage() {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ data: {} }),
+        body: JSON.stringify({ data: initialData || {} }),
       });
 
       if (res.ok) {
@@ -850,6 +1377,13 @@ export default function BasePage() {
         r.id === recordId ? { ...r, data: { ...r.data, [fieldId]: value } } : r
       )
     );
+
+    // Also update selected record if it's the same
+    if (selectedRecord?.id === recordId) {
+      setSelectedRecord((prev) =>
+        prev ? { ...prev, data: { ...prev.data, [fieldId]: value } } : null
+      );
+    }
 
     try {
       await fetch(`/api/records/${recordId}`, {
@@ -947,6 +1481,11 @@ export default function BasePage() {
     setColumnWidths((prev) => ({ ...prev, [fieldId]: width }));
   };
 
+  // Record click handler
+  const handleRecordClick = (record: RecordData) => {
+    setSelectedRecord(record);
+  };
+
   if (isLoading) {
     return (
       <div className="h-full flex items-center justify-center">
@@ -982,7 +1521,11 @@ export default function BasePage() {
         {base.tables.map((table) => (
           <button
             key={table.id}
-            onClick={() => setActiveTableId(table.id)}
+            onClick={() => {
+              setActiveTableId(table.id);
+              setActiveViewId(null);
+              setSelectedRecord(null);
+            }}
             className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${
               activeTableId === table.id
                 ? "border-blue-600 text-blue-600"
@@ -1008,7 +1551,10 @@ export default function BasePage() {
             return (
               <button
                 key={view.id}
-                onClick={() => setActiveViewId(view.id)}
+                onClick={() => {
+                  setActiveViewId(view.id);
+                  setSelectedRecord(null);
+                }}
                 className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium border-b-2 -mb-px ${
                   activeViewId === view.id
                     ? "border-blue-600 text-blue-600"
@@ -1026,27 +1572,61 @@ export default function BasePage() {
               Grid View
             </span>
           )}
+          <button
+            onClick={() => setIsAddViewOpen(true)}
+            className="px-3 py-1.5 text-gray-500 hover:text-gray-700"
+          >
+            <Plus className="w-4 h-4" />
+          </button>
         </div>
       )}
 
-      {/* Grid view */}
-      {activeTable && (
-        <GridView
-          table={activeTable}
-          records={records}
-          selectedRows={selectedRows}
-          onSelectRow={selectRow}
-          onSelectAll={selectAll}
-          onCellEdit={editCell}
-          onAddRow={addRecord}
-          onAddField={() => setIsAddFieldOpen(true)}
-          onFieldRename={renameField}
-          onFieldChangeType={changeFieldType}
-          onFieldDelete={deleteField}
-          columnWidths={columnWidths}
-          onColumnResize={resizeColumn}
-        />
-      )}
+      {/* Main content area with optional detail panel */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* View content */}
+        {activeTable && (
+          <>
+            {activeView?.type === "kanban" ? (
+              <KanbanView
+                table={activeTable}
+                records={records}
+                view={activeView}
+                onCellEdit={editCell}
+                onAddRecord={addRecord}
+                onRecordClick={handleRecordClick}
+                onUpdateViewConfig={updateViewConfig}
+              />
+            ) : (
+              <GridView
+                table={activeTable}
+                records={records}
+                selectedRows={selectedRows}
+                onSelectRow={selectRow}
+                onSelectAll={selectAll}
+                onCellEdit={editCell}
+                onAddRow={() => addRecord()}
+                onAddField={() => setIsAddFieldOpen(true)}
+                onFieldRename={renameField}
+                onFieldChangeType={changeFieldType}
+                onFieldDelete={deleteField}
+                columnWidths={columnWidths}
+                onColumnResize={resizeColumn}
+                onRecordClick={handleRecordClick}
+              />
+            )}
+          </>
+        )}
+
+        {/* Record detail panel */}
+        {selectedRecord && activeTable && (
+          <RecordDetailPanel
+            record={selectedRecord}
+            fields={activeTable.fields}
+            onClose={() => setSelectedRecord(null)}
+            onCellEdit={(fieldId, value) => editCell(selectedRecord.id, fieldId, value)}
+          />
+        )}
+      </div>
 
       {/* Empty state */}
       {!activeTable && base.tables.length === 0 && (
@@ -1156,6 +1736,77 @@ export default function BasePage() {
               <button
                 onClick={addField}
                 disabled={!newFieldName.trim()}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              >
+                Create
+              </button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+
+      {/* Add View Dialog */}
+      <Dialog.Root open={isAddViewOpen} onOpenChange={setIsAddViewOpen}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 bg-black/50" />
+          <Dialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg shadow-xl p-6 w-[400px]">
+            <Dialog.Title className="text-lg font-semibold text-gray-900 mb-4">
+              Add View
+            </Dialog.Title>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Name
+                </label>
+                <input
+                  type="text"
+                  value={newViewName}
+                  onChange={(e) => setNewViewName(e.target.value)}
+                  placeholder="View name"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Type
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => setNewViewType("grid")}
+                    className={`flex items-center gap-2 px-4 py-3 border rounded-lg transition-colors ${
+                      newViewType === "grid"
+                        ? "border-blue-500 bg-blue-50 text-blue-700"
+                        : "border-gray-200 hover:border-gray-300"
+                    }`}
+                  >
+                    <Grid3X3 className="w-5 h-5" />
+                    <span className="font-medium">Grid</span>
+                  </button>
+                  <button
+                    onClick={() => setNewViewType("kanban")}
+                    className={`flex items-center gap-2 px-4 py-3 border rounded-lg transition-colors ${
+                      newViewType === "kanban"
+                        ? "border-blue-500 bg-blue-50 text-blue-700"
+                        : "border-gray-200 hover:border-gray-300"
+                    }`}
+                  >
+                    <Kanban className="w-5 h-5" />
+                    <span className="font-medium">Kanban</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => setIsAddViewOpen(false)}
+                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={addView}
+                disabled={!newViewName.trim()}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
               >
                 Create
