@@ -832,8 +832,8 @@
         "Typecheck passes"
       ],
       "priority": 50,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created apps/api/src/db/schema/documents.ts with 4 tables. documents table: uuid pk, org_id fk, title, type enum (doc/sheet/slide/mindnote/board), yjs_doc_id (unique varchar), owner_id fk, template_id, settings jsonb, timestamps, deleted_at soft delete. document_permissions table: uuid pk, document_id fk, principal_id, principal_type enum (user/department/org), role enum (viewer/editor/manager/owner), timestamps. document_versions table: uuid pk, document_id fk, name, snapshot_blob bytea, created_by fk, created_at. document_comments table: uuid pk, document_id fk, block_id, user_id fk, content text, resolved bool, thread_id self-ref fk, timestamps. Added comprehensive indexes. Migration 0014_slimy_mother_askani.sql generated and applied. Typecheck passes."
     },
     {
       "id": "US-051",
