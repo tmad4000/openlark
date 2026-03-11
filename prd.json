@@ -1006,8 +1006,8 @@
         "Typecheck passes"
       ],
       "priority": 60,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created wiki.ts schema with 3 tables: wiki_spaces (id, org_id, name, description, icon, type enum private/public, settings jsonb, timestamps), wiki_space_members (space_id, user_id, role enum admin/editor/viewer, created_at), wiki_pages (id, space_id, document_id fk to documents, parent_page_id self-ref for hierarchy, position, created_by, timestamps). Migration 0016_lyrical_bloodaxe.sql applied. Created wiki.ts routes with full CRUD: POST /wiki/spaces creates space with creator as admin, GET /wiki/spaces returns user's spaces (member + public), GET /wiki/spaces/:id returns space details, POST /wiki/spaces/:id/pages creates page with auto-linked document, GET /wiki/spaces/:id/pages returns hierarchical page tree, PATCH /wiki/pages/:id moves/reorders pages with circular reference detection, GET /wiki/pages/:id returns page with breadcrumb, DELETE /wiki/pages/:id deletes page. Also added member management: POST/DELETE /wiki/spaces/:id/members. Typecheck passes."
     },
     {
       "id": "US-061",

@@ -60,3 +60,4 @@
 [2026-03-11 04:35] US-057 — Document sharing dialog — PASS
 [2026-03-10 20:29] US-058 — Document version management — PASS
 [2026-03-10 20:34] US-059 — Documents list page — PASS
+[2026-03-10 20:42] US-060 — Wiki space schema and API — PASS
