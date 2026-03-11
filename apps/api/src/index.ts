@@ -16,8 +16,10 @@ import { documentCommentsRoutes } from "./routes/document-comments";
 import { uploadsRoutes } from "./routes/uploads";
 import { wikiRoutes } from "./routes/wiki";
 import { basesRoutes } from "./routes/bases";
+import { automationsRoutes } from "./routes/automations";
 import { wsRoutes } from "./routes/ws";
 import { closeRedis } from "./lib/redis";
+import { startAutomationWorker, stopAutomationWorker } from "./lib/automation-worker";
 
 const fastify = Fastify({
   logger: true,
@@ -47,6 +49,7 @@ await fastify.register(documentCommentsRoutes);
 await fastify.register(uploadsRoutes);
 await fastify.register(wikiRoutes);
 await fastify.register(basesRoutes);
+await fastify.register(automationsRoutes);
 await fastify.register(wsRoutes);
 
 fastify.get("/", async () => {
@@ -62,6 +65,9 @@ const start = async () => {
     const port = parseInt(process.env.PORT || "3001", 10);
     await fastify.listen({ port, host: "0.0.0.0" });
     console.log(`API server listening on port ${port}`);
+
+    // Start automation worker
+    startAutomationWorker();
   } catch (err) {
     fastify.log.error(err);
     process.exit(1);
@@ -72,6 +78,7 @@ const start = async () => {
 const shutdown = async () => {
   console.log("Shutting down...");
   await fastify.close();
+  await stopAutomationWorker();
   await closeRedis();
   process.exit(0);
 };

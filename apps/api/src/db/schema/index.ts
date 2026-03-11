@@ -13,3 +13,4 @@ export * from "./calendar";
 export * from "./documents";
 export * from "./wiki";
 export * from "./base";
+export * from "./automations";

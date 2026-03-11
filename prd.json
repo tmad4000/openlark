@@ -1144,8 +1144,8 @@
         "Typecheck passes"
       ],
       "priority": 68,
-      "passes": false,
-      "notes": "Automations run as background jobs. Keep execution within 30s timeout."
+      "passes": true,
+      "notes": "Created base_automations table (id, base_id, name, trigger jsonb, actions jsonb[], enabled, type enum automation/workflow, timestamps) and automation_runs table (id, automation_id, trigger_event jsonb, status enum pending/running/success/failed, error, started_at, completed_at). Added BullMQ worker (bullmq 5.34.0) with 30s execution timeout, 10 concurrent jobs. Supported triggers: record_created, record_updated (with optional fieldIds filter), record_matches_condition (with filter condition), scheduled (cron), button_clicked (tableId+fieldId), webhook_received. Supported actions: update_record, create_record, send_message (to chat with Redis publish), http_request (GET/POST/PUT/PATCH/DELETE with headers and body). Template variable substitution in actions ({{record.fieldId}}, {{recordId}}, {{tableId}}). Full CRUD API: GET/POST /bases/:id/automations, GET/PATCH/DELETE /automations/:id, POST /automations/:id/test, GET /automations/:id/runs. Record creation/update triggers automations automatically. Button field click endpoint POST /records/:id/button/:fieldId. Migration 0018_shallow_blur.sql. Typecheck passes."
     },
     {
       "id": "US-069",

@@ -3,6 +3,7 @@ import { db } from "../db";
 import { bases, baseTables, baseFields, baseRecords, baseViews, users } from "../db/schema";
 import { eq, and, desc, asc, sql, gt, lt, ilike, inArray } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
+import { triggerRecordAutomations, triggerButtonAutomation } from "../lib/automation-worker";
 
 // UUID validation regex
 const UUID_REGEX =
@@ -929,6 +930,16 @@ export async function basesRoutes(fastify: FastifyInstance) {
         .set({ updatedAt: new Date() })
         .where(eq(bases.id, table.baseId));
 
+      // Trigger automations for record creation
+      triggerRecordAutomations(
+        id,
+        "record_created",
+        newRecord.id,
+        data as Record<string, unknown>
+      ).catch((err) => {
+        console.error("Failed to trigger record creation automations:", err);
+      });
+
       return reply.status(201).send({
         id: newRecord.id,
         tableId: newRecord.tableId,
@@ -1221,6 +1232,17 @@ export async function basesRoutes(fastify: FastifyInstance) {
         .update(bases)
         .set({ updatedAt: new Date() })
         .where(eq(bases.id, record.baseId));
+
+      // Trigger automations for record update
+      triggerRecordAutomations(
+        record.tableId,
+        "record_updated",
+        id,
+        newData,
+        existingData
+      ).catch((err) => {
+        console.error("Failed to trigger record update automations:", err);
+      });
 
       return reply.status(200).send({
         id: updatedRecord.id,
@@ -1755,6 +1777,97 @@ export async function basesRoutes(fastify: FastifyInstance) {
       return reply.status(201).send({
         id: newRecord.id,
         success: true,
+      });
+    }
+  );
+
+  /**
+   * POST /records/:id/button/:fieldId - Trigger a button field click
+   * This is used for button-type fields that trigger automations
+   * Returns: { success: true, triggered: boolean }
+   */
+  fastify.post<{ Params: { id: string; fieldId: string } }>(
+    "/records/:id/button/:fieldId",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id, fieldId } = request.params;
+
+      // Validate UUID format
+      if (!UUID_REGEX.test(id) || !UUID_REGEX.test(fieldId)) {
+        return reply.status(400).send({
+          error: "Invalid ID format",
+        });
+      }
+
+      // User must belong to an organization
+      if (!request.user.orgId) {
+        return reply.status(400).send({
+          error: "User must belong to an organization",
+        });
+      }
+
+      const orgId = request.user.orgId;
+
+      // Get the record with table and base info
+      const [record] = await db
+        .select({
+          id: baseRecords.id,
+          tableId: baseRecords.tableId,
+          data: baseRecords.data,
+          baseId: baseTables.baseId,
+          baseOrgId: bases.orgId,
+        })
+        .from(baseRecords)
+        .innerJoin(baseTables, eq(baseRecords.tableId, baseTables.id))
+        .innerJoin(bases, eq(baseTables.baseId, bases.id))
+        .where(eq(baseRecords.id, id))
+        .limit(1);
+
+      if (!record) {
+        return reply.status(404).send({
+          error: "Record not found",
+        });
+      }
+
+      // Check org access
+      if (record.baseOrgId !== orgId) {
+        return reply.status(403).send({
+          error: "Access denied",
+        });
+      }
+
+      // Verify the field exists and is a button type
+      const [field] = await db
+        .select()
+        .from(baseFields)
+        .where(and(eq(baseFields.id, fieldId), eq(baseFields.tableId, record.tableId)))
+        .limit(1);
+
+      if (!field) {
+        return reply.status(404).send({
+          error: "Field not found",
+        });
+      }
+
+      if (field.type !== "button") {
+        return reply.status(400).send({
+          error: "Field is not a button type",
+        });
+      }
+
+      // Trigger button automations
+      triggerButtonAutomation(
+        record.tableId,
+        fieldId,
+        id,
+        (record.data ?? {}) as Record<string, unknown>
+      ).catch((err) => {
+        console.error("Failed to trigger button automations:", err);
+      });
+
+      return reply.status(200).send({
+        success: true,
+        triggered: true,
       });
     }
   );
