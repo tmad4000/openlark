@@ -703,7 +703,7 @@
         },
         {
           "description": "Build TipTap editor with core block types (headings, lists, code, tables)",
-          "done": false
+          "done": true
         },
         {
           "description": "Add slash commands, floating toolbar, drag handles",
@@ -724,6 +724,12 @@
           "role": "implementer",
           "value": 1,
           "reason": "Iteration 25 independent analysis: T-005 (Docs) is the recommended Phase 2 start per goal.md build order. Phase 1 (Auth + Messenger + Calendar) is functionally complete. Starting Docs would deliver the next major user-facing feature. However, requires Hocuspocus/Yjs infrastructure setup which is substantial."
+        },
+        {
+          "iteration": 26,
+          "role": "implementer",
+          "value": 1,
+          "reason": "Iteration 26: Backend complete (subtask 1), frontend gap critical. Users cannot create or edit docs despite full API. Subtask 2 (TipTap editor) is clear next step."
         }
       ],
       "comments": [
@@ -731,6 +737,11 @@
           "iteration": 25,
           "role": "implementer",
           "message": "Iteration 25: Implemented T-005 subtask 1 (Hocuspocus server with Yjs PostgreSQL persistence). Created docs module with database schema (documents, documentPermissions, documentVersions, documentComments, yjsUpdates tables), DocsService class with CRUD operations, Hocuspocus server with Database extension for PostgreSQL persistence, and full REST API for documents/permissions/versions/comments. Used custom bytea Drizzle type for Yjs Uint8Array binary state. Added 45 tests covering schema validation and auth requirements. All 275 tests pass. Build and lint pass."
+        },
+        {
+          "iteration": 26,
+          "role": "implementer",
+          "message": "Iteration 26: Implemented T-005 subtask 2 (TipTap editor with core block types). Created frontend docs module: DocumentList component with loading/error/empty states, CreateDocumentDialog for document creation, DocumentEditor with TipTap + Yjs collaboration support. Added docs API methods to api.ts. Created /docs page following established patterns. Installed TipTap packages (starter-kit, table, task-list, code-block-lowlight, collaboration, placeholder). 18 tests added (8 for DocumentList, 10 for CreateDocumentDialog). All 413 tests pass. Build and lint pass."
         }
       ],
       "status": "in-progress",
@@ -739,7 +750,7 @@
         "role": "implementer"
       },
       "claimedBy": {
-        "iteration": 25,
+        "iteration": 26,
         "role": "implementer"
       },
       "splitFrom": null
@@ -1441,7 +1452,7 @@
   ],
   "metadata": {
     "createdAt": "2026-03-04T21:00:00Z",
-    "totalIterations": 35,
+    "totalIterations": 36,
     "iterationLog": [
       {
         "iteration": 1,
@@ -1658,6 +1669,12 @@
         "role": "implementer",
         "taskWorked": "T-005",
         "contextCompacted": true
+      },
+      {
+        "iteration": 36,
+        "role": "implementer",
+        "taskWorked": "T-005",
+        "contextCompacted": false
       }
     ]
   }

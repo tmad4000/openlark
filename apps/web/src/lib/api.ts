@@ -265,6 +265,121 @@ class ApiClient {
       `/calendar/rooms${query ? `?${query}` : ""}`
     );
   }
+
+  // Docs endpoints
+  async getDocuments(params?: {
+    type?: "doc" | "sheet" | "slide" | "mindnote" | "board";
+    cursor?: string;
+    limit?: number;
+  }) {
+    const searchParams = new URLSearchParams();
+    if (params?.type) searchParams.set("type", params.type);
+    if (params?.cursor) searchParams.set("cursor", params.cursor);
+    if (params?.limit) searchParams.set("limit", params.limit.toString());
+    const query = searchParams.toString();
+    return this.request<{ documents: Document[] }>(
+      `/docs/documents${query ? `?${query}` : ""}`
+    );
+  }
+
+  async getDocument(documentId: string) {
+    return this.request<{ document: Document }>(`/docs/documents/${documentId}`);
+  }
+
+  async createDocument(data: {
+    title: string;
+    type: "doc" | "sheet" | "slide" | "mindnote" | "board";
+    templateId?: string;
+  }) {
+    return this.request<{ document: Document }>("/docs/documents", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateDocument(documentId: string, data: { title?: string }) {
+    return this.request<{ document: Document }>(`/docs/documents/${documentId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteDocument(documentId: string) {
+    return this.request<void>(`/docs/documents/${documentId}`, {
+      method: "DELETE",
+    });
+  }
+
+  // Document permissions
+  async getDocumentPermissions(documentId: string) {
+    return this.request<{ permissions: DocumentPermission[] }>(
+      `/docs/documents/${documentId}/permissions`
+    );
+  }
+
+  async addDocumentPermission(
+    documentId: string,
+    data: {
+      principalId: string;
+      principalType: "user" | "department" | "org";
+      role: "viewer" | "editor" | "manager" | "owner";
+    }
+  ) {
+    return this.request<{ permission: DocumentPermission }>(
+      `/docs/documents/${documentId}/permissions`,
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+      }
+    );
+  }
+
+  // Document versions
+  async getDocumentVersions(documentId: string) {
+    return this.request<{ versions: DocumentVersion[] }>(
+      `/docs/documents/${documentId}/versions`
+    );
+  }
+
+  async createDocumentVersion(documentId: string, data: { name: string }) {
+    return this.request<{ version: DocumentVersion }>(
+      `/docs/documents/${documentId}/versions`,
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+      }
+    );
+  }
+
+  async restoreDocumentVersion(versionId: string) {
+    return this.request<void>(`/docs/versions/${versionId}/restore`, {
+      method: "POST",
+    });
+  }
+
+  // Document comments
+  async getDocumentComments(documentId: string) {
+    return this.request<{ comments: DocumentComment[] }>(
+      `/docs/documents/${documentId}/comments`
+    );
+  }
+
+  async createDocumentComment(
+    documentId: string,
+    data: {
+      content: string;
+      blockId?: string;
+      threadId?: string;
+    }
+  ) {
+    return this.request<{ comment: DocumentComment }>(
+      `/docs/documents/${documentId}/comments`,
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+      }
+    );
+  }
 }
 
 // Types
@@ -378,6 +493,50 @@ export interface MeetingRoom {
   equipment: string[] | null;
   location: string | null;
   floor: string | null;
+}
+
+// Document types
+export interface Document {
+  id: string;
+  orgId: string;
+  title: string;
+  type: "doc" | "sheet" | "slide" | "mindnote" | "board";
+  ownerId: string;
+  templateId: string | null;
+  lastEditedBy: string | null;
+  lastEditedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DocumentPermission {
+  id: string;
+  documentId: string;
+  principalId: string;
+  principalType: "user" | "department" | "org";
+  role: "viewer" | "editor" | "manager" | "owner";
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface DocumentVersion {
+  id: string;
+  documentId: string;
+  name: string;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface DocumentComment {
+  id: string;
+  documentId: string;
+  userId: string;
+  content: string;
+  blockId: string | null;
+  threadId: string | null;
+  resolved: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export const api = new ApiClient();

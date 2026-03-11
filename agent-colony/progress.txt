@@ -2623,3 +2623,79 @@ T-005 subtask 1 complete. Remaining subtasks:
 - Subtask 6: Slides (presentation editing)
 
 ---
+
+## 2026-03-10 - Iteration 26 - T-005 (TipTap Editor Frontend)
+
+### What was implemented
+Built the frontend docs module with TipTap editor (T-005 subtask 2):
+
+1. **API Client** (`apps/web/src/lib/api.ts`):
+   - Added docs types: `Document`, `DocumentPermission`, `DocumentVersion`, `DocumentComment`
+   - Added methods: `getDocuments`, `getDocument`, `createDocument`, `updateDocument`, `deleteDocument`
+   - Added permission/version/comment methods
+
+2. **DocumentList component** (`apps/web/src/components/docs/document-list.tsx`):
+   - Fetches documents from API on mount
+   - Shows document type icons (doc, sheet, slide, mindnote, board)
+   - Highlights selected document
+   - Loading, empty, and error states
+   - Static `addDocument` method for external updates
+
+3. **DocumentEditor component** (`apps/web/src/components/docs/document-editor.tsx`):
+   - TipTap editor with StarterKit, TaskList, Table, CodeBlockLowlight
+   - Yjs integration via y-websocket WebSocketProvider
+   - Collaboration extension for real-time editing
+   - Toolbar with formatting buttons (bold, italic, headings, lists, code, table)
+   - Connection status indicator (connected/connecting/disconnected)
+
+4. **CreateDocumentDialog** (`apps/web/src/components/docs/create-document-dialog.tsx`):
+   - Modal for creating new documents
+   - Document type selector with icons
+   - Title input with "Untitled" default
+   - Loading and error states
+
+5. **Docs page** (`apps/web/src/app/(app)/docs/page.tsx`):
+   - AppShell layout with DocumentList in sidebar
+   - DocumentEditor in main area when document selected
+   - Empty state with welcome message
+
+### Files changed
+- `apps/web/package.json` - Added TipTap, Yjs, lowlight dependencies
+- `apps/web/src/lib/api.ts` - Added docs API methods and types
+- `apps/web/src/components/docs/document-list.tsx` - New component
+- `apps/web/src/components/docs/document-editor.tsx` - New component
+- `apps/web/src/components/docs/create-document-dialog.tsx` - New component
+- `apps/web/src/components/docs/index.ts` - Barrel exports
+- `apps/web/src/app/(app)/docs/page.tsx` - New page
+- `apps/web/src/components/docs/document-list.test.tsx` - 8 tests
+- `apps/web/src/components/docs/create-document-dialog.test.tsx` - 10 tests
+
+### Tests added
+- **8 DocumentList tests**: loading, empty state, renders list, error state, selection, highlighting, create button
+- **10 CreateDocumentDialog tests**: render, type options, selection, create with title, default title, loading, error, cancel, different types
+
+### Plan deviations
+- None — followed established patterns from calendar and messenger modules
+
+### Learnings for future iterations
+- **Pattern reinforced**: Static method pattern (`DocumentList.addDocument`) matches calendar/messenger
+- **Pattern reinforced**: Three-panel layout with sidebar list, main content area
+- **Gotcha**: TipTap v3 table extensions use named exports (`{ Table }`) not default exports
+- **Gotcha**: StarterKit no longer has a `history` option in v3 (Collaboration extension handles undo/redo)
+- **Note**: Docs page is 469kB First Load JS due to TipTap + Yjs bundles — consider code splitting for production
+- **Self-reflection**: Backend was complete from iteration 25, frontend was the gap. This follows the pattern seen in Calendar iterations (backend complete, frontend gap).
+
+### Tech debt addressed
+- ✅ Frontend docs module now exists (was missing after backend iteration 25)
+
+### Tech debt remaining
+- T-005 subtasks 3-5 (slash commands, floating toolbar, drag handles, permissions UI, comments, synced blocks)
+- Static method pattern fragile (`chat-list.tsx`, `message-list.tsx`, `event-list.tsx`, `document-list.tsx`)
+- Auto-generated tabs not implemented (FR-2.15 partial)
+- Typing/presence tests skipped
+- Login needs org context for multi-tenant
+- `next lint` deprecation warning
+- DialogContent accessibility warnings (missing Description)
+- Docs page large bundle size (469kB)
+
+---
