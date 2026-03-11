@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { Search, Plus, MessageCircle, Users, Bell, BellOff, AtSign, Info, Wifi, WifiOff, Loader2, Check, CheckCheck, Circle, MoreHorizontal, Reply, X, MessageSquare, Pin, Star, Pencil, Trash2, Forward, Square, CheckSquare, Tag, FileText, File, FolderOpen, ExternalLink, GripVertical, Shield, Crown, UserPlus, UserMinus, Settings, Globe, Lock, ChevronDown, ChevronRight, LogOut, Megaphone } from "lucide-react";
+import { Search, Plus, MessageCircle, Users, Bell, BellOff, AtSign, Info, Wifi, WifiOff, Loader2, Check, CheckCheck, Circle, MoreHorizontal, Reply, X, MessageSquare, Pin, Star, Pencil, Trash2, Forward, Square, CheckSquare, Tag, FileText, File, FolderOpen, ExternalLink, GripVertical, Shield, Crown, UserPlus, UserMinus, Settings, Globe, Lock, ChevronDown, ChevronRight, LogOut, Megaphone, Zap } from "lucide-react";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as ContextMenu from "@radix-ui/react-context-menu";
 import MessageInput, { MentionUser } from "@/components/MessageInput";
@@ -432,11 +432,13 @@ function QuickReactionPicker({
   onFavorite,
   onEdit,
   onRecall,
+  onBuzz,
   isPinned,
   isFavorited,
   canEdit,
   canRecall,
   canForward,
+  canBuzz,
 }: {
   onSelect: (emoji: string) => void;
   onOpenFull: () => void;
@@ -446,11 +448,13 @@ function QuickReactionPicker({
   onFavorite?: () => void;
   onEdit?: () => void;
   onRecall?: () => void;
+  onBuzz?: () => void;
   isPinned?: boolean;
   isFavorited?: boolean;
   canEdit?: boolean;
   canRecall?: boolean;
   canForward?: boolean;
+  canBuzz?: boolean;
 }) {
   return (
     <div className="flex items-center gap-0.5 bg-white border border-gray-200 rounded-full shadow-lg px-1.5 py-0.5">
@@ -526,6 +530,15 @@ function QuickReactionPicker({
           title="Recall message"
         >
           <Trash2 className="w-4 h-4" />
+        </button>
+      )}
+      {canBuzz && onBuzz && (
+        <button
+          onClick={onBuzz}
+          className="w-7 h-7 flex items-center justify-center hover:bg-orange-50 rounded-full transition-colors text-orange-500 hover:text-orange-600"
+          title="Buzz - send urgent notification"
+        >
+          <Zap className="w-4 h-4" />
         </button>
       )}
     </div>
@@ -772,8 +785,10 @@ function MessageBubble({
   onEdit,
   onRecall,
   onForward,
+  onBuzz,
   isPinned,
   isFavorited,
+  isBuzzed,
   isSelectionMode,
   isSelected,
   onToggleSelect,
@@ -789,8 +804,10 @@ function MessageBubble({
   onEdit?: (messageId: string) => void;
   onRecall?: (messageId: string) => void;
   onForward?: (messageId: string) => void;
+  onBuzz?: (messageId: string) => void;
   isPinned?: boolean;
   isFavorited?: boolean;
+  isBuzzed?: boolean;
   isSelectionMode?: boolean;
   isSelected?: boolean;
   onToggleSelect?: (messageId: string) => void;
@@ -905,6 +922,14 @@ function MessageBubble({
         )}
 
         <div className="relative">
+          {/* Buzz urgent indicator */}
+          {isBuzzed && (
+            <div className="absolute -top-1 -right-1 z-10">
+              <div className="w-5 h-5 bg-red-500 rounded-full flex items-center justify-center animate-pulse shadow-lg">
+                <Zap className="w-3 h-3 text-white" />
+              </div>
+            </div>
+          )}
           <div
             className={`px-3 py-2 rounded-2xl ${
               isCurrentUser
@@ -912,7 +937,7 @@ function MessageBubble({
                   ? "bg-blue-400 text-white rounded-br-md"
                   : "bg-blue-600 text-white rounded-br-md"
                 : "bg-gray-100 text-gray-900 rounded-bl-md"
-            }`}
+            } ${isBuzzed ? "ring-2 ring-red-500 ring-opacity-50" : ""}`}
           >
             {renderMessageContent(message)}
           </div>
@@ -957,11 +982,16 @@ function MessageBubble({
                   setShowReactionPicker(false);
                   onRecall(message.id);
                 } : undefined}
+                onBuzz={onBuzz ? () => {
+                  setShowReactionPicker(false);
+                  onBuzz(message.id);
+                } : undefined}
                 isPinned={isPinned}
                 isFavorited={isFavorited}
                 canEdit={isCurrentUser && !message.recalledAt && (message.type === "text" || message.type === "rich_text")}
                 canRecall={isCurrentUser && !message.recalledAt}
                 canForward={!message.recalledAt && message.type !== "system"}
+                canBuzz={isCurrentUser && !message.recalledAt && message.type !== "system"}
               />
             </div>
           )}
@@ -1794,6 +1824,33 @@ function ChatView({
     setShowForwardModal(false);
     setForwardingMessageId(null);
     setForwardingMessage(null);
+  }, []);
+
+  // Buzz message state
+  const [buzzingMessageId, setBuzzingMessageId] = useState<string | null>(null);
+  const [buzzingMessage, setBuzzingMessage] = useState<Message | null>(null);
+  const [showBuzzDialog, setShowBuzzDialog] = useState(false);
+  const [buzzedMessageIds, setBuzzedMessageIds] = useState<Set<string>>(new Set());
+
+  // Open buzz dialog for a message
+  const openBuzzDialog = useCallback((messageId: string) => {
+    const message = messages.find(m => m.id === messageId);
+    if (!message) return;
+    setBuzzingMessageId(messageId);
+    setBuzzingMessage(message);
+    setShowBuzzDialog(true);
+  }, [messages]);
+
+  // Close buzz dialog
+  const closeBuzzDialog = useCallback(() => {
+    setShowBuzzDialog(false);
+    setBuzzingMessageId(null);
+    setBuzzingMessage(null);
+  }, []);
+
+  // Handle buzz sent - mark message as buzzed
+  const handleBuzzSent = useCallback((messageId: string) => {
+    setBuzzedMessageIds((prev) => new Set(prev).add(messageId));
   }, []);
 
   // Multi-select mode for combining and forwarding multiple messages
@@ -2864,8 +2921,10 @@ function ChatView({
                         onEdit={startEditing}
                         onRecall={recallMessage}
                         onForward={openForwardModal}
+                        onBuzz={openBuzzDialog}
                         isPinned={pinnedMessageIds.has(message.id)}
                         isFavorited={favoritedMessageIds.has(message.id)}
+                        isBuzzed={buzzedMessageIds.has(message.id)}
                         isSelectionMode={isSelectionMode}
                         isSelected={selectedMessageIds.has(message.id)}
                         onToggleSelect={toggleMessageSelection}
@@ -3141,6 +3200,18 @@ function ChatView({
           onClose={closeMultiForwardModal}
         />
       )}
+
+      {/* Buzz Message Dialog */}
+      {showBuzzDialog && buzzingMessage && currentUserId && (
+        <BuzzMessageDialog
+          messageId={buzzingMessageId!}
+          message={buzzingMessage}
+          chatMembers={chatMembers}
+          currentUserId={currentUserId}
+          onClose={closeBuzzDialog}
+          onBuzzSent={handleBuzzSent}
+        />
+      )}
     </div>
   );
 }
@@ -3361,6 +3432,292 @@ function ForwardMessageModal({
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
+  );
+}
+
+// Buzz Message Dialog Component - send urgent notification for a message
+function BuzzMessageDialog({
+  messageId,
+  message,
+  chatMembers,
+  currentUserId,
+  onClose,
+  onBuzzSent,
+}: {
+  messageId: string;
+  message: Message;
+  chatMembers: MentionUser[];
+  currentUserId: string;
+  onClose: () => void;
+  onBuzzSent?: (messageId: string) => void;
+}) {
+  const [selectedRecipient, setSelectedRecipient] = useState<string | null>(null);
+  const [isSending, setIsSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // Filter out current user from recipients
+  const availableRecipients = useMemo(() => {
+    const filtered = chatMembers.filter((m) => m.id !== currentUserId);
+    if (!searchQuery.trim()) return filtered;
+    const query = searchQuery.toLowerCase();
+    return filtered.filter((m) =>
+      m.displayName?.toLowerCase().includes(query)
+    );
+  }, [chatMembers, currentUserId, searchQuery]);
+
+  const handleSendBuzz = async () => {
+    if (!selectedRecipient) return;
+
+    const token = getCookie("session_token");
+    if (!token) return;
+
+    setIsSending(true);
+    setError(null);
+
+    try {
+      const res = await fetch(`/api/messages/${messageId}/buzz`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          recipient_id: selectedRecipient,
+          type: "in_app",
+        }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to send buzz");
+      }
+
+      onBuzzSent?.(messageId);
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to send buzz");
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  return (
+    <Dialog.Root open={true} onOpenChange={(open) => !open && onClose()}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 bg-black/50 z-50" />
+        <Dialog.Content className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg shadow-xl z-50 w-full max-w-md max-h-[80vh] flex flex-col">
+          <div className="p-4 border-b border-gray-200">
+            <Dialog.Title className="text-lg font-semibold flex items-center gap-2">
+              <Zap className="w-5 h-5 text-orange-500" />
+              Buzz - Urgent Notification
+            </Dialog.Title>
+            <Dialog.Description className="text-sm text-gray-500 mt-1">
+              Send an urgent notification to get someone&apos;s immediate attention
+            </Dialog.Description>
+            <button
+              onClick={onClose}
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Message Preview */}
+          <div className="px-4 py-3 bg-orange-50 border-b border-orange-100">
+            <div className="text-xs text-orange-600 font-medium mb-1">Message to buzz:</div>
+            <div className="text-sm text-gray-700 line-clamp-2">
+              {message.content.text ? String(message.content.text) : "[Message]"}
+            </div>
+          </div>
+
+          {/* Search */}
+          <div className="p-3 border-b border-gray-200">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search recipients..."
+                className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+              />
+            </div>
+          </div>
+
+          {/* Recipient List */}
+          <div className="flex-1 overflow-y-auto min-h-0">
+            {availableRecipients.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                {searchQuery ? "No recipients found" : "No other chat members"}
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-100">
+                {availableRecipients.map((member) => (
+                  <button
+                    key={member.id}
+                    onClick={() => setSelectedRecipient(member.id)}
+                    className={`w-full flex items-center gap-3 p-3 hover:bg-gray-50 transition-colors text-left ${
+                      selectedRecipient === member.id ? "bg-orange-50" : ""
+                    }`}
+                  >
+                    <div className="relative">
+                      {selectedRecipient === member.id ? (
+                        <div className="w-10 h-10 rounded-full bg-orange-500 flex items-center justify-center">
+                          <Check className="w-5 h-5 text-white" />
+                        </div>
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-gray-200 overflow-hidden flex items-center justify-center">
+                          {member.avatarUrl ? (
+                            <img
+                              src={member.avatarUrl}
+                              alt={member.displayName || "User"}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <span className="text-sm font-medium text-gray-600">
+                              {member.displayName?.charAt(0).toUpperCase() || "?"}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-gray-900 truncate">
+                        {member.displayName || "Unknown"}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Warning */}
+          <div className="px-4 py-2 bg-yellow-50 text-yellow-700 text-xs border-t border-yellow-100">
+            <strong>Note:</strong> Buzz sends a full-screen urgent notification. Use sparingly.
+          </div>
+
+          {/* Error Message */}
+          {error && (
+            <div className="px-4 py-2 bg-red-50 text-red-600 text-sm border-t border-red-100">
+              {error}
+            </div>
+          )}
+
+          {/* Footer */}
+          <div className="p-4 border-t border-gray-200 flex items-center justify-between">
+            <div className="text-sm text-gray-500">
+              {selectedRecipient
+                ? `Buzz ${availableRecipients.find((r) => r.id === selectedRecipient)?.displayName || "selected user"}`
+                : "Select a recipient"}
+            </div>
+            <button
+              onClick={handleSendBuzz}
+              disabled={!selectedRecipient || isSending}
+              className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+            >
+              {isSending ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <Zap className="w-4 h-4" />
+                  Send Buzz
+                </>
+              )}
+            </button>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
+
+// Buzz Overlay Component - full-screen urgent notification for recipients
+interface BuzzEvent {
+  buzzId: string;
+  messageId: string;
+  chatId: string;
+  chatName: string;
+  senderName: string;
+  messagePreview: string;
+  createdAt: string;
+}
+
+function BuzzOverlay({
+  buzz,
+  onDismiss,
+  onViewInChat,
+}: {
+  buzz: BuzzEvent;
+  onDismiss: () => void;
+  onViewInChat: () => void;
+}) {
+  // Auto-dismiss after 60 seconds if user doesn't interact
+  useEffect(() => {
+    const timeout = setTimeout(onDismiss, 60000);
+    return () => clearTimeout(timeout);
+  }, [onDismiss]);
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center">
+      {/* Animated pulsing background */}
+      <div className="absolute inset-0 bg-red-600 animate-pulse" />
+      <div className="absolute inset-0 bg-gradient-to-b from-red-500/90 to-red-700/90" />
+
+      {/* Content */}
+      <div className="relative z-10 max-w-md w-full mx-4 text-center">
+        {/* Urgent indicator */}
+        <div className="mb-6 flex justify-center">
+          <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center shadow-2xl animate-bounce">
+            <Zap className="w-14 h-14 text-red-500" />
+          </div>
+        </div>
+
+        {/* Header */}
+        <h1 className="text-3xl font-bold text-white mb-2 drop-shadow-lg">
+          URGENT MESSAGE
+        </h1>
+
+        {/* Sender info */}
+        <div className="text-white/90 text-lg mb-6">
+          <span className="font-semibold">{buzz.senderName}</span> buzzed you in{" "}
+          <span className="font-semibold">{buzz.chatName}</span>
+        </div>
+
+        {/* Message preview */}
+        <div className="bg-white/20 backdrop-blur-sm rounded-xl p-4 mb-8 text-left">
+          <div className="text-white text-base leading-relaxed line-clamp-4">
+            {buzz.messagePreview}
+          </div>
+        </div>
+
+        {/* Action buttons */}
+        <div className="flex flex-col gap-3">
+          <button
+            onClick={onViewInChat}
+            className="w-full py-4 bg-white text-red-600 font-bold text-lg rounded-xl hover:bg-gray-100 transition-colors shadow-lg flex items-center justify-center gap-2"
+          >
+            <MessageCircle className="w-5 h-5" />
+            View in Chat
+          </button>
+          <button
+            onClick={onDismiss}
+            className="w-full py-3 bg-white/20 text-white font-medium rounded-xl hover:bg-white/30 transition-colors"
+          >
+            Dismiss
+          </button>
+        </div>
+
+        {/* Timestamp */}
+        <div className="mt-6 text-white/70 text-sm">
+          Received at {new Date(buzz.createdAt).toLocaleTimeString()}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -5833,6 +6190,25 @@ export default function MessengerPage() {
   // Online presence - track who is online
   const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
 
+  // Buzz overlay state (for receiving buzzes)
+  const [activeBuzz, setActiveBuzz] = useState<BuzzEvent | null>(null);
+
+  // Dismiss buzz overlay
+  const dismissBuzz = useCallback(() => {
+    setActiveBuzz(null);
+  }, []);
+
+  // View buzzed message in chat
+  const viewBuzzInChat = useCallback(() => {
+    if (!activeBuzz) return;
+    // Select the chat with the buzzed message
+    const buzzChat = chats.find((c: Chat) => c.id === activeBuzz.chatId);
+    if (buzzChat) {
+      setSelectedChatId(buzzChat.id);
+    }
+    setActiveBuzz(null);
+  }, [activeBuzz, chats]);
+
   // Handle incoming WebSocket messages
   const handleWebSocketMessage = useCallback((message: WebSocketMessage) => {
     if (message.type === "message" && message.payload) {
@@ -5879,6 +6255,16 @@ export default function MessengerPage() {
       const payload = message.payload as Message;
       setUpdatedMessage(payload);
     }
+
+    // Handle buzz (urgent notification) events
+    if (message.type === "buzz" && message.payload) {
+      const payload = message.payload as BuzzEvent;
+      setActiveBuzz(payload);
+    }
+
+    // Handle notification events (includes buzz notifications)
+    // Note: Buzz notifications are handled via the dedicated "buzz" event type above
+    // Other notification types can be handled here if needed in the future
   }, [currentUserId]);
 
   // Handle typing events
@@ -6239,6 +6625,15 @@ export default function MessengerPage() {
         onClose={() => setIsNewChatDialogOpen(false)}
         onChatCreated={handleChatCreated}
       />
+
+      {/* Buzz Overlay - full-screen urgent notification for incoming buzzes */}
+      {activeBuzz && (
+        <BuzzOverlay
+          buzz={activeBuzz}
+          onDismiss={dismissBuzz}
+          onViewInChat={viewBuzzInChat}
+        />
+      )}
     </div>
   );
 }
