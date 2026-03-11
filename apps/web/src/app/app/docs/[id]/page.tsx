@@ -11,9 +11,12 @@ import {
   Share2,
   Star,
   Trash2,
+  Users,
 } from "lucide-react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
+import * as Tooltip from "@radix-ui/react-tooltip";
 import dynamic from "next/dynamic";
+import type { Collaborator } from "@/components/DocumentEditor";
 
 // Dynamically import the editor to avoid SSR issues with Yjs
 const DocumentEditor = dynamic(
@@ -76,6 +79,7 @@ export default function DocumentEditorPage() {
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("syncing");
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState("");
+  const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
 
   // Fetch user and document data
   useEffect(() => {
@@ -191,6 +195,11 @@ export default function DocumentEditorPage() {
     setSyncStatus(status);
   }, []);
 
+  // Handle collaborators change
+  const handleCollaboratorsChange = useCallback((newCollaborators: Collaborator[]) => {
+    setCollaborators(newCollaborators);
+  }, []);
+
   if (isLoading) {
     return (
       <div className="h-full flex items-center justify-center bg-white">
@@ -293,6 +302,54 @@ export default function DocumentEditorPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Collaborators avatars */}
+          {collaborators.length > 0 && (
+            <Tooltip.Provider>
+              <div className="flex items-center -space-x-2 mr-2">
+                {collaborators.slice(0, 4).map((collaborator) => (
+                  <Tooltip.Root key={collaborator.clientId}>
+                    <Tooltip.Trigger asChild>
+                      <div
+                        className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium text-white border-2 border-white cursor-default"
+                        style={{ backgroundColor: collaborator.color }}
+                        title={collaborator.name}
+                      >
+                        {collaborator.name.charAt(0).toUpperCase()}
+                      </div>
+                    </Tooltip.Trigger>
+                    <Tooltip.Portal>
+                      <Tooltip.Content
+                        className="bg-gray-900 text-white text-xs px-2 py-1 rounded shadow-lg z-50"
+                        sideOffset={5}
+                      >
+                        {collaborator.name}
+                        <Tooltip.Arrow className="fill-gray-900" />
+                      </Tooltip.Content>
+                    </Tooltip.Portal>
+                  </Tooltip.Root>
+                ))}
+                {collaborators.length > 4 && (
+                  <Tooltip.Root>
+                    <Tooltip.Trigger asChild>
+                      <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium text-gray-600 bg-gray-200 border-2 border-white cursor-default">
+                        +{collaborators.length - 4}
+                      </div>
+                    </Tooltip.Trigger>
+                    <Tooltip.Portal>
+                      <Tooltip.Content
+                        className="bg-gray-900 text-white text-xs px-2 py-1 rounded shadow-lg z-50 max-w-[200px]"
+                        sideOffset={5}
+                      >
+                        {collaborators.slice(4).map((c) => c.name).join(", ")}
+                        <Tooltip.Arrow className="fill-gray-900" />
+                      </Tooltip.Content>
+                    </Tooltip.Portal>
+                  </Tooltip.Root>
+                )}
+              </div>
+            </Tooltip.Provider>
+          )}
+
           {/* Share button */}
           <button
             onClick={() => {
@@ -356,6 +413,7 @@ export default function DocumentEditorPage() {
           token={token}
           userName={user.displayName || user.email}
           onSyncStatusChange={handleSyncStatusChange}
+          onCollaboratorsChange={handleCollaboratorsChange}
         />
       </div>
     </div>

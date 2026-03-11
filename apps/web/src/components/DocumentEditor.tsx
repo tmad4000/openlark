@@ -62,6 +62,12 @@ import { Callout, CalloutType, Toggle, ToggleSummary, ToggleContent, FileAttachm
 // Create lowlight instance with common languages
 const lowlight = createLowlight(common);
 
+export interface Collaborator {
+  clientId: number;
+  name: string;
+  color: string;
+}
+
 interface DocumentEditorProps {
   documentId: string;
   yjsDocId: string;
@@ -69,6 +75,7 @@ interface DocumentEditorProps {
   userName: string;
   userColor?: string;
   onSyncStatusChange?: (status: "syncing" | "synced" | "offline") => void;
+  onCollaboratorsChange?: (collaborators: Collaborator[]) => void;
 }
 
 // Slash command menu items
@@ -760,6 +767,7 @@ export default function DocumentEditor({
   userName,
   userColor,
   onSyncStatusChange,
+  onCollaboratorsChange,
 }: DocumentEditorProps) {
   const [isConnected, setIsConnected] = useState(false);
   const [isSynced, setIsSynced] = useState(false);
@@ -805,14 +813,39 @@ export default function DocumentEditor({
           setIsConnected(false);
         }
       },
+      onAwarenessUpdate: ({ states }) => {
+        // Extract collaborator info from awareness states
+        const collaborators: Collaborator[] = [];
+        for (const state of states) {
+          const clientId = state.clientId as number;
+          // Skip our own client
+          if (clientId === provider.awareness?.clientID) continue;
+
+          const user = state.user as { name?: string; color?: string } | undefined;
+          if (user?.name) {
+            collaborators.push({
+              clientId,
+              name: user.name,
+              color: user.color || "#888888",
+            });
+          }
+        }
+        onCollaboratorsChange?.(collaborators);
+      },
     });
 
     providerRef.current = provider;
 
+    // Set our own awareness state
+    provider.awareness?.setLocalStateField("user", {
+      name: userName,
+      color: colorRef.current,
+    });
+
     return () => {
       provider.destroy();
     };
-  }, [yjsDocId, token, onSyncStatusChange]);
+  }, [yjsDocId, token, userName, onSyncStatusChange, onCollaboratorsChange]);
 
   // Setup slash command suggestion
   const slashCommandSuggestion = {
@@ -988,6 +1021,19 @@ export default function DocumentEditor({
                 user: {
                   name: userName,
                   color: colorRef.current,
+                },
+                render: (user: { name: string; color: string }) => {
+                  const cursor = document.createElement("span");
+                  cursor.classList.add("collaboration-cursor__caret");
+                  cursor.style.borderColor = user.color;
+
+                  const label = document.createElement("div");
+                  label.classList.add("collaboration-cursor__label");
+                  label.style.backgroundColor = user.color;
+                  label.textContent = user.name;
+                  cursor.appendChild(label);
+
+                  return cursor;
                 },
               }),
             ]
