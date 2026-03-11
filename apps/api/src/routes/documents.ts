@@ -5,8 +5,10 @@ import {
   documentPermissions,
   users,
   departmentMembers,
+  departments,
+  organizations,
 } from "../db/schema";
-import { eq, and, or, inArray, desc, sql, isNull } from "drizzle-orm";
+import { eq, and, or, inArray, desc, sql, isNull, ilike } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
 import { randomUUID } from "crypto";
 
@@ -1010,6 +1012,440 @@ export async function documentsRoutes(fastify: FastifyInstance) {
         .where(eq(documentPermissions.id, permissionId));
 
       return reply.status(200).send({ success: true });
+    }
+  );
+
+  /**
+   * GET /documents/:id/collaborators - Get enriched collaborator list
+   * Returns: Permissions with user/department/org details
+   */
+  fastify.get<{ Params: { id: string } }>(
+    "/documents/:id/collaborators",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id } = request.params;
+
+      // Validate UUID format
+      if (!UUID_REGEX.test(id)) {
+        return reply.status(400).send({
+          error: "Invalid document ID format",
+        });
+      }
+
+      // User must belong to an organization
+      if (!request.user.orgId) {
+        return reply.status(400).send({
+          error: "User must belong to an organization",
+        });
+      }
+
+      const currentUserId = request.user.id;
+      const orgId = request.user.orgId;
+
+      // Get the document
+      const [doc] = await db
+        .select()
+        .from(documents)
+        .where(
+          and(
+            eq(documents.id, id),
+            eq(documents.orgId, orgId),
+            isNull(documents.deletedAt)
+          )
+        )
+        .limit(1);
+
+      if (!doc) {
+        return reply.status(404).send({
+          error: "Document not found",
+        });
+      }
+
+      // Check if user has access
+      const userRole = await getUserDocumentRole(id, currentUserId, orgId);
+      if (!userRole) {
+        return reply.status(403).send({
+          error: "Access denied - no permission to view this document",
+        });
+      }
+
+      // Get all permissions
+      const permissions = await db
+        .select()
+        .from(documentPermissions)
+        .where(eq(documentPermissions.documentId, id));
+
+      // Enrich with details
+      const enrichedCollaborators = await Promise.all(
+        permissions.map(async (p) => {
+          let principalDetails: {
+            id: string;
+            name: string;
+            avatarUrl: string | null;
+            email?: string;
+            memberCount?: number;
+          };
+
+          if (p.principalType === "user") {
+            const [user] = await db
+              .select({
+                id: users.id,
+                displayName: users.displayName,
+                email: users.email,
+                avatarUrl: users.avatarUrl,
+              })
+              .from(users)
+              .where(eq(users.id, p.principalId))
+              .limit(1);
+
+            principalDetails = user
+              ? {
+                  id: user.id,
+                  name: user.displayName || user.email,
+                  email: user.email,
+                  avatarUrl: user.avatarUrl,
+                }
+              : {
+                  id: p.principalId,
+                  name: "Unknown User",
+                  avatarUrl: null,
+                };
+          } else if (p.principalType === "department") {
+            const [dept] = await db
+              .select({
+                id: departments.id,
+                name: departments.name,
+              })
+              .from(departments)
+              .where(eq(departments.id, p.principalId))
+              .limit(1);
+
+            // Get member count
+            const [countResult] = await db
+              .select({ count: sql<number>`count(*)::int` })
+              .from(departmentMembers)
+              .where(eq(departmentMembers.departmentId, p.principalId));
+
+            principalDetails = dept
+              ? {
+                  id: dept.id,
+                  name: dept.name,
+                  avatarUrl: null,
+                  memberCount: countResult?.count ?? 0,
+                }
+              : {
+                  id: p.principalId,
+                  name: "Unknown Department",
+                  avatarUrl: null,
+                };
+          } else {
+            // org type
+            const [org] = await db
+              .select({
+                id: organizations.id,
+                name: organizations.name,
+                logoUrl: organizations.logoUrl,
+              })
+              .from(organizations)
+              .where(eq(organizations.id, p.principalId))
+              .limit(1);
+
+            principalDetails = org
+              ? {
+                  id: org.id,
+                  name: org.name,
+                  avatarUrl: org.logoUrl,
+                }
+              : {
+                  id: p.principalId,
+                  name: "Unknown Organization",
+                  avatarUrl: null,
+                };
+          }
+
+          return {
+            id: p.id,
+            principalId: p.principalId,
+            principalType: p.principalType,
+            role: p.role,
+            createdAt: p.createdAt,
+            principal: principalDetails,
+          };
+        })
+      );
+
+      // Get owner info separately (not in permissions table as explicit entry)
+      const [owner] = await db
+        .select({
+          id: users.id,
+          displayName: users.displayName,
+          email: users.email,
+          avatarUrl: users.avatarUrl,
+        })
+        .from(users)
+        .where(eq(users.id, doc.ownerId))
+        .limit(1);
+
+      return reply.status(200).send({
+        documentId: id,
+        owner: owner
+          ? {
+              id: owner.id,
+              name: owner.displayName || owner.email,
+              email: owner.email,
+              avatarUrl: owner.avatarUrl,
+            }
+          : null,
+        collaborators: enrichedCollaborators,
+        currentUserRole: userRole,
+        canManage: userRole === "owner" || userRole === "manager",
+      });
+    }
+  );
+
+  /**
+   * GET /documents/:id/search-principals - Search users and departments to add as collaborators
+   * Query: { q: string, type?: 'user' | 'department' }
+   */
+  fastify.get<{ Params: { id: string }; Querystring: { q?: string; type?: string } }>(
+    "/documents/:id/search-principals",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id } = request.params;
+      const { q, type } = request.query;
+
+      // Validate UUID format
+      if (!UUID_REGEX.test(id)) {
+        return reply.status(400).send({
+          error: "Invalid document ID format",
+        });
+      }
+
+      // User must belong to an organization
+      if (!request.user.orgId) {
+        return reply.status(400).send({
+          error: "User must belong to an organization",
+        });
+      }
+
+      const currentUserId = request.user.id;
+      const orgId = request.user.orgId;
+
+      // Check if user can manage permissions
+      const canManage = await canManagePermissions(id, currentUserId, orgId);
+      if (!canManage) {
+        return reply.status(403).send({
+          error: "Access denied - need manager or owner permission",
+        });
+      }
+
+      // Get existing permission principal IDs to exclude
+      const existingPermissions = await db
+        .select({ principalId: documentPermissions.principalId })
+        .from(documentPermissions)
+        .where(eq(documentPermissions.documentId, id));
+
+      const excludedIds = new Set(existingPermissions.map((p) => p.principalId));
+
+      // Get document owner to exclude
+      const [doc] = await db
+        .select({ ownerId: documents.ownerId })
+        .from(documents)
+        .where(eq(documents.id, id))
+        .limit(1);
+
+      if (doc) {
+        excludedIds.add(doc.ownerId);
+      }
+
+      const results: Array<{
+        id: string;
+        type: "user" | "department";
+        name: string;
+        email?: string;
+        avatarUrl: string | null;
+        memberCount?: number;
+      }> = [];
+
+      // Search users if type is not specified or is 'user'
+      if (!type || type === "user") {
+        const searchTerm = q ? `%${q.trim()}%` : "%";
+        const userResults = await db
+          .select({
+            id: users.id,
+            displayName: users.displayName,
+            email: users.email,
+            avatarUrl: users.avatarUrl,
+          })
+          .from(users)
+          .where(
+            and(
+              eq(users.orgId, orgId),
+              isNull(users.deletedAt),
+              or(
+                ilike(users.displayName, searchTerm),
+                ilike(users.email, searchTerm)
+              )
+            )
+          )
+          .limit(10);
+
+        for (const user of userResults) {
+          if (!excludedIds.has(user.id)) {
+            results.push({
+              id: user.id,
+              type: "user",
+              name: user.displayName || user.email,
+              email: user.email,
+              avatarUrl: user.avatarUrl,
+            });
+          }
+        }
+      }
+
+      // Search departments if type is not specified or is 'department'
+      if (!type || type === "department") {
+        const searchTerm = q ? `%${q.trim()}%` : "%";
+        const deptResults = await db
+          .select({
+            id: departments.id,
+            name: departments.name,
+          })
+          .from(departments)
+          .where(
+            and(
+              eq(departments.orgId, orgId),
+              ilike(departments.name, searchTerm)
+            )
+          )
+          .limit(10);
+
+        for (const dept of deptResults) {
+          if (!excludedIds.has(dept.id)) {
+            // Get member count
+            const [countResult] = await db
+              .select({ count: sql<number>`count(*)::int` })
+              .from(departmentMembers)
+              .where(eq(departmentMembers.departmentId, dept.id));
+
+            results.push({
+              id: dept.id,
+              type: "department",
+              name: dept.name,
+              avatarUrl: null,
+              memberCount: countResult?.count ?? 0,
+            });
+          }
+        }
+      }
+
+      return reply.status(200).send({
+        results,
+      });
+    }
+  );
+
+  /**
+   * POST /documents/:id/copy-link - Generate a shareable link with specified permission
+   * Body: { role: 'viewer' | 'editor' }
+   * Returns: { link: string }
+   */
+  fastify.post<{ Params: { id: string }; Body: { role: "viewer" | "editor" } }>(
+    "/documents/:id/copy-link",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id } = request.params;
+      const { role } = request.body;
+
+      // Validate UUID format
+      if (!UUID_REGEX.test(id)) {
+        return reply.status(400).send({
+          error: "Invalid document ID format",
+        });
+      }
+
+      // Validate role
+      if (!role || !["viewer", "editor"].includes(role)) {
+        return reply.status(400).send({
+          error: "role must be one of: viewer, editor",
+        });
+      }
+
+      // User must belong to an organization
+      if (!request.user.orgId) {
+        return reply.status(400).send({
+          error: "User must belong to an organization",
+        });
+      }
+
+      const currentUserId = request.user.id;
+      const orgId = request.user.orgId;
+
+      // Check if document exists
+      const [doc] = await db
+        .select()
+        .from(documents)
+        .where(
+          and(
+            eq(documents.id, id),
+            eq(documents.orgId, orgId),
+            isNull(documents.deletedAt)
+          )
+        )
+        .limit(1);
+
+      if (!doc) {
+        return reply.status(404).send({
+          error: "Document not found",
+        });
+      }
+
+      // Check if user can manage permissions
+      const canManage = await canManagePermissions(id, currentUserId, orgId);
+      if (!canManage) {
+        return reply.status(403).send({
+          error: "Access denied - need manager or owner permission",
+        });
+      }
+
+      // Check if org-wide permission already exists
+      const [existingOrgPerm] = await db
+        .select()
+        .from(documentPermissions)
+        .where(
+          and(
+            eq(documentPermissions.documentId, id),
+            eq(documentPermissions.principalType, "org"),
+            eq(documentPermissions.principalId, orgId)
+          )
+        )
+        .limit(1);
+
+      if (existingOrgPerm) {
+        // Update the role if different
+        if (existingOrgPerm.role !== role) {
+          await db
+            .update(documentPermissions)
+            .set({ role, updatedAt: new Date() })
+            .where(eq(documentPermissions.id, existingOrgPerm.id));
+        }
+      } else {
+        // Create org-wide permission
+        await db.insert(documentPermissions).values({
+          documentId: id,
+          principalId: orgId,
+          principalType: "org",
+          role,
+        });
+      }
+
+      // Generate the link (using the frontend URL pattern)
+      const link = `/app/docs/${id}`;
+
+      return reply.status(200).send({
+        link,
+        message: `Anyone in your organization can now ${role === "viewer" ? "view" : "edit"} this document`,
+      });
     }
   );
 }

@@ -953,8 +953,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 57,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented ShareDialog component with full sharing functionality. Share button in document header opens dialog. Search for users/departments by name via GET /documents/:id/search-principals API. Set permission level per recipient (Viewer, Editor, Manager) with Radix dropdown menu. Copy link button creates org-wide permission via POST /documents/:id/copy-link and copies URL to clipboard. Current collaborators displayed with owner highlighted, permission levels shown, and role can be changed via dropdown. Remove collaborator button with confirmation. Added 3 new API endpoints: GET /documents/:id/collaborators (enriched list with user/dept details), GET /documents/:id/search-principals (search to add), POST /documents/:id/copy-link (org-wide link sharing). Typecheck passes."
     },
     {
       "id": "US-058",

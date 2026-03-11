@@ -20,6 +20,7 @@ import dynamic from "next/dynamic";
 import type { Collaborator, DocumentEditorHandle } from "@/components/DocumentEditor";
 import CommentsPanel from "@/components/CommentsPanel";
 import AddCommentDialog from "@/components/AddCommentDialog";
+import ShareDialog from "@/components/ShareDialog";
 
 // Dynamically import the editor to avoid SSR issues with Yjs
 const DocumentEditor = dynamic(
@@ -87,6 +88,7 @@ export default function DocumentEditorPage() {
   // Comments state
   const [showCommentsPanel, setShowCommentsPanel] = useState(false);
   const [showAddCommentDialog, setShowAddCommentDialog] = useState(false);
+  const [showShareDialog, setShowShareDialog] = useState(false);
   const [pendingComment, setPendingComment] = useState<{
     selectedText: string;
     from: number;
@@ -466,10 +468,7 @@ export default function DocumentEditorPage() {
 
           {/* Share button */}
           <button
-            onClick={() => {
-              // TODO: Open share dialog
-              alert("Share functionality coming soon");
-            }}
+            onClick={() => setShowShareDialog(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
           >
             <Share2 className="w-4 h-4" />
@@ -572,6 +571,15 @@ export default function DocumentEditorPage() {
         }}
         onSubmit={handleCommentSubmit}
         selectedText={pendingComment?.selectedText}
+      />
+
+      {/* Share Dialog */}
+      <ShareDialog
+        isOpen={showShareDialog}
+        onClose={() => setShowShareDialog(false)}
+        documentId={document.id}
+        token={token}
+        currentUserRole={document.currentUserRole}
       />
     </div>
   );
