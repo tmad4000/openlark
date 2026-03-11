@@ -644,8 +644,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 39,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented group announcements feature. API: GET/POST /chats/:id/announcements (list/create), PATCH/DELETE /chats/:id/announcements/:announcementId (edit/delete). Only admin/owner can manage announcements. UI: Announcements tab added to chat tabs (group chats only) showing all announcements with count badge. AnnouncementsTabContent component with create/edit/delete dialogs. AnnouncementBanner component shows most recent announcement at top of chat view with dismiss and 'View all' options. Current user's role tracked via member list fetch. Existing announcements table schema leveraged from US-018. Typecheck passes."
     },
     {
       "id": "US-040",

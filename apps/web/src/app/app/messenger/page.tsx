@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { Search, Plus, MessageCircle, Users, Bell, BellOff, AtSign, Info, Wifi, WifiOff, Loader2, Check, CheckCheck, Circle, MoreHorizontal, Reply, X, MessageSquare, Pin, Star, Pencil, Trash2, Forward, Square, CheckSquare, Tag, FileText, File, FolderOpen, ExternalLink, GripVertical, Shield, Crown, UserPlus, UserMinus, Settings, Globe, Lock, ChevronDown, ChevronRight, LogOut } from "lucide-react";
+import { Search, Plus, MessageCircle, Users, Bell, BellOff, AtSign, Info, Wifi, WifiOff, Loader2, Check, CheckCheck, Circle, MoreHorizontal, Reply, X, MessageSquare, Pin, Star, Pencil, Trash2, Forward, Square, CheckSquare, Tag, FileText, File, FolderOpen, ExternalLink, GripVertical, Shield, Crown, UserPlus, UserMinus, Settings, Globe, Lock, ChevronDown, ChevronRight, LogOut, Megaphone } from "lucide-react";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as ContextMenu from "@radix-ui/react-context-menu";
 import MessageInput, { MentionUser } from "@/components/MessageInput";
@@ -181,7 +181,7 @@ interface ChatTab {
   position: number;
 }
 
-type ChatTabType = "chat" | "docs" | "files" | "pins" | "custom";
+type ChatTabType = "chat" | "docs" | "files" | "pins" | "announcements" | "custom";
 
 interface SharedFile {
   messageId: string;
@@ -207,6 +207,19 @@ interface SharedDoc {
     avatarUrl: string | null;
   };
   sharedAt: string;
+}
+
+interface Announcement {
+  id: string;
+  chatId: string;
+  content: string;
+  authorId: string;
+  createdAt: string;
+  author: {
+    id: string;
+    displayName: string | null;
+    avatarUrl: string | null;
+  };
 }
 
 function formatMessageTime(dateStr: string): string {
@@ -1405,6 +1418,9 @@ function ChatView({
   const [sharedFiles, setSharedFiles] = useState<SharedFile[]>([]);
   const [sharedDocs, setSharedDocs] = useState<SharedDoc[]>([]);
   const [draggedTabId, setDraggedTabId] = useState<string | null>(null);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [showAnnouncementBanner, setShowAnnouncementBanner] = useState(true);
+  const [currentUserRole, setCurrentUserRole] = useState<"owner" | "admin" | "member">("member");
 
   // Chat members for @mention autocomplete
   const [chatMembers, setChatMembers] = useState<MentionUser[]>([]);
@@ -1955,6 +1971,24 @@ function ChatView({
     }
   }, [chat.id, customTabs, loadTabs]);
 
+  // Load announcements for the chat
+  const loadAnnouncements = useCallback(async () => {
+    const token = getCookie("session_token");
+    if (!token) return;
+
+    try {
+      const res = await fetch(`/api/chats/${chat.id}/announcements`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAnnouncements(data.announcements || []);
+      }
+    } catch {
+      // Silent fail
+    }
+  }, [chat.id]);
+
   // Extract shared files and docs from messages
   const extractSharedContent = useCallback((msgs: Message[]) => {
     const files: SharedFile[] = [];
@@ -2098,12 +2132,15 @@ function ChatView({
     setCustomTabs([]);
     setSharedFiles([]);
     setSharedDocs([]);
+    setAnnouncements([]);
+    setShowAnnouncementBanner(true);
     lastMarkedReadRef.current = null;
     loadMessages();
     loadPinnedMessages();
     loadFavorites();
     loadTabs();
-  }, [chat.id, loadMessages, loadPinnedMessages, loadFavorites, loadTabs]);
+    loadAnnouncements();
+  }, [chat.id, loadMessages, loadPinnedMessages, loadFavorites, loadTabs, loadAnnouncements]);
 
   // Extract shared files and docs when messages change
   useEffect(() => {
@@ -2125,6 +2162,13 @@ function ChatView({
 
         if (res.ok) {
           const data = await res.json();
+          // Find current user's role
+          const currentMember = (data.members || []).find(
+            (m: { userId: string }) => m.userId === currentUserId
+          );
+          if (currentMember?.role) {
+            setCurrentUserRole(currentMember.role);
+          }
           // Filter out current user from mention suggestions
           const members = (data.members || [])
             .filter((m: { userId: string }) => m.userId !== currentUserId)
@@ -2583,6 +2627,25 @@ function ChatView({
             </span>
           )}
         </button>
+        {/* Only show Announcements tab for group chats */}
+        {chat.type !== "dm" && (
+          <button
+            onClick={() => setActiveTab("announcements")}
+            className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+              activeTab === "announcements"
+                ? "bg-blue-100 text-blue-700"
+                : "text-gray-600 hover:bg-gray-100"
+            }`}
+          >
+            <Megaphone className="w-4 h-4" />
+            Announcements
+            {announcements.length > 0 && (
+              <span className="ml-1 px-1.5 py-0.5 text-xs bg-gray-200 text-gray-600 rounded-full">
+                {announcements.length}
+              </span>
+            )}
+          </button>
+        )}
 
         {/* Divider before custom tabs */}
         {customTabs.length > 0 && (
@@ -2715,6 +2778,15 @@ function ChatView({
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
+
+      {/* Announcement Banner - shows most recent announcement at top of chat */}
+      {chat.type !== "dm" && announcements.length > 0 && showAnnouncementBanner && activeTab === "chat" && (
+        <AnnouncementBanner
+          announcement={announcements[0]}
+          onDismiss={() => setShowAnnouncementBanner(false)}
+          onViewAll={() => setActiveTab("announcements")}
+        />
+      )}
 
       {/* Tab Content Areas */}
       {activeTab === "chat" ? (
@@ -2924,6 +2996,16 @@ function ChatView({
             chatId={chat.id}
             pinnedMessageIds={pinnedMessageIds}
             onUnpin={togglePin}
+          />
+        </div>
+      ) : activeTab === "announcements" ? (
+        /* Announcements Tab Content */
+        <div className="flex-1 overflow-y-auto px-4 py-4 bg-gray-50">
+          <AnnouncementsTabContent
+            chatId={chat.id}
+            announcements={announcements}
+            onRefresh={loadAnnouncements}
+            currentUserRole={currentUserRole}
           />
         </div>
       ) : null}
@@ -3680,6 +3762,351 @@ function PinsTabContent({
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+function AnnouncementBanner({
+  announcement,
+  onDismiss,
+  onViewAll,
+}: {
+  announcement: Announcement;
+  onDismiss: () => void;
+  onViewAll: () => void;
+}) {
+  return (
+    <div className="flex-shrink-0 bg-amber-50 border-b border-amber-200 px-4 py-2">
+      <div className="flex items-start gap-3">
+        <Megaphone className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-0.5">
+            <span className="text-xs font-medium text-amber-800">
+              {announcement.author.displayName || "Admin"}
+            </span>
+            <span className="text-xs text-amber-600">
+              {formatTimestamp(announcement.createdAt)}
+            </span>
+          </div>
+          <p className="text-sm text-amber-900 line-clamp-2">
+            {announcement.content}
+          </p>
+        </div>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <button
+            onClick={onViewAll}
+            className="px-2 py-1 text-xs text-amber-700 hover:text-amber-900 hover:bg-amber-100 rounded transition-colors"
+          >
+            View all
+          </button>
+          <button
+            onClick={onDismiss}
+            className="p-1 text-amber-500 hover:text-amber-700 hover:bg-amber-100 rounded transition-colors"
+            title="Dismiss"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AnnouncementsTabContent({
+  chatId,
+  announcements,
+  onRefresh,
+  currentUserRole,
+}: {
+  chatId: string;
+  announcements: Announcement[];
+  onRefresh: () => void;
+  currentUserRole: "owner" | "admin" | "member";
+}) {
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
+  const [newContent, setNewContent] = useState("");
+  const [editContent, setEditContent] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const canManage = currentUserRole === "owner" || currentUserRole === "admin";
+
+  const createAnnouncement = async () => {
+    if (!newContent.trim() || isSubmitting) return;
+
+    const token = getCookie("session_token");
+    if (!token) return;
+
+    setIsSubmitting(true);
+    try {
+      const res = await fetch(`/api/chats/${chatId}/announcements`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ content: newContent.trim() }),
+      });
+
+      if (res.ok) {
+        setNewContent("");
+        setShowCreateDialog(false);
+        onRefresh();
+      }
+    } catch {
+      // Silent fail
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const updateAnnouncement = async () => {
+    if (!editingAnnouncement || !editContent.trim() || isSubmitting) return;
+
+    const token = getCookie("session_token");
+    if (!token) return;
+
+    setIsSubmitting(true);
+    try {
+      const res = await fetch(`/api/chats/${chatId}/announcements/${editingAnnouncement.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ content: editContent.trim() }),
+      });
+
+      if (res.ok) {
+        setEditContent("");
+        setEditingAnnouncement(null);
+        setShowEditDialog(false);
+        onRefresh();
+      }
+    } catch {
+      // Silent fail
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const deleteAnnouncement = async (announcementId: string) => {
+    const token = getCookie("session_token");
+    if (!token) return;
+
+    try {
+      const res = await fetch(`/api/chats/${chatId}/announcements/${announcementId}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (res.ok) {
+        onRefresh();
+      }
+    } catch {
+      // Silent fail
+    }
+  };
+
+  const openEditDialog = (announcement: Announcement) => {
+    setEditingAnnouncement(announcement);
+    setEditContent(announcement.content);
+    setShowEditDialog(true);
+  };
+
+  if (announcements.length === 0 && !canManage) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-gray-500">
+        <Megaphone className="w-12 h-12 mb-3 text-gray-300" />
+        <p className="text-sm">No announcements</p>
+        <p className="text-xs mt-1">Group admins can post announcements here</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {/* Header with create button */}
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-medium text-gray-700">
+          {announcements.length} announcement{announcements.length !== 1 ? "s" : ""}
+        </h3>
+        {canManage && (
+          <button
+            onClick={() => setShowCreateDialog(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            New Announcement
+          </button>
+        )}
+      </div>
+
+      {/* Announcements list */}
+      {announcements.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-12 text-gray-500">
+          <Megaphone className="w-12 h-12 mb-3 text-gray-300" />
+          <p className="text-sm">No announcements yet</p>
+          <p className="text-xs mt-1">Post an announcement to share with the group</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {announcements.map((announcement) => (
+            <div
+              key={announcement.id}
+              className="flex items-start gap-3 p-3 bg-white rounded-lg border border-gray-200 hover:border-amber-300 hover:shadow-sm transition-all"
+            >
+              {/* Author avatar */}
+              <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-200 flex-shrink-0">
+                {announcement.author.avatarUrl ? (
+                  <img
+                    src={announcement.author.avatarUrl}
+                    alt={announcement.author.displayName || "User"}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center bg-amber-600 text-white text-sm font-medium">
+                    {announcement.author.displayName?.charAt(0).toUpperCase() || "?"}
+                  </div>
+                )}
+              </div>
+
+              {/* Content */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-sm font-medium text-gray-900">
+                    {announcement.author.displayName || "Unknown"}
+                  </span>
+                  <span className="text-xs text-gray-400">
+                    {formatTimestamp(announcement.createdAt)}
+                  </span>
+                </div>
+                <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                  {announcement.content}
+                </p>
+                {canManage && (
+                  <div className="flex items-center gap-2 mt-2">
+                    <button
+                      onClick={() => openEditDialog(announcement)}
+                      className="text-xs text-blue-500 hover:text-blue-600 flex items-center gap-1"
+                    >
+                      <Pencil className="w-3 h-3" />
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => deleteAnnouncement(announcement.id)}
+                      className="text-xs text-red-500 hover:text-red-600 flex items-center gap-1"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      Delete
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Create Announcement Dialog */}
+      <Dialog.Root open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 bg-black/50 z-50" />
+          <Dialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg shadow-xl p-6 w-full max-w-md z-50">
+            <Dialog.Title className="text-lg font-semibold text-gray-900 mb-4">
+              New Announcement
+            </Dialog.Title>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Content
+                </label>
+                <textarea
+                  value={newContent}
+                  onChange={(e) => setNewContent(e.target.value)}
+                  placeholder="Write your announcement..."
+                  rows={4}
+                  maxLength={5000}
+                  className="w-full px-3 py-2 text-gray-900 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  {newContent.length}/5000 characters
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-6">
+              <button
+                onClick={() => {
+                  setShowCreateDialog(false);
+                  setNewContent("");
+                }}
+                className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={createAnnouncement}
+                disabled={!newContent.trim() || isSubmitting}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSubmitting ? "Posting..." : "Post Announcement"}
+              </button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+
+      {/* Edit Announcement Dialog */}
+      <Dialog.Root open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 bg-black/50 z-50" />
+          <Dialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg shadow-xl p-6 w-full max-w-md z-50">
+            <Dialog.Title className="text-lg font-semibold text-gray-900 mb-4">
+              Edit Announcement
+            </Dialog.Title>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Content
+                </label>
+                <textarea
+                  value={editContent}
+                  onChange={(e) => setEditContent(e.target.value)}
+                  placeholder="Write your announcement..."
+                  rows={4}
+                  maxLength={5000}
+                  className="w-full px-3 py-2 text-gray-900 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  {editContent.length}/5000 characters
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-6">
+              <button
+                onClick={() => {
+                  setShowEditDialog(false);
+                  setEditingAnnouncement(null);
+                  setEditContent("");
+                }}
+                className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={updateAnnouncement}
+                disabled={!editContent.trim() || isSubmitting}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isSubmitting ? "Saving..." : "Save Changes"}
+              </button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
     </div>
   );
 }

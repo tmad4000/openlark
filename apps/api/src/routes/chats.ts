@@ -1,6 +1,6 @@
 import { FastifyInstance } from "fastify";
 import { db } from "../db";
-import { chats, chatMembers, users, messages, pins, chatTabs } from "../db/schema";
+import { chats, chatMembers, users, messages, pins, chatTabs, announcements } from "../db/schema";
 import { eq, and, or, inArray, desc, gt, sql, isNull } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
 import { createSystemMessage } from "./messages";
@@ -2129,6 +2129,354 @@ export async function chatsRoutes(fastify: FastifyInstance) {
         .orderBy(chatTabs.position);
 
       return reply.status(200).send({ tabs });
+    }
+  );
+
+  /**
+   * GET /chats/:id/announcements - Get all announcements for a chat
+   * Returns: { announcements: Array<{ id, chatId, content, authorId, createdAt, author }> }
+   */
+  fastify.get<{ Params: { id: string } }>(
+    "/chats/:id/announcements",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id: chatId } = request.params;
+
+      // Validate UUID format
+      if (!UUID_REGEX.test(chatId)) {
+        return reply.status(400).send({
+          error: "Invalid chat ID format",
+        });
+      }
+
+      const currentUserId = request.user.id;
+
+      // Verify user is a member of this chat
+      const [membership] = await db
+        .select()
+        .from(chatMembers)
+        .where(
+          and(
+            eq(chatMembers.chatId, chatId),
+            eq(chatMembers.userId, currentUserId)
+          )
+        )
+        .limit(1);
+
+      if (!membership) {
+        return reply.status(403).send({
+          error: "Access denied - not a member of this chat",
+        });
+      }
+
+      // Get all announcements with author info
+      const chatAnnouncements = await db
+        .select({
+          id: announcements.id,
+          chatId: announcements.chatId,
+          content: announcements.content,
+          authorId: announcements.authorId,
+          createdAt: announcements.createdAt,
+          author: {
+            id: users.id,
+            displayName: users.displayName,
+            avatarUrl: users.avatarUrl,
+          },
+        })
+        .from(announcements)
+        .innerJoin(users, eq(announcements.authorId, users.id))
+        .where(eq(announcements.chatId, chatId))
+        .orderBy(desc(announcements.createdAt));
+
+      return reply.status(200).send({ announcements: chatAnnouncements });
+    }
+  );
+
+  /**
+   * POST /chats/:id/announcements - Create a new announcement (admin/owner only)
+   * Body: { content: string }
+   * Returns: { announcement: { id, chatId, content, authorId, createdAt, author } }
+   */
+  fastify.post<{ Params: { id: string }; Body: { content: string } }>(
+    "/chats/:id/announcements",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id: chatId } = request.params;
+      const { content } = request.body;
+
+      // Validate UUID format
+      if (!UUID_REGEX.test(chatId)) {
+        return reply.status(400).send({
+          error: "Invalid chat ID format",
+        });
+      }
+
+      // Validate content
+      if (!content || typeof content !== "string" || content.trim().length === 0) {
+        return reply.status(400).send({
+          error: "content is required and must be a non-empty string",
+        });
+      }
+
+      if (content.length > 5000) {
+        return reply.status(400).send({
+          error: "content must be at most 5000 characters",
+        });
+      }
+
+      const currentUserId = request.user.id;
+
+      // Get the chat to verify it's a group
+      const [chat] = await db
+        .select()
+        .from(chats)
+        .where(eq(chats.id, chatId))
+        .limit(1);
+
+      if (!chat) {
+        return reply.status(404).send({
+          error: "Chat not found",
+        });
+      }
+
+      if (chat.type === "dm") {
+        return reply.status(400).send({
+          error: "Cannot create announcements in a DM",
+        });
+      }
+
+      // Get user's membership and role
+      const [membership] = await db
+        .select()
+        .from(chatMembers)
+        .where(
+          and(
+            eq(chatMembers.chatId, chatId),
+            eq(chatMembers.userId, currentUserId)
+          )
+        )
+        .limit(1);
+
+      if (!membership) {
+        return reply.status(403).send({
+          error: "Access denied - not a member of this chat",
+        });
+      }
+
+      // Only owner and admin can create announcements
+      if (membership.role !== "owner" && membership.role !== "admin") {
+        return reply.status(403).send({
+          error: "Only group owner or admin can create announcements",
+        });
+      }
+
+      // Create the announcement
+      const [newAnnouncement] = await db
+        .insert(announcements)
+        .values({
+          chatId,
+          content: content.trim(),
+          authorId: currentUserId,
+        })
+        .returning();
+
+      return reply.status(201).send({
+        announcement: {
+          ...newAnnouncement,
+          author: {
+            id: request.user.id,
+            displayName: request.user.displayName,
+            avatarUrl: request.user.avatarUrl,
+          },
+        },
+      });
+    }
+  );
+
+  /**
+   * PATCH /chats/:id/announcements/:announcementId - Update an announcement (admin/owner only)
+   * Body: { content: string }
+   * Returns: { announcement: { id, chatId, content, authorId, createdAt, author } }
+   */
+  fastify.patch<{ Params: { id: string; announcementId: string }; Body: { content: string } }>(
+    "/chats/:id/announcements/:announcementId",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id: chatId, announcementId } = request.params;
+      const { content } = request.body;
+
+      // Validate UUID formats
+      if (!UUID_REGEX.test(chatId)) {
+        return reply.status(400).send({
+          error: "Invalid chat ID format",
+        });
+      }
+
+      if (!UUID_REGEX.test(announcementId)) {
+        return reply.status(400).send({
+          error: "Invalid announcement ID format",
+        });
+      }
+
+      // Validate content
+      if (!content || typeof content !== "string" || content.trim().length === 0) {
+        return reply.status(400).send({
+          error: "content is required and must be a non-empty string",
+        });
+      }
+
+      if (content.length > 5000) {
+        return reply.status(400).send({
+          error: "content must be at most 5000 characters",
+        });
+      }
+
+      const currentUserId = request.user.id;
+
+      // Verify the announcement exists and belongs to this chat
+      const [announcement] = await db
+        .select()
+        .from(announcements)
+        .where(
+          and(
+            eq(announcements.id, announcementId),
+            eq(announcements.chatId, chatId)
+          )
+        )
+        .limit(1);
+
+      if (!announcement) {
+        return reply.status(404).send({
+          error: "Announcement not found",
+        });
+      }
+
+      // Get user's membership and role
+      const [membership] = await db
+        .select()
+        .from(chatMembers)
+        .where(
+          and(
+            eq(chatMembers.chatId, chatId),
+            eq(chatMembers.userId, currentUserId)
+          )
+        )
+        .limit(1);
+
+      if (!membership) {
+        return reply.status(403).send({
+          error: "Access denied - not a member of this chat",
+        });
+      }
+
+      // Only owner and admin can edit announcements
+      if (membership.role !== "owner" && membership.role !== "admin") {
+        return reply.status(403).send({
+          error: "Only group owner or admin can edit announcements",
+        });
+      }
+
+      // Update the announcement
+      const [updatedAnnouncement] = await db
+        .update(announcements)
+        .set({ content: content.trim() })
+        .where(eq(announcements.id, announcementId))
+        .returning();
+
+      // Get author info
+      const [author] = await db
+        .select({
+          id: users.id,
+          displayName: users.displayName,
+          avatarUrl: users.avatarUrl,
+        })
+        .from(users)
+        .where(eq(users.id, updatedAnnouncement.authorId))
+        .limit(1);
+
+      return reply.status(200).send({
+        announcement: {
+          ...updatedAnnouncement,
+          author,
+        },
+      });
+    }
+  );
+
+  /**
+   * DELETE /chats/:id/announcements/:announcementId - Delete an announcement (admin/owner only)
+   * Returns: { success: true }
+   */
+  fastify.delete<{ Params: { id: string; announcementId: string } }>(
+    "/chats/:id/announcements/:announcementId",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id: chatId, announcementId } = request.params;
+
+      // Validate UUID formats
+      if (!UUID_REGEX.test(chatId)) {
+        return reply.status(400).send({
+          error: "Invalid chat ID format",
+        });
+      }
+
+      if (!UUID_REGEX.test(announcementId)) {
+        return reply.status(400).send({
+          error: "Invalid announcement ID format",
+        });
+      }
+
+      const currentUserId = request.user.id;
+
+      // Verify the announcement exists and belongs to this chat
+      const [announcement] = await db
+        .select()
+        .from(announcements)
+        .where(
+          and(
+            eq(announcements.id, announcementId),
+            eq(announcements.chatId, chatId)
+          )
+        )
+        .limit(1);
+
+      if (!announcement) {
+        return reply.status(404).send({
+          error: "Announcement not found",
+        });
+      }
+
+      // Get user's membership and role
+      const [membership] = await db
+        .select()
+        .from(chatMembers)
+        .where(
+          and(
+            eq(chatMembers.chatId, chatId),
+            eq(chatMembers.userId, currentUserId)
+          )
+        )
+        .limit(1);
+
+      if (!membership) {
+        return reply.status(403).send({
+          error: "Access denied - not a member of this chat",
+        });
+      }
+
+      // Only owner and admin can delete announcements
+      if (membership.role !== "owner" && membership.role !== "admin") {
+        return reply.status(403).send({
+          error: "Only group owner or admin can delete announcements",
+        });
+      }
+
+      // Delete the announcement
+      await db
+        .delete(announcements)
+        .where(eq(announcements.id, announcementId));
+
+      return reply.status(200).send({ success: true });
     }
   );
 }
