@@ -388,6 +388,12 @@
           "role": "reviewer",
           "value": 1,
           "reason": "Iter 24 review: 4/6 subtasks complete. Messenger core remains solid. Static method pattern (ChatList.addChat, MessageList.addMessage, EventList.addEvent) now in 3+ components, flagged since iter 12. Works for Phase 1 but should be addressed for Phase 2. No new concerns."
+        },
+        {
+          "iteration": 27,
+          "role": "reviewer",
+          "value": 1,
+          "reason": "Iter 27 review: 4/6 subtasks complete. Messenger core solid. Static method pattern in 4 components now (ChatList, MessageList, EventList, DocumentList) - consistent but should be documented as known limitation. Remaining subtasks 3-4 (threads, rich text, typing UI) are Phase 2."
         }
       ],
       "comments": [
@@ -612,6 +618,12 @@
           "role": "implementer",
           "value": 1,
           "reason": "Iteration 25 independent analysis: T-004 is nearly complete (4/5 subtasks). Core calendar functionality (events, RSVP, attendees, room booking) works well. Subtask 4 (shared calendars, iCal, drag-and-drop) is Phase 1 polish. The task can be marked done with remaining work deferred to a follow-up task for Phase 2."
+        },
+        {
+          "iteration": 27,
+          "role": "reviewer",
+          "value": 1,
+          "reason": "Iter 27 review: 4/5 subtasks complete. Calendar is functionally solid. Subtask 4 (shared calendars, iCal, drag-and-drop) is Phase 2 scope. Core calendar functionality works: events, RSVP, attendees, room booking. 358+ tests pass."
         }
       ],
       "comments": [
@@ -730,6 +742,12 @@
           "role": "implementer",
           "value": 1,
           "reason": "Iteration 26: Backend complete (subtask 1), frontend gap critical. Users cannot create or edit docs despite full API. Subtask 2 (TipTap editor) is clear next step."
+        },
+        {
+          "iteration": 27,
+          "role": "reviewer",
+          "value": 1,
+          "reason": "Iter 27 review: T-005 subtasks 1-2 complete. Docs backend solid (Hocuspocus + PostgreSQL persistence, 45 tests). Frontend has TipTap editor with Yjs collaboration support. Module follows established patterns exactly. Docs page bundle is 469kB - large but expected for TipTap + Yjs. Remaining subtasks 3-5 (slash commands, floating toolbar, permissions UI, comments, synced blocks) are Phase 2 polish."
         }
       ],
       "comments": [
@@ -742,6 +760,21 @@
           "iteration": 26,
           "role": "implementer",
           "message": "Iteration 26: Implemented T-005 subtask 2 (TipTap editor with core block types). Created frontend docs module: DocumentList component with loading/error/empty states, CreateDocumentDialog for document creation, DocumentEditor with TipTap + Yjs collaboration support. Added docs API methods to api.ts. Created /docs page following established patterns. Installed TipTap packages (starter-kit, table, task-list, code-block-lowlight, collaboration, placeholder). 18 tests added (8 for DocumentList, 10 for CreateDocumentDialog). All 413 tests pass. Build and lint pass."
+        },
+        {
+          "iteration": 27,
+          "role": "reviewer",
+          "message": "Iter 27 review: DocumentEditor.tsx has no tests yet. The editor component is complex (TipTap + Yjs + WebSocket) and should have tests for toolbar actions, read-only mode, and connection status display. Consider adding in next iteration."
+        },
+        {
+          "iteration": 27,
+          "role": "reviewer",
+          "message": "Iter 27 review: Static method pattern (DocumentList.addDocument) follows messenger/calendar pattern. Now in 4 components. Works but fragile for multi-instance. Same tech debt as ChatList.addChat, MessageList.addMessage, EventList.addEvent."
+        },
+        {
+          "iteration": 27,
+          "role": "reviewer",
+          "message": "Iter 27 review: Hocuspocus server (hocuspocus.ts) is solid. JWT auth with permission checking, Database extension for PostgreSQL persistence. Console.log statements for connection events should be replaced with proper logging in production."
         }
       ],
       "status": "in-progress",
@@ -1452,7 +1485,7 @@
   ],
   "metadata": {
     "createdAt": "2026-03-04T21:00:00Z",
-    "totalIterations": 36,
+    "totalIterations": 37,
     "iterationLog": [
       {
         "iteration": 1,
@@ -1672,6 +1705,12 @@
       },
       {
         "iteration": 36,
+        "role": "implementer",
+        "taskWorked": "T-005",
+        "contextCompacted": false
+      },
+      {
+        "iteration": 37,
         "role": "implementer",
         "taskWorked": "T-005",
         "contextCompacted": false

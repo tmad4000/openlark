@@ -2699,3 +2699,152 @@ Built the frontend docs module with TipTap editor (T-005 subtask 2):
 - Docs page large bundle size (469kB)
 
 ---
+
+## 2026-03-10 - Iteration 27 - REVIEW
+
+### Code quality observations
+
+**What looks good:**
+- Docs module (T-005) follows established patterns exactly:
+  - DocsService class with CRUD operations for documents, permissions, versions, comments, Yjs persistence
+  - Hocuspocus server with Database extension for PostgreSQL persistence (hocuspocus.ts)
+  - JWT authentication in onAuthenticate hook with permission checking
+  - Custom `bytea` Drizzle type for Yjs Uint8Array binary state
+  - 45 API tests covering schema validation and auth requirements
+- DocumentEditor component is well-architected:
+  - TipTap with StarterKit, TaskList, Table, CodeBlockLowlight
+  - Yjs integration via y-websocket WebSocketProvider
+  - Collaboration extension for real-time editing
+  - Toolbar with formatting buttons and connection status indicator
+  - Properly cleans up WebSocket provider on unmount
+- DocumentList and CreateDocumentDialog follow calendar/messenger patterns:
+  - Loading/empty/error states in all components
+  - Static method pattern (DocumentList.addDocument) consistent with existing components
+  - 18 tests covering component behavior
+- Build passes cleanly:
+  - API: 270 tests passing, 5 skipped (Redis timing)
+  - Web: 143 tests passing
+  - All builds successful, lint passes
+- Bundle size note: Docs page is 469kB First Load JS. This is expected for TipTap + Yjs + lowlight syntax highlighting. The docs module is code-split from other pages.
+
+**Areas needing attention:**
+
+1. **DocumentEditor has no tests** (`apps/web/src/components/docs/document-editor.tsx`):
+   - Complex component with TipTap, Yjs, WebSocket integration
+   - No tests for toolbar actions, read-only mode, or connection status display
+   - Consider adding tests in next iteration, mocking TipTap and WebsocketProvider
+
+2. **Hocuspocus console.log statements** (`apps/api/src/modules/docs/hocuspocus.ts:83-91`):
+   - Uses `console.log` for connection/disconnection events
+   - Should be replaced with proper structured logging (Fastify logger) for production
+   - Not blocking but worth noting for production readiness
+
+3. **Static method pattern now in 4 components**:
+   - `ChatList.addChat` (chat-list.tsx:51)
+   - `MessageList.addMessage` (message-list.tsx:138)
+   - `EventList.addEvent` (event-list.tsx:55)
+   - `DocumentList.addDocument` (document-list.tsx:52)
+   - Pattern has been flagged since iteration 12 (now 15 iterations)
+   - Works reliably for single-instance pages but fragile for multi-instance
+   - Should be refactored to React Context + event emitter or React Query for Phase 2
+
+4. **DialogContent accessibility warnings persist**:
+   - Multiple DialogContent components missing `Description` or `aria-describedby`
+   - Warning appears in test output for CreateEventDialog, CreateDocumentDialog
+   - Should add `DialogDescription` component for a11y compliance
+
+5. **Docs bundle size (469kB)** is large:
+   - TipTap + Yjs + lowlight contribute most of the bundle
+   - Consider dynamic imports or separate chunk for docs when optimizing
+   - Not blocking for Phase 2 development
+
+### Commit history review
+
+Recent 5 commits since last review:
+```
+8496e6b feat(docs): add frontend document editor with TipTap + Yjs collaboration (T-005)
+9aa8b62 feat(docs): add Hocuspocus server with Yjs PostgreSQL persistence (T-005)
+97577b7 docs: update progress log for iteration 24 (review)
+eb7b307 docs: update progress log for iteration 23 (room booking UI T-004)
+7fa6da9 feat(calendar): add room booking UI to CreateEventDialog and EventDetails (T-004)
+```
+
+Pattern holds: Implementation commits reference task IDs (T-005, T-004), are atomic and well-scoped. Feature commits are comprehensive (backend + frontend in same commit for iteration 26).
+
+### Plan assessment
+
+**T-001 (Infrastructure):** Done ✓
+**T-023 (Frontend Shell):** Done ✓
+
+**T-002 (Auth):** Stable at 2/6 subtasks. No changes since Phase 1 completion. Auth foundation solid. Remaining subtasks (RLS, magic link, 2FA, departments, API keys) correctly deferred as Phase 2 scope.
+
+**T-003 (Messenger):** Solid at 4/6 subtasks. Core messaging complete (WebSocket, reactions, pins, chat tabs). Static method pattern in ChatList/MessageList. Remaining: subtask 3 (threads, rich text, forwarding) and subtask 4 (typing/presence UI). These are Phase 2 polish.
+
+**T-004 (Calendar):** Strong at 4/5 subtasks. Calendar feature-complete for Phase 2 foundation. Room booking, attendee selection, RSVP all working. Only subtask 4 (shared calendars, iCal import/export, drag-and-drop) remains for Phase 2 polish.
+
+**T-005 (Docs):** Good progress at 2/5 subtasks. Hocuspocus server with PostgreSQL persistence complete. TipTap editor with Yjs collaboration working. Remaining: subtask 3 (slash commands, floating toolbar, drag handles), subtask 4 (permissions UI, version management), subtask 5 (comments, synced blocks, templates).
+
+### Phase 2 status
+
+Phase 2 per goal.md: Docs (+ Collab Engine) → Wiki → Sheets → Base
+
+| Module | Status | Notes |
+|--------|--------|-------|
+| Docs | 2/5 subtasks | Backend + TipTap editor working |
+| Wiki | Not started | Depends on Docs being more complete |
+| Sheets | Not started | Separate effort per goal.md |
+| Base | Not started | Large module |
+
+**Recommendation:** Continue T-005 (Docs subtask 3: slash commands, floating toolbar). This adds key editing UX before moving to Wiki or Sheets.
+
+### Nudges left
+
+1. **T-005**: DocumentEditor needs tests for toolbar actions, read-only mode, connection status
+2. **T-005**: Replace console.log with proper Fastify logging in hocuspocus.ts
+3. **All modules**: Static method pattern now in 4 components - document as known limitation, consider React Query pattern
+4. **All modules**: DialogContent accessibility warnings - add DialogDescription to dialogs
+
+### Tech debt items
+
+| Priority | Item | Location | Notes |
+|----------|------|----------|-------|
+| Medium | DocumentEditor has no tests | document-editor.tsx | Complex component untested |
+| Medium | Static method pattern in 4 components | ChatList, MessageList, EventList, DocumentList | Works but fragile |
+| Low | Console.log in Hocuspocus server | hocuspocus.ts:83-91 | Replace with structured logging |
+| Low | DialogContent accessibility warnings | CreateEventDialog, CreateDocumentDialog | Add DialogDescription |
+| Low | Docs page bundle size (469kB) | /docs route | Expected for TipTap + Yjs |
+| Low | Auto-generated tabs not implemented | messenger.service.ts | FR-2.15 partial |
+| Low | Typing/presence tests skipped | websocket.integration.test.ts | Timing sensitivity |
+| Low | Login needs org context | auth.service.ts:122 | Multi-tenant limitation |
+| Low | `next lint` deprecation warning | apps/web | Cosmetic |
+
+### Reinforced patterns
+
+From progress log that held true this iteration:
+- ✅ Module structure (routes.ts, service.ts, schemas.ts) — Docs module follows exactly
+- ✅ Auth middleware reuse (`preHandler: authenticate`) — All docs endpoints use it
+- ✅ Custom Drizzle types for PostgreSQL — bytea type for Yjs Uint8Array binary state
+- ✅ Component patterns (loading/error/empty states) — DocumentList, CreateDocumentDialog follow
+- ✅ Test patterns (schema validation + auth requirement tests) — 45 docs tests follow
+- ✅ Static method pattern for cross-component updates — DocumentList.addDocument follows existing pattern
+
+### New patterns observed
+
+1. **TipTap + Yjs integration pattern** (`document-editor.tsx`):
+   - Create Y.Doc with useMemo (no deps = single instance)
+   - Create WebsocketProvider with useMemo, include document.id in deps
+   - Cleanup provider in useEffect return
+   - Pass ydoc to Collaboration.configure()
+   - This pattern should be followed for Sheets editor when implementing spreadsheet collaboration
+
+2. **Custom PostgreSQL type for binary data** (`apps/api/src/db/schema/docs.ts`):
+   ```typescript
+   const bytea = customType<{ data: Uint8Array; driverData: Buffer }>({
+     dataType() { return "bytea"; },
+     toDriver(value: Uint8Array): Buffer { return Buffer.from(value); },
+     fromDriver(value: Buffer): Uint8Array { return new Uint8Array(value); },
+   });
+   ```
+   This enables storing Yjs state (Uint8Array) directly in PostgreSQL bytea columns.
+
+---
