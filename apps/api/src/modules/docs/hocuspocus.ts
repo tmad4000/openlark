@@ -77,19 +77,24 @@ export function createHocuspocusServer(): Hocuspocus {
       };
     },
 
-    // Connection event logging
+    // Connection event logging (using process.stdout for structured output when logger is not injected)
     async onConnect({ documentName, context }) {
       const user = context?.user as { id: string; name: string } | undefined;
-      console.log(
-        `User ${user?.id || "unknown"} connected to document ${documentName}`
-      );
+      // Note: Hocuspocus runs outside Fastify request context, so we use a simple structured log format
+      if (process.env.NODE_ENV !== "test") {
+        process.stdout.write(
+          JSON.stringify({ level: "info", msg: "collab_connect", documentName, userId: user?.id || "unknown" }) + "\n"
+        );
+      }
     },
 
     async onDisconnect({ documentName, context }) {
       const user = context?.user as { id: string; name: string } | undefined;
-      console.log(
-        `User ${user?.id || "unknown"} disconnected from document ${documentName}`
-      );
+      if (process.env.NODE_ENV !== "test") {
+        process.stdout.write(
+          JSON.stringify({ level: "info", msg: "collab_disconnect", documentName, userId: user?.id || "unknown" }) + "\n"
+        );
+      }
     },
 
     // Document persistence via Database extension
@@ -101,7 +106,11 @@ export function createHocuspocusServer(): Hocuspocus {
             const state = await docsService.loadYjsState(documentName);
             return state ?? null;
           } catch (error) {
-            console.error(`Error loading document ${documentName}:`, error);
+            if (process.env.NODE_ENV !== "test") {
+              process.stderr.write(
+                JSON.stringify({ level: "error", msg: "collab_fetch_error", documentName, error: String(error) }) + "\n"
+              );
+            }
             return null;
           }
         },
@@ -112,7 +121,11 @@ export function createHocuspocusServer(): Hocuspocus {
             const user = context?.user as { id: string } | undefined;
             await docsService.storeYjsState(documentName, state, user?.id);
           } catch (error) {
-            console.error(`Error storing document ${documentName}:`, error);
+            if (process.env.NODE_ENV !== "test") {
+              process.stderr.write(
+                JSON.stringify({ level: "error", msg: "collab_store_error", documentName, error: String(error) }) + "\n"
+              );
+            }
           }
         },
       }),

@@ -1,5 +1,4 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-import { DocsService } from "./docs.service.js";
 import {
   createDocumentSchema,
   updateDocumentSchema,
@@ -12,8 +11,7 @@ import {
 } from "./docs.schemas.js";
 import { authenticate } from "../auth/middleware.js";
 import { formatZodError } from "../../utils/validation.js";
-
-const docsService = new DocsService();
+import { docsService } from "./hocuspocus.js";
 
 export async function docsRoutes(app: FastifyInstance) {
   // Apply authentication to all routes in this plugin
