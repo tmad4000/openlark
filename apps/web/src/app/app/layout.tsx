@@ -15,6 +15,8 @@ import {
   LogOut,
   ChevronLeft,
   ChevronRight,
+  Bell,
+  X,
 } from "lucide-react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 
@@ -23,6 +25,18 @@ interface UserData {
   email: string;
   displayName: string;
   avatarUrl: string | null;
+}
+
+interface NotificationData {
+  id: string;
+  userId: string;
+  type: string;
+  title: string;
+  body: string | null;
+  entityType: string | null;
+  entityId: string | null;
+  readAt: string | null;
+  createdAt: string;
 }
 
 const NAV_ITEMS = [
@@ -52,6 +66,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [sidebarWidth, setSidebarWidth] = useState(240);
   const [isResizing, setIsResizing] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [notificationPanelOpen, setNotificationPanelOpen] = useState(false);
+  const [notifications, setNotifications] = useState<NotificationData[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     const token = getCookie("session_token");
@@ -75,6 +92,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       .then((data) => {
         setUser(data.user);
         setIsLoading(false);
+        // Fetch initial notifications and unread count
+        fetchNotifications(token);
       })
       .catch(() => {
         document.cookie = "session_token=; path=/; max-age=0";
@@ -94,6 +113,97 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     }
     document.cookie = "session_token=; path=/; max-age=0";
     router.push("/login");
+  };
+
+  const fetchNotifications = async (token: string) => {
+    try {
+      const res = await fetch("/api/notifications?limit=20", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setNotifications(data.notifications || []);
+        setUnreadCount(data.unreadCount || 0);
+      }
+    } catch (error) {
+      console.error("Failed to fetch notifications:", error);
+    }
+  };
+
+  const markNotificationAsRead = async (notificationId: string) => {
+    const token = getCookie("session_token");
+    if (!token) return;
+
+    try {
+      const res = await fetch(`/api/notifications/${notificationId}/read`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (res.ok) {
+        setNotifications((prev) =>
+          prev.map((n) =>
+            n.id === notificationId ? { ...n, readAt: new Date().toISOString() } : n
+          )
+        );
+        setUnreadCount((prev) => Math.max(0, prev - 1));
+      }
+    } catch (error) {
+      console.error("Failed to mark notification as read:", error);
+    }
+  };
+
+  const markAllNotificationsAsRead = async () => {
+    const token = getCookie("session_token");
+    if (!token) return;
+
+    try {
+      const res = await fetch("/api/notifications/read-all", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (res.ok) {
+        setNotifications((prev) =>
+          prev.map((n) => ({ ...n, readAt: n.readAt || new Date().toISOString() }))
+        );
+        setUnreadCount(0);
+      }
+    } catch (error) {
+      console.error("Failed to mark all notifications as read:", error);
+    }
+  };
+
+  const handleNotificationClick = (notification: NotificationData) => {
+    // Mark as read
+    if (!notification.readAt) {
+      markNotificationAsRead(notification.id);
+    }
+    // Navigate based on entity type
+    if (notification.entityType === "message" && notification.entityId) {
+      // For messages, navigate to messenger - in a real app, we'd navigate to the specific chat
+      router.push("/app/messenger");
+      setNotificationPanelOpen(false);
+    }
+  };
+
+  const formatTimeAgo = (dateString: string): string => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+
+    if (minutes < 1) return "Just now";
+    if (minutes < 60) return `${minutes}m ago`;
+    if (hours < 24) return `${hours}h ago`;
+    if (days < 7) return `${days}d ago`;
+    return date.toLocaleDateString();
   };
 
   const handleMouseDown = () => {
@@ -178,8 +288,32 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           })}
         </div>
 
+        {/* Notification Bell */}
+        <div className="mt-auto mb-2 relative">
+          <button
+            onClick={() => setNotificationPanelOpen(!notificationPanelOpen)}
+            className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors group relative ${
+              notificationPanelOpen
+                ? "bg-blue-600 text-white"
+                : "text-gray-400 hover:bg-gray-800 hover:text-white"
+            }`}
+            title="Notifications"
+          >
+            <Bell className="w-5 h-5" />
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+                {unreadCount > 99 ? "99+" : unreadCount}
+              </span>
+            )}
+            {/* Tooltip */}
+            <span className="absolute left-full ml-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+              Notifications
+            </span>
+          </button>
+        </div>
+
         {/* User Avatar + Dropdown */}
-        <div className="mt-auto">
+        <div>
           <DropdownMenu.Root>
             <DropdownMenu.Trigger asChild>
               <button className="w-10 h-10 rounded-full overflow-hidden border-2 border-transparent hover:border-gray-600 transition-colors focus:outline-none focus:border-blue-500">
@@ -243,6 +377,74 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </DropdownMenu.Root>
         </div>
       </nav>
+
+      {/* Notification Panel - slides in from left */}
+      {notificationPanelOpen && (
+        <aside className="w-80 bg-white border-r border-gray-200 flex flex-col flex-shrink-0 shadow-lg">
+          {/* Header */}
+          <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+            <h2 className="font-semibold text-gray-900">Notifications</h2>
+            <div className="flex items-center gap-2">
+              {unreadCount > 0 && (
+                <button
+                  onClick={markAllNotificationsAsRead}
+                  className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                >
+                  Mark all read
+                </button>
+              )}
+              <button
+                onClick={() => setNotificationPanelOpen(false)}
+                className="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-gray-600 rounded"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Notification List */}
+          <div className="flex-1 overflow-y-auto">
+            {notifications.length === 0 ? (
+              <div className="p-8 text-center text-gray-500">
+                <Bell className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                <p className="text-sm">No notifications yet</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-100">
+                {notifications.map((notification) => (
+                  <button
+                    key={notification.id}
+                    onClick={() => handleNotificationClick(notification)}
+                    className={`w-full p-4 text-left hover:bg-gray-50 transition-colors ${
+                      !notification.readAt ? "bg-blue-50/50" : ""
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      {/* Unread indicator */}
+                      {!notification.readAt && (
+                        <span className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0" />
+                      )}
+                      <div className={`flex-1 min-w-0 ${notification.readAt ? "pl-5" : ""}`}>
+                        <p className={`text-sm ${!notification.readAt ? "font-medium" : ""} text-gray-900 line-clamp-2`}>
+                          {notification.title}
+                        </p>
+                        {notification.body && (
+                          <p className="text-sm text-gray-500 mt-1 line-clamp-2">
+                            {notification.body}
+                          </p>
+                        )}
+                        <p className="text-xs text-gray-400 mt-1">
+                          {formatTimeAgo(notification.createdAt)}
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </aside>
+      )}
 
       {/* Resizable Sidebar Panel - hidden for modules with their own sidebar */}
       {!hasOwnSidebar && !isSidebarCollapsed && (

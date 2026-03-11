@@ -662,8 +662,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 40,
-      "passes": false,
-      "notes": "Push notifications (browser, mobile) are a follow-up story."
+      "passes": true,
+      "notes": "Created notifications table with enums for notification_type (dm_received, mentioned, thread_reply, task_assigned, approval_pending) and notification_entity_type (message, chat, task, approval, document). Added lib/notifications.ts with createNotification and specialized helpers (createDmReceivedNotification, createMentionNotification, createThreadReplyNotification, createTaskAssignedNotification, createApprovalPendingNotification). Integrated notification generation into messages.ts for DMs, @mentions, and thread replies. Created notifications routes: GET /notifications with cursor-based pagination and unread count, GET /notifications/unread-count, PATCH /notifications/:id/read, POST /notifications/read-all. Added Bell icon to nav rail with unread count badge, notification panel with mark-all-read and click-to-navigate. Push notifications are a follow-up story."
     },
     {
       "id": "US-041",

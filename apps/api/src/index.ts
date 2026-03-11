@@ -8,6 +8,7 @@ import { usersRoutes } from "./routes/users";
 import { contactsRoutes } from "./routes/contacts";
 import { chatsRoutes } from "./routes/chats";
 import { messagesRoutes } from "./routes/messages";
+import { notificationsRoutes } from "./routes/notifications";
 import { wsRoutes } from "./routes/ws";
 import { closeRedis } from "./lib/redis";
 
@@ -30,6 +31,7 @@ await fastify.register(usersRoutes);
 await fastify.register(contactsRoutes);
 await fastify.register(chatsRoutes);
 await fastify.register(messagesRoutes);
+await fastify.register(notificationsRoutes);
 await fastify.register(wsRoutes);
 
 fastify.get("/", async () => {

@@ -4,6 +4,11 @@ import { messages, chatMembers, chats, users, messageReadReceipts, messageReacti
 import { eq, and, desc, lt, gt, inArray, sql } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
 import { publish, getChatChannel, getUserPresenceChannel } from "../lib/redis";
+import {
+  createDmReceivedNotification,
+  createMentionNotification,
+  createThreadReplyNotification,
+} from "../lib/notifications";
 
 // UUID validation regex
 const UUID_REGEX =
@@ -225,20 +230,42 @@ export async function messagesRoutes(fastify: FastifyInstance) {
         },
       });
 
-      // Publish mention notifications for mentioned users
+      // Get chat info for notifications
+      const [chatInfo] = await db
+        .select({ name: chats.name, type: chats.type })
+        .from(chats)
+        .where(eq(chats.id, chatId))
+        .limit(1);
+
+      // Get message text preview for notifications
+      const messagePreview = typeof content.text === "string" ? content.text :
+        typeof content.html === "string" ? content.html.replace(/<[^>]*>/g, "").substring(0, 100) :
+        "New message";
+
+      // Track users who should not receive DM notifications (they're getting mention/thread notifications)
+      const notifiedUserIds = new Set<string>();
+      notifiedUserIds.add(currentUserId); // Don't notify sender
+
+      // Handle mention notifications
       const mentions = content.mentions as Array<{ id: string; displayName: string }> | undefined;
       if (mentions && mentions.length > 0) {
-        // Get chat name for the notification
-        const [chatInfo] = await db
-          .select({ name: chats.name, type: chats.type })
-          .from(chats)
-          .where(eq(chats.id, chatId))
-          .limit(1);
-
         for (const mention of mentions) {
           // Don't notify the sender if they mention themselves
           if (mention.id === currentUserId) continue;
 
+          notifiedUserIds.add(mention.id);
+
+          // Create persistent notification for mention
+          await createMentionNotification({
+            mentionedUserId: mention.id,
+            mentionedByName: request.user.displayName,
+            chatId,
+            chatName: chatInfo?.name || "Chat",
+            messageId: newMessage.id,
+            messagePreview,
+          });
+
+          // Also publish to presence channel for real-time
           await publish(getUserPresenceChannel(mention.id), {
             type: "mention",
             payload: {
@@ -252,6 +279,76 @@ export async function messagesRoutes(fastify: FastifyInstance) {
               text: content.text || "",
               createdAt: newMessage.createdAt,
             },
+          });
+        }
+      }
+
+      // Handle thread reply notifications
+      if (thread_id) {
+        // Get the parent message to find who should be notified (thread participants)
+        const threadParticipants = await db
+          .select({ senderId: messages.senderId })
+          .from(messages)
+          .where(eq(messages.threadId, thread_id))
+          .groupBy(messages.senderId);
+
+        // Also include the parent message sender
+        const [parentMessage] = await db
+          .select({ senderId: messages.senderId })
+          .from(messages)
+          .where(eq(messages.id, thread_id))
+          .limit(1);
+
+        const participantIds = new Set<string>();
+        for (const p of threadParticipants) {
+          participantIds.add(p.senderId);
+        }
+        if (parentMessage) {
+          participantIds.add(parentMessage.senderId);
+        }
+
+        // Notify thread participants (except sender and already notified via mentions)
+        for (const participantId of participantIds) {
+          if (notifiedUserIds.has(participantId)) continue;
+          notifiedUserIds.add(participantId);
+
+          await createThreadReplyNotification({
+            recipientId: participantId,
+            replierName: request.user.displayName,
+            chatId,
+            chatName: chatInfo?.name || "Thread",
+            threadId: thread_id,
+            messageId: newMessage.id,
+            messagePreview,
+          });
+        }
+      }
+
+      // Handle DM notifications (only for DM chats)
+      if (chatInfo?.type === "dm") {
+        // Get the other member of the DM who isn't muted
+        const otherMembers = await db
+          .select({ userId: chatMembers.userId, muted: chatMembers.muted })
+          .from(chatMembers)
+          .where(
+            and(
+              eq(chatMembers.chatId, chatId),
+              sql`${chatMembers.userId} != ${currentUserId}`
+            )
+          );
+
+        for (const member of otherMembers) {
+          // Skip if already notified via mention or muted
+          if (notifiedUserIds.has(member.userId)) continue;
+          if (member.muted) continue;
+
+          await createDmReceivedNotification({
+            recipientId: member.userId,
+            senderId: currentUserId,
+            senderName: request.user.displayName,
+            chatId,
+            messageId: newMessage.id,
+            messagePreview,
           });
         }
       }
