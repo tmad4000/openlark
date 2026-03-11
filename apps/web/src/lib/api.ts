@@ -150,6 +150,107 @@ class ApiClient {
   async getChatMembers(chatId: string) {
     return this.request<{ members: ChatMember[] }>(`/messenger/chats/${chatId}/members`);
   }
+
+  // Calendar endpoints
+  async getCalendars() {
+    return this.request<{ calendars: Calendar[] }>("/calendar/calendars");
+  }
+
+  async createCalendar(data: {
+    name: string;
+    type?: "personal" | "public" | "shared";
+    color?: string;
+    description?: string;
+  }) {
+    return this.request<{ calendar: Calendar }>("/calendar/calendars", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getEvents(params?: {
+    calendarId?: string;
+    startDate?: string;
+    endDate?: string;
+  }) {
+    const searchParams = new URLSearchParams();
+    if (params?.calendarId) searchParams.set("calendarId", params.calendarId);
+    if (params?.startDate) searchParams.set("startDate", params.startDate);
+    if (params?.endDate) searchParams.set("endDate", params.endDate);
+    const query = searchParams.toString();
+    return this.request<{ events: CalendarEvent[] }>(
+      `/calendar/events${query ? `?${query}` : ""}`
+    );
+  }
+
+  async createEvent(data: {
+    calendarId: string;
+    title: string;
+    startTime: string;
+    endTime: string;
+    description?: string;
+    location?: string;
+    timezone?: string;
+    attendeeIds?: string[];
+    roomId?: string;
+  }) {
+    return this.request<{ event: CalendarEvent; attendees: EventAttendee[] }>(
+      "/calendar/events",
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+      }
+    );
+  }
+
+  async updateEvent(
+    eventId: string,
+    data: {
+      title?: string;
+      startTime?: string;
+      endTime?: string;
+      description?: string;
+      location?: string;
+    }
+  ) {
+    return this.request<{ event: CalendarEvent }>(`/calendar/events/${eventId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteEvent(eventId: string) {
+    return this.request<void>(`/calendar/events/${eventId}`, {
+      method: "DELETE",
+    });
+  }
+
+  async rsvpEvent(eventId: string, rsvp: "yes" | "no" | "maybe") {
+    return this.request<{ attendee: EventAttendee }>(
+      `/calendar/events/${eventId}/rsvp`,
+      {
+        method: "POST",
+        body: JSON.stringify({ rsvp }),
+      }
+    );
+  }
+
+  async getEventAttendees(eventId: string) {
+    return this.request<{ attendees: EventAttendee[] }>(
+      `/calendar/events/${eventId}/attendees`
+    );
+  }
+
+  async getMeetingRooms(params?: { minCapacity?: number; floor?: string }) {
+    const searchParams = new URLSearchParams();
+    if (params?.minCapacity)
+      searchParams.set("minCapacity", params.minCapacity.toString());
+    if (params?.floor) searchParams.set("floor", params.floor);
+    const query = searchParams.toString();
+    return this.request<{ rooms: MeetingRoom[] }>(
+      `/calendar/rooms${query ? `?${query}` : ""}`
+    );
+  }
 }
 
 // Types
@@ -201,6 +302,61 @@ export interface Message {
   createdAt: string;
   editedAt: string | null;
   recalledAt: string | null;
+}
+
+// Calendar types
+export interface Calendar {
+  id: string;
+  orgId: string;
+  ownerId: string;
+  type: "personal" | "public" | "all_staff" | "shared";
+  name: string;
+  color: string | null;
+  description: string | null;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CalendarEvent {
+  id: string;
+  calendarId: string;
+  title: string;
+  description: string | null;
+  startTime: string;
+  endTime: string;
+  timezone: string;
+  location: string | null;
+  recurrenceRule: string | null;
+  roomId: string | null;
+  creatorId: string;
+  isCancelled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EventAttendee {
+  id: string;
+  eventId: string;
+  userId: string;
+  rsvp: "pending" | "yes" | "no" | "maybe";
+  isRequired: boolean;
+  isOrganizer: boolean;
+  respondedAt: string | null;
+  user?: {
+    displayName: string | null;
+    avatarUrl: string | null;
+  };
+}
+
+export interface MeetingRoom {
+  id: string;
+  orgId: string;
+  name: string;
+  capacity: number;
+  equipment: string[] | null;
+  location: string | null;
+  floor: string | null;
 }
 
 export const api = new ApiClient();
