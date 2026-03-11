@@ -167,6 +167,13 @@ export const baseViews = pgTable(
         // Gallery-specific
         coverFieldId?: string;
         showTitleOnly?: boolean;
+        // Form-specific
+        formDescription?: string;
+        formSubmitLabel?: string;
+        formSuccessMessage?: string;
+        formRequiredFields?: string[];
+        formPublicAccess?: boolean;
+        formShareToken?: string;
       }>()
       .default({}),
     position: integer("position").notNull().default(0),

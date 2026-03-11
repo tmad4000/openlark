@@ -26,6 +26,11 @@ import {
   Filter,
   ArrowUpDown,
   Layers,
+  FileText,
+  Copy,
+  ExternalLink,
+  Settings,
+  CheckCircle,
 } from "lucide-react";
 import { ViewToolbar } from "@/components/base/ViewToolbar";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
@@ -90,6 +95,13 @@ interface ViewConfig {
   durationFieldId?: string;
   coverFieldId?: string;
   showTitleOnly?: boolean;
+  // Form-specific
+  formDescription?: string;
+  formSubmitLabel?: string;
+  formSuccessMessage?: string;
+  formRequiredFields?: string[];
+  formPublicAccess?: boolean;
+  formShareToken?: string;
 }
 
 interface RecordData {
@@ -1000,6 +1012,458 @@ function KanbanView({
   );
 }
 
+// Form View Component
+function FormView({
+  table,
+  view,
+  onUpdateViewConfig,
+  onAddRecord,
+  baseId,
+}: {
+  table: TableWithDetails;
+  view: ViewData;
+  onUpdateViewConfig: (config: Partial<ViewConfig>) => void;
+  onAddRecord: (data?: Record<string, unknown>) => Promise<void>;
+  baseId: string;
+}) {
+  const [formData, setFormData] = useState<Record<string, unknown>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
+
+  // Form settings from view config
+  const description = view.config?.formDescription || "";
+  const submitLabel = view.config?.formSubmitLabel || "Submit";
+  const successMessage = view.config?.formSuccessMessage || "Thank you! Your response has been recorded.";
+  const requiredFields = view.config?.formRequiredFields || [];
+  const isPublic = view.config?.formPublicAccess ?? false;
+  const shareToken = view.config?.formShareToken || "";
+
+  // Get visible fields (exclude hidden fields)
+  const visibleFields = table.fields.filter(
+    (f) => !view.config?.hiddenFields?.includes(f.id)
+  );
+
+  // Generate share URL
+  const shareUrl = shareToken
+    ? `${window.location.origin}/form/${shareToken}`
+    : "";
+
+  const handleFieldChange = (fieldId: string, value: unknown) => {
+    setFormData((prev) => ({ ...prev, [fieldId]: value }));
+  };
+
+  const handleSubmit = async () => {
+    // Validate required fields
+    for (const fieldId of requiredFields) {
+      const value = formData[fieldId];
+      if (value === undefined || value === null || value === "") {
+        return;
+      }
+    }
+
+    setIsSubmitting(true);
+    try {
+      await onAddRecord(formData);
+      setFormData({});
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 3000);
+    } catch (error) {
+      console.error("Failed to submit form:", error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const togglePublicAccess = async () => {
+    if (!isPublic) {
+      // Generate a share token when enabling public access
+      const token = crypto.randomUUID();
+      onUpdateViewConfig({
+        formPublicAccess: true,
+        formShareToken: token,
+      });
+    } else {
+      onUpdateViewConfig({
+        formPublicAccess: false,
+        formShareToken: "",
+      });
+    }
+  };
+
+  const copyShareLink = () => {
+    navigator.clipboard.writeText(shareUrl);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2000);
+  };
+
+  const isFieldRequired = (fieldId: string) => requiredFields.includes(fieldId);
+
+  const toggleRequired = (fieldId: string) => {
+    const newRequired = isFieldRequired(fieldId)
+      ? requiredFields.filter((id) => id !== fieldId)
+      : [...requiredFields, fieldId];
+    onUpdateViewConfig({ formRequiredFields: newRequired });
+  };
+
+  return (
+    <div className="flex-1 flex overflow-hidden">
+      {/* Form preview */}
+      <div className="flex-1 overflow-y-auto bg-gray-50 p-8">
+        <div className="max-w-2xl mx-auto">
+          {showSuccess ? (
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
+              <CheckCircle className="w-16 h-16 mx-auto text-green-500 mb-4" />
+              <h2 className="text-xl font-semibold text-gray-900 mb-2">Submitted!</h2>
+              <p className="text-gray-600">{successMessage}</p>
+              <button
+                onClick={() => setShowSuccess(false)}
+                className="mt-6 px-4 py-2 text-blue-600 hover:text-blue-700 font-medium"
+              >
+                Submit another response
+              </button>
+            </div>
+          ) : (
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+              {/* Form header */}
+              <div className="px-6 py-5 border-b border-gray-200">
+                <h2 className="text-xl font-semibold text-gray-900">{view.name}</h2>
+                {description && (
+                  <p className="mt-2 text-gray-600">{description}</p>
+                )}
+              </div>
+
+              {/* Form fields */}
+              <div className="px-6 py-4 space-y-5">
+                {visibleFields.map((field) => {
+                  const Icon = FIELD_TYPE_ICONS[field.type] || Type;
+                  const required = isFieldRequired(field.id);
+                  const value = formData[field.id];
+
+                  return (
+                    <div key={field.id}>
+                      <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 mb-1.5">
+                        <Icon className="w-4 h-4 text-gray-400" />
+                        {field.name}
+                        {required && <span className="text-red-500">*</span>}
+                      </label>
+                      <FormFieldInput
+                        field={field}
+                        value={value}
+                        onChange={(val) => handleFieldChange(field.id, val)}
+                        required={required}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Submit button */}
+              <div className="px-6 py-4 border-t border-gray-100">
+                <button
+                  onClick={handleSubmit}
+                  disabled={isSubmitting}
+                  className="w-full px-4 py-2.5 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isSubmitting ? "Submitting..." : submitLabel}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Settings sidebar */}
+      <div className="w-80 border-l border-gray-200 bg-white flex flex-col">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+          <h3 className="font-semibold text-gray-900">Form Settings</h3>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4 space-y-5">
+          {/* Share settings */}
+          <div>
+            <label className="flex items-center justify-between cursor-pointer">
+              <span className="text-sm font-medium text-gray-700">Public access</span>
+              <button
+                onClick={togglePublicAccess}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  isPublic ? "bg-blue-600" : "bg-gray-200"
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    isPublic ? "translate-x-6" : "translate-x-1"
+                  }`}
+                />
+              </button>
+            </label>
+            <p className="mt-1 text-xs text-gray-500">
+              Allow anyone with the link to submit responses
+            </p>
+
+            {isPublic && shareUrl && (
+              <div className="mt-3">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={shareUrl}
+                    readOnly
+                    className="flex-1 px-3 py-1.5 text-sm border border-gray-300 rounded-lg bg-gray-50 truncate"
+                  />
+                  <button
+                    onClick={copyShareLink}
+                    className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded"
+                    title="Copy link"
+                  >
+                    {copiedLink ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
+                  </button>
+                  <a
+                    href={shareUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded"
+                    title="Open in new tab"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                  </a>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Description */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Description
+            </label>
+            <textarea
+              value={description}
+              onChange={(e) => onUpdateViewConfig({ formDescription: e.target.value })}
+              placeholder="Add a description for your form..."
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm resize-none"
+              rows={3}
+            />
+          </div>
+
+          {/* Submit button label */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Submit button label
+            </label>
+            <input
+              type="text"
+              value={submitLabel}
+              onChange={(e) => onUpdateViewConfig({ formSubmitLabel: e.target.value })}
+              placeholder="Submit"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+            />
+          </div>
+
+          {/* Success message */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Success message
+            </label>
+            <textarea
+              value={successMessage}
+              onChange={(e) => onUpdateViewConfig({ formSuccessMessage: e.target.value })}
+              placeholder="Thank you for your submission!"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm resize-none"
+              rows={2}
+            />
+          </div>
+
+          {/* Required fields */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Required fields
+            </label>
+            <div className="space-y-2">
+              {visibleFields.map((field) => (
+                <label key={field.id} className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isFieldRequired(field.id)}
+                    onChange={() => toggleRequired(field.id)}
+                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-sm text-gray-700">{field.name}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Form Field Input Component
+function FormFieldInput({
+  field,
+  value,
+  onChange,
+  required,
+}: {
+  field: FieldData;
+  value: unknown;
+  onChange: (value: unknown) => void;
+  required?: boolean;
+}) {
+  switch (field.type) {
+    case "checkbox":
+      return (
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={Boolean(value)}
+            onChange={(e) => onChange(e.target.checked)}
+            className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+          />
+          <span className="text-sm text-gray-600">Yes</span>
+        </label>
+      );
+
+    case "number":
+    case "currency":
+    case "percent":
+      return (
+        <input
+          type="number"
+          value={value !== undefined && value !== null ? String(value) : ""}
+          onChange={(e) => onChange(e.target.valueAsNumber || null)}
+          required={required}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          placeholder={`Enter ${field.name.toLowerCase()}...`}
+        />
+      );
+
+    case "date":
+      return (
+        <input
+          type="date"
+          value={String(value || "")}
+          onChange={(e) => onChange(e.target.value || null)}
+          required={required}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      );
+
+    case "datetime":
+      return (
+        <input
+          type="datetime-local"
+          value={String(value || "")}
+          onChange={(e) => onChange(e.target.value || null)}
+          required={required}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      );
+
+    case "single_select":
+      const options = (field.config?.options as string[]) || [];
+      return (
+        <select
+          value={String(value || "")}
+          onChange={(e) => onChange(e.target.value || null)}
+          required={required}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="">Select...</option>
+          {options.map((opt) => (
+            <option key={opt} value={opt}>
+              {opt}
+            </option>
+          ))}
+        </select>
+      );
+
+    case "long_text":
+      return (
+        <textarea
+          value={String(value || "")}
+          onChange={(e) => onChange(e.target.value || null)}
+          required={required}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+          rows={4}
+          placeholder={`Enter ${field.name.toLowerCase()}...`}
+        />
+      );
+
+    case "email":
+      return (
+        <input
+          type="email"
+          value={String(value || "")}
+          onChange={(e) => onChange(e.target.value || null)}
+          required={required}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          placeholder="email@example.com"
+        />
+      );
+
+    case "url":
+      return (
+        <input
+          type="url"
+          value={String(value || "")}
+          onChange={(e) => onChange(e.target.value || null)}
+          required={required}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          placeholder="https://..."
+        />
+      );
+
+    case "phone":
+      return (
+        <input
+          type="tel"
+          value={String(value || "")}
+          onChange={(e) => onChange(e.target.value || null)}
+          required={required}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          placeholder="+1 234 567 8900"
+        />
+      );
+
+    case "rating":
+      const currentRating = Number(value) || 0;
+      return (
+        <div className="flex gap-1">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => onChange(i === currentRating ? null : i)}
+              className="p-1"
+            >
+              <Star
+                className={`w-6 h-6 ${
+                  i <= currentRating
+                    ? "text-yellow-400 fill-yellow-400"
+                    : "text-gray-300 hover:text-yellow-200"
+                }`}
+              />
+            </button>
+          ))}
+        </div>
+      );
+
+    default:
+      return (
+        <input
+          type="text"
+          value={String(value || "")}
+          onChange={(e) => onChange(e.target.value || null)}
+          required={required}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          placeholder={`Enter ${field.name.toLowerCase()}...`}
+        />
+      );
+  }
+}
+
 // Record Detail Panel Component
 function RecordDetailPanel({
   record,
@@ -1104,7 +1568,7 @@ export default function BasePage() {
   const [newFieldType, setNewFieldType] = useState("text");
   const [isAddViewOpen, setIsAddViewOpen] = useState(false);
   const [newViewName, setNewViewName] = useState("");
-  const [newViewType, setNewViewType] = useState<"grid" | "kanban">("grid");
+  const [newViewType, setNewViewType] = useState<"grid" | "kanban" | "form">("grid");
 
   const getToken = () => getCookie("session_token");
 
@@ -1536,7 +2000,7 @@ export default function BasePage() {
       {activeTable && (
         <div className="flex items-center border-b border-gray-200 px-2 bg-white">
           {activeTable.views.map((view) => {
-            const ViewIcon = view.type === "kanban" ? Kanban : view.type === "calendar" ? Calendar : Grid3X3;
+            const ViewIcon = view.type === "kanban" ? Kanban : view.type === "calendar" ? Calendar : view.type === "form" ? FileText : Grid3X3;
             return (
               <button
                 key={view.id}
@@ -1599,6 +2063,14 @@ export default function BasePage() {
                 onRecordClick={handleRecordClick}
                 onUpdateViewConfig={updateViewConfig}
               />
+            ) : activeView?.type === "form" ? (
+              <FormView
+                table={activeTable}
+                view={activeView}
+                onUpdateViewConfig={updateViewConfig}
+                onAddRecord={addRecord}
+                baseId={baseId}
+              />
             ) : (
               <GridView
                 table={activeTable}
@@ -1620,8 +2092,8 @@ export default function BasePage() {
           </>
         )}
 
-        {/* Record detail panel */}
-        {selectedRecord && activeTable && (
+        {/* Record detail panel (not shown for form view) */}
+        {selectedRecord && activeTable && activeView?.type !== "form" && (
           <RecordDetailPanel
             record={selectedRecord}
             fields={activeTable.fields}
@@ -1774,7 +2246,7 @@ export default function BasePage() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Type
                 </label>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   <button
                     onClick={() => setNewViewType("grid")}
                     className={`flex items-center gap-2 px-4 py-3 border rounded-lg transition-colors ${
@@ -1796,6 +2268,17 @@ export default function BasePage() {
                   >
                     <Kanban className="w-5 h-5" />
                     <span className="font-medium">Kanban</span>
+                  </button>
+                  <button
+                    onClick={() => setNewViewType("form")}
+                    className={`flex items-center gap-2 px-4 py-3 border rounded-lg transition-colors ${
+                      newViewType === "form"
+                        ? "border-blue-500 bg-blue-50 text-blue-700"
+                        : "border-gray-200 hover:border-gray-300"
+                    }`}
+                  >
+                    <FileText className="w-5 h-5" />
+                    <span className="font-medium">Form</span>
                   </button>
                 </div>
               </div>

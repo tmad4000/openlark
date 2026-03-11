@@ -1599,4 +1599,163 @@ export async function basesRoutes(fastify: FastifyInstance) {
       return reply.status(200).send({ success: true });
     }
   );
+
+  /**
+   * GET /forms/:token - Get public form by share token (no auth required)
+   * Returns: Form view data with table fields
+   */
+  fastify.get<{
+    Params: { token: string };
+  }>(
+    "/forms/:token",
+    async (request, reply) => {
+      const { token } = request.params;
+
+      // Find the view with this share token
+      const [result] = await db
+        .select({
+          viewId: baseViews.id,
+          viewName: baseViews.name,
+          viewType: baseViews.type,
+          viewConfig: baseViews.config,
+          tableId: baseTables.id,
+          tableName: baseTables.name,
+        })
+        .from(baseViews)
+        .innerJoin(baseTables, eq(baseViews.tableId, baseTables.id))
+        .where(
+          sql`${baseViews.config}->>'formShareToken' = ${token} AND ${baseViews.config}->>'formPublicAccess' = 'true'`
+        )
+        .limit(1);
+
+      if (!result) {
+        return reply.status(404).send({
+          error: "Form not found or not publicly accessible",
+        });
+      }
+
+      // Get fields for this table
+      const fields = await db
+        .select()
+        .from(baseFields)
+        .where(eq(baseFields.tableId, result.tableId))
+        .orderBy(asc(baseFields.position));
+
+      // Filter out hidden fields based on view config
+      const config = result.viewConfig as Record<string, unknown> || {};
+      const hiddenFields = (config.hiddenFields as string[]) || [];
+      const visibleFields = fields.filter((f) => !hiddenFields.includes(f.id));
+
+      return reply.status(200).send({
+        id: result.viewId,
+        name: result.viewName,
+        description: config.formDescription || "",
+        submitLabel: config.formSubmitLabel || "Submit",
+        successMessage: config.formSuccessMessage || "Thank you! Your response has been recorded.",
+        requiredFields: (config.formRequiredFields as string[]) || [],
+        fields: visibleFields.map((f) => ({
+          id: f.id,
+          name: f.name,
+          type: f.type,
+          config: f.config,
+        })),
+      });
+    }
+  );
+
+  /**
+   * POST /forms/:token/submit - Submit a public form (no auth required)
+   * Body: { data: Record<string, unknown> }
+   * Returns: Created record ID
+   */
+  fastify.post<{
+    Params: { token: string };
+    Body: { data: Record<string, unknown> };
+  }>(
+    "/forms/:token/submit",
+    async (request, reply) => {
+      const { token } = request.params;
+      const { data } = request.body;
+
+      if (!data || typeof data !== "object") {
+        return reply.status(400).send({
+          error: "data is required and must be an object",
+        });
+      }
+
+      // Find the view with this share token
+      const [result] = await db
+        .select({
+          viewId: baseViews.id,
+          viewConfig: baseViews.config,
+          tableId: baseTables.id,
+          baseId: baseTables.baseId,
+          baseOwnerId: bases.ownerId,
+        })
+        .from(baseViews)
+        .innerJoin(baseTables, eq(baseViews.tableId, baseTables.id))
+        .innerJoin(bases, eq(baseTables.baseId, bases.id))
+        .where(
+          sql`${baseViews.config}->>'formShareToken' = ${token} AND ${baseViews.config}->>'formPublicAccess' = 'true'`
+        )
+        .limit(1);
+
+      if (!result) {
+        return reply.status(404).send({
+          error: "Form not found or not publicly accessible",
+        });
+      }
+
+      // Get fields for validation
+      const fields = await db
+        .select()
+        .from(baseFields)
+        .where(eq(baseFields.tableId, result.tableId));
+
+      const fieldMap = new Map(fields.map((f) => [f.id, f]));
+      const config = result.viewConfig as Record<string, unknown> || {};
+      const requiredFields = (config.formRequiredFields as string[]) || [];
+
+      // Validate required fields
+      for (const fieldId of requiredFields) {
+        const value = data[fieldId];
+        if (value === undefined || value === null || value === "") {
+          const field = fieldMap.get(fieldId);
+          return reply.status(400).send({
+            error: `${field?.name || "Field"} is required`,
+          });
+        }
+      }
+
+      // Validate field IDs exist
+      const validFieldIds = new Set(fields.map((f) => f.id));
+      const cleanData: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(data)) {
+        if (validFieldIds.has(key)) {
+          cleanData[key] = value;
+        }
+      }
+
+      // Create the record (using base owner as the creator for anonymous submissions)
+      const [newRecord] = await db
+        .insert(baseRecords)
+        .values({
+          tableId: result.tableId,
+          data: cleanData,
+          createdBy: result.baseOwnerId,
+        })
+        .returning();
+
+      // Update base's updatedAt
+      await db
+        .update(bases)
+        .set({ updatedAt: new Date() })
+        .where(eq(bases.id, result.baseId));
+
+      return reply.status(201).send({
+        id: newRecord.id,
+        success: true,
+      });
+    }
+  );
 }
