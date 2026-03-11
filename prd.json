@@ -885,8 +885,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 53,
-      "passes": false,
-      "notes": "Use @tiptap/extension-collaboration and @tiptap/extension-collaboration-cursor for Yjs integration."
+      "passes": true,
+      "notes": "Created DocumentEditor component (apps/web/src/components/DocumentEditor.tsx) with TipTap + Yjs/Hocuspocus integration. Features: (1) Collaboration via @hocuspocus/provider connecting to collab server with token auth; (2) All basic block types via StarterKit + extensions: paragraph, headings H1-H6, bullet/numbered lists, task/todo lists, blockquote, horizontal rule, code block with lowlight syntax highlighting; (3) Slash command menu with 13 block types (Text, H1-H6, Bullet List, Numbered List, Todo List, Quote, Divider, Code Block) with fuzzy search; (4) BubbleMenu floating toolbar on text selection with Bold, Italic, Underline, Strikethrough, Code, Link formatting; (5) DragHandle extension shows grip icon on block hover for reordering; (6) Auto-save indicator in header shows syncing/synced/offline status. Document list page at /app/docs with grid/list views, search, and CRUD. Document editor page at /app/docs/[id] with editable title, share button, delete option. Typecheck passes."
     },
     {
       "id": "US-054",
