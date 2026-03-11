@@ -1059,8 +1059,8 @@
         "Typecheck passes"
       ],
       "priority": 63,
-      "passes": false,
-      "notes": "Filtering syntax: {field_id: {op: 'eq|gt|lt|contains|in', value: ...}}"
+      "passes": true,
+      "notes": "Created apps/api/src/routes/bases.ts with comprehensive Base CRUD API. POST /bases creates base with name/icon; GET /bases lists user's bases with pagination and owner info. GET /bases/:id returns base with tables. POST /bases/:id/tables creates table; GET /bases/:id/tables lists tables. GET /tables/:id returns table with fields and views. POST /tables/:id/fields creates field with name, type (29 types supported), and config; PATCH /fields/:id updates field; DELETE /fields/:id removes field. POST /tables/:id/records creates record with data keyed by field_id; GET /tables/:id/records returns cursor-paginated records with filtering (eq/neq/gt/gte/lt/lte/contains/not_contains/is_empty/is_not_empty/in operators) and sorting via JSON query params; PATCH /records/:id updates record data; DELETE /records/:id hard-deletes record (schema has no deletedAt). All endpoints validate org membership and check access. Typecheck passes."
     },
     {
       "id": "US-064",

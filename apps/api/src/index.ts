@@ -15,6 +15,7 @@ import { documentsRoutes } from "./routes/documents";
 import { documentCommentsRoutes } from "./routes/document-comments";
 import { uploadsRoutes } from "./routes/uploads";
 import { wikiRoutes } from "./routes/wiki";
+import { basesRoutes } from "./routes/bases";
 import { wsRoutes } from "./routes/ws";
 import { closeRedis } from "./lib/redis";
 
@@ -45,6 +46,7 @@ await fastify.register(documentsRoutes);
 await fastify.register(documentCommentsRoutes);
 await fastify.register(uploadsRoutes);
 await fastify.register(wikiRoutes);
+await fastify.register(basesRoutes);
 await fastify.register(wsRoutes);
 
 fastify.get("/", async () => {
