@@ -867,8 +867,8 @@
         "Typecheck passes"
       ],
       "priority": 52,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created apps/api/src/routes/documents.ts with full Document CRUD API. Endpoints: POST /documents creates document with yjs_doc_id (format: doc-{uuid}) and auto-creates owner permission; GET /documents returns paginated list with filtering by type, checks ownership + user/department/org permissions; GET /documents/:id returns metadata + all permissions + current user role; PATCH /documents/:id updates title and settings (requires editor+); DELETE /documents/:id soft-deletes (owner only). Permission endpoints: POST /documents/:id/permissions adds permission (manager/owner); PATCH updates role (manager/owner); DELETE removes (manager/owner). Cannot assign/modify owner role via permissions API. Registered in index.ts. Typecheck passes."
     },
     {
       "id": "US-053",
