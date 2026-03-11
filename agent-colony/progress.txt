@@ -2157,3 +2157,97 @@ EventDetails component that fills the critical gap in the calendar module - user
 - `next lint` deprecation warning
 
 ---
+
+## 2026-03-10 - Iteration 21 - REVIEW
+
+### Code quality observations
+
+**What looks good:**
+- EventDetails component (T-004) is well-implemented with comprehensive functionality
+- Test coverage remains excellent: 325+ tests, all passing
+- Promise.all pattern for parallel fetching (event + attendees) is correct
+- RSVP bug from iteration 18 was properly fixed in iteration 19
+- Component structure follows established patterns (loading/error/empty states)
+- Calendar module now has complete CRUD + RSVP flow for Phase 1
+
+**Minor observations:**
+1. **Duplicate date formatting logic**: `formatEventTime` exists in both `event-list.tsx:58-76` and `event-details.tsx:73-93`. Could be extracted to shared util. Not blocking.
+
+2. **Static method pattern still present**: ChatList.addChat, MessageList.addMessage, EventList.addEvent all use same fragile pattern flagged since iteration 12. Works for single-instance pages but won't scale. Pattern should be documented as known tech debt.
+
+3. **Consistent quality**: Recent commits maintain established patterns (routes.ts, service.ts, schemas.ts structure, auth middleware reuse, Zod validation)
+
+### Commit history review
+
+Last 5 commits are well-structured:
+```
+9b874fe docs: update progress log for iteration 20 (EventDetails T-004)
+96f61d4 feat(calendar): add EventDetails component with RSVP functionality (T-004)
+43cf1e7 fix(calendar): correct RSVP API field name from 'rsvp' to 'response' (T-004)
+e7f6778 docs: update progress log for iteration 18 (review)
+f84c9de docs: update progress log for iteration 17 (calendar frontend T-004)
+```
+
+Pattern holds: Implementation commits reference task IDs, followed by progress log updates. Fix commits clearly describe the bug corrected.
+
+### Plan assessment
+
+**T-001 (Infrastructure):** Done ✓
+**T-023 (Frontend Shell):** Done ✓
+
+**T-002 (Auth):** 2/6 subtasks - Stable foundation. Remaining work (RLS, magic link, 2FA, departments, API keys) correctly deferred. Production-ready for single-org deployment.
+
+**T-003 (Messenger):** 4/6 subtasks - Core complete. WebSocket messaging, reactions, pins, favorites, chat tabs, announcements all working. Remaining: threads/rich text (subtask 3), typing/presence UI (subtask 4). These are Phase 2 polish.
+
+**T-004 (Calendar):** 3/5 subtasks - Event CRUD + RSVP complete. Remaining: room booking UI (subtask 3), shared calendars + iCal + drag-and-drop (subtask 4). Core calendar functionality works.
+
+**Phase 1 status:** Auth → Messenger → Calendar foundation is functionally complete. Users can authenticate, send messages in real-time, and schedule/RSVP to events. This is a usable team communication tool per goal.md ("Phase 1 alone is a usable team communication tool").
+
+### Nudges left
+
+- T-004: Date formatting could be extracted to shared util
+- T-003: Static method pattern documented as known limitation, not blocking Phase 1
+
+### Tech debt items
+
+**Low priority (functional but fragile):**
+- Static method pattern in 3 components - works but won't scale to multi-instance
+- Duplicate formatEventTime logic
+- Raw UUID input for chat creation (no user search)
+- Auto-generated tabs not implemented (FR-2.15)
+- Typing/presence tests skipped (flaky in CI)
+- Login needs org context for true multi-tenant
+
+**Deferred (not Phase 1 scope):**
+- T-002 subtasks 3-6 (RLS, magic link, 2FA, departments, API keys)
+- T-003 subtasks 3,4 (threads, rich text, typing/presence UI)
+- T-004 subtasks 3,4 (room booking UI, shared calendars, iCal, drag-and-drop)
+
+### Reinforced patterns
+
+1. **Module structure** (routes, service, schemas) - Calendar followed exactly
+2. **Auth middleware reuse** - `preHandler: authenticate` works across modules
+3. **Zod `.refine()` for cross-field validation** - Calendar time range validation
+4. **Component patterns** - Loading/error/empty states, Promise.all for parallel fetch
+5. **Test patterns** - Schema validation + auth requirement + integration tests per module
+6. **Progress log format** - Consistent documentation of implementation details
+
+### Phase 1 completion assessment
+
+Per goal.md line 981: "Each phase delivers standalone value. Phase 1 alone is a usable team communication tool."
+
+**Phase 1 delivers:**
+- ✅ User registration and login (T-002)
+- ✅ Real-time messaging with reactions, pins, favorites (T-003)
+- ✅ Calendar event scheduling with RSVP (T-004)
+- ✅ Unified frontend shell with navigation (T-023)
+
+**Phase 1 remaining polish (not blocking):**
+- Threads and rich text in messages
+- Typing indicators and presence
+- Room booking and availability search
+- Visual calendar grid (weekly/monthly)
+
+**Recommendation:** Phase 1 foundation is complete. Colony can proceed to Phase 2 (Docs + Collab Engine → Wiki → Sheets → Base) or continue polishing Phase 1 modules based on product priorities.
+
+---

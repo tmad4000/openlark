@@ -165,6 +165,12 @@
           "role": "reviewer",
           "value": 1,
           "reason": "Iter 18 review: Auth foundation remains stable. 2/6 subtasks complete. Known limitation: login needs org context for true multi-tenant (auth.service.ts:122). Remaining subtasks (RLS, magic link, 2FA, departments, API keys) are correctly deferred as lower priority."
+        },
+        {
+          "iteration": 21,
+          "role": "reviewer",
+          "value": 1,
+          "reason": "Iteration 21 review: Auth foundation stable. 2/6 subtasks complete. Remaining subtasks (RLS, magic link, 2FA, departments, API keys) correctly deferred as lower priority. Known limitation: login needs org context for multi-tenant (auth.service.ts:122)."
         }
       ],
       "comments": [
@@ -364,6 +370,12 @@
           "role": "reviewer",
           "value": 1,
           "reason": "Iter 18 review: 4/6 subtasks complete. Messenger core functionality solid. Same fragile static method pattern (ChatList.addChat, MessageList.addMessage) still present - flagged since iter 12. Remaining: subtask 3 (threads, rich text, forwarding) and subtask 4 (typing/presence UI)."
+        },
+        {
+          "iteration": 21,
+          "role": "reviewer",
+          "value": 1,
+          "reason": "Iteration 21 review: 4/6 subtasks complete. Messenger core solid. Static method pattern flagged 9 iterations ago (iter 12), still present in 3 components. Phase 1 complete - threads/rich text/typing UI are Phase 2."
         }
       ],
       "comments": [
@@ -466,6 +478,11 @@
           "iteration": 15,
           "role": "reviewer",
           "message": "Iter 15 review: create-chat-dialog.tsx uses raw user IDs rather than a user search/picker. This is a UX limitation - users must know recipient UUIDs. Consider adding user search endpoint (GET /users?q=...) and autocomplete UI for Phase 2. Acceptable for Phase 1 scope."
+        },
+        {
+          "iteration": 21,
+          "role": "reviewer",
+          "message": "Iter 21 review: Static method pattern (ChatList.addChat, MessageList.addMessage) has been flagged for 9 iterations (since iter 12) but works reliably for single-instance pages. When starting Phase 2 modules or if adding real-time updates elsewhere, consider extracting to React Query + subscription pattern. Low urgency since current usage is contained."
         }
       ],
       "status": "in-progress",
@@ -553,6 +570,12 @@
           "role": "implementer",
           "value": 1,
           "reason": "Iteration 20: Event details view is the critical missing piece. Users can create events but can't see details, RSVP, or view attendees. This breaks the core calendar use case. Will implement EventDetails component with RSVP UI."
+        },
+        {
+          "iteration": 21,
+          "role": "reviewer",
+          "value": 1,
+          "reason": "Iteration 21 review: EventDetails component is well-implemented. RSVP bug fixed (iter 19). 3/5 subtasks complete. Calendar module has complete CRUD + RSVP flow now. Ready for subtasks 3-4 (room booking, shared calendars) when prioritized. Phase 1 Calendar foundation is solid."
         }
       ],
       "comments": [
@@ -595,6 +618,11 @@
           "iteration": 20,
           "role": "implementer",
           "message": "Iteration 20: Added EventDetails component with RSVP functionality. Users can now view event details (title, description, time, location), see attendee list with RSVP status, and submit their own RSVP (Yes/No/Maybe). Added getEvent API method and 10 tests. Calendar module now has complete CRUD + RSVP flow."
+        },
+        {
+          "iteration": 21,
+          "role": "reviewer",
+          "message": "Iter 21 review: EventDetails follows established patterns well. Test coverage comprehensive (10 tests). Uses Promise.all for parallel fetching, which is the correct pattern. One minor observation: formatEventDateTime could be extracted to a shared util (same logic exists in event-list.tsx:58-76). Not blocking."
         }
       ],
       "status": "in-progress",
@@ -1341,7 +1369,7 @@
   ],
   "metadata": {
     "createdAt": "2026-03-04T21:00:00Z",
-    "totalIterations": 30,
+    "totalIterations": 31,
     "iterationLog": [
       {
         "iteration": 1,
@@ -1519,6 +1547,12 @@
       },
       {
         "iteration": 30,
+        "role": "implementer",
+        "taskWorked": "T-004",
+        "contextCompacted": false
+      },
+      {
+        "iteration": 31,
         "role": "implementer",
         "taskWorked": "T-004",
         "contextCompacted": false
