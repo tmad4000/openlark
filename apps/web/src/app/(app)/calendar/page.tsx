@@ -2,14 +2,14 @@
 
 import { useState, useCallback } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import { EventList } from "@/components/calendar/event-list";
+import { EventList, EventDetails } from "@/components/calendar";
 import { CreateEventDialog } from "@/components/calendar/create-event-dialog";
 import { AppShell } from "@/components/layout/app-shell";
 import { Calendar } from "lucide-react";
 import type { CalendarEvent } from "@/lib/api";
 
 export default function CalendarPage() {
-  const { organization } = useAuth();
+  const { user, organization } = useAuth();
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
 
@@ -38,27 +38,8 @@ export default function CalendarPage() {
   return (
     <>
       <AppShell sidebar={sidebar}>
-        {selectedEventId ? (
-          <div className="flex flex-col h-full">
-            {/* Event header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-800">
-              <div className="flex items-center gap-3">
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                  Event Details
-                </h2>
-              </div>
-            </div>
-
-            {/* Event details - placeholder for now */}
-            <div className="flex-1 p-4">
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                Selected event: {selectedEventId}
-              </p>
-              <p className="text-sm text-gray-400 dark:text-gray-500 mt-2">
-                Event details view coming soon.
-              </p>
-            </div>
-          </div>
+        {selectedEventId && user ? (
+          <EventDetails eventId={selectedEventId} currentUserId={user.id} />
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-900">
             <div className="text-center">

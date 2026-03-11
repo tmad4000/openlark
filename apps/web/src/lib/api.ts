@@ -183,6 +183,10 @@ class ApiClient {
     );
   }
 
+  async getEvent(eventId: string) {
+    return this.request<{ event: CalendarEvent }>(`/calendar/events/${eventId}`);
+  }
+
   async createEvent(data: {
     calendarId: string;
     title: string;
