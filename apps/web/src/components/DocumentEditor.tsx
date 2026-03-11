@@ -54,10 +54,11 @@ import {
   ChevronRight,
   Info,
   Upload,
+  MessageSquare,
 } from "lucide-react";
 import { Extension } from "@tiptap/react";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
-import { Callout, CalloutType, Toggle, ToggleSummary, ToggleContent, FileAttachment } from "./editor/extensions";
+import { Callout, CalloutType, Toggle, ToggleSummary, ToggleContent, FileAttachment, Comment } from "./editor/extensions";
 
 // Create lowlight instance with common languages
 const lowlight = createLowlight(common);
@@ -68,6 +69,13 @@ export interface Collaborator {
   color: string;
 }
 
+export interface DocumentEditorHandle {
+  setCommentMark: (commentId: string, from: number, to: number) => void;
+  resolveComment: (commentId: string) => void;
+  unresolveComment: (commentId: string) => void;
+  removeCommentMark: (commentId: string) => void;
+}
+
 interface DocumentEditorProps {
   documentId: string;
   yjsDocId: string;
@@ -76,6 +84,8 @@ interface DocumentEditorProps {
   userColor?: string;
   onSyncStatusChange?: (status: "syncing" | "synced" | "offline") => void;
   onCollaboratorsChange?: (collaborators: Collaborator[]) => void;
+  onAddComment?: (selectedText: string, from: number, to: number) => void;
+  onCommentClick?: (commentId: string) => void;
 }
 
 // Slash command menu items
@@ -760,7 +770,7 @@ function ImageUploadDialog({ isOpen, onClose, onUpload }: ImageUploadDialogProps
   );
 }
 
-export default function DocumentEditor({
+const DocumentEditorInner = forwardRef<DocumentEditorHandle, DocumentEditorProps>(function DocumentEditor({
   documentId,
   yjsDocId,
   token,
@@ -768,7 +778,9 @@ export default function DocumentEditor({
   userColor,
   onSyncStatusChange,
   onCollaboratorsChange,
-}: DocumentEditorProps) {
+  onAddComment,
+  onCommentClick,
+}, ref) {
   const [isConnected, setIsConnected] = useState(false);
   const [isSynced, setIsSynced] = useState(false);
   const [showLinkDialog, setShowLinkDialog] = useState(false);
@@ -1010,6 +1022,7 @@ export default function DocumentEditor({
         ToggleSummary,
         ToggleContent,
         FileAttachment,
+        Comment,
         // Collaboration extensions
         ...(providerRef.current && ydocRef.current
           ? [
@@ -1162,6 +1175,54 @@ export default function DocumentEditor({
     [editor]
   );
 
+  // Expose methods for comment management via ref
+  useImperativeHandle(ref, () => ({
+    setCommentMark: (commentId: string, from: number, to: number) => {
+      if (!editor) return;
+      editor.chain().focus().setTextSelection({ from, to }).setComment({ commentId }).run();
+    },
+    resolveComment: (commentId: string) => {
+      if (!editor) return;
+      editor.chain().resolveComment(commentId).run();
+    },
+    unresolveComment: (commentId: string) => {
+      if (!editor) return;
+      editor.chain().unresolveComment(commentId).run();
+    },
+    removeCommentMark: (commentId: string) => {
+      if (!editor) return;
+      // Find and remove all marks with this commentId
+      const { doc, schema, tr } = editor.state;
+      doc.descendants((node, pos) => {
+        if (node.marks) {
+          node.marks.forEach((mark) => {
+            if (mark.type.name === "comment" && mark.attrs.commentId === commentId) {
+              tr.removeMark(pos, pos + node.nodeSize, mark);
+            }
+          });
+        }
+      });
+      editor.view.dispatch(tr);
+    },
+  }), [editor]);
+
+  // Set up comment click handler
+  useEffect(() => {
+    if (!editor) return;
+
+    const handleCommentClick = (event: Event) => {
+      const customEvent = event as CustomEvent<{ commentId: string }>;
+      onCommentClick?.(customEvent.detail.commentId);
+    };
+
+    const editorElement = editor.view.dom;
+    editorElement.addEventListener("comment-click", handleCommentClick);
+
+    return () => {
+      editorElement.removeEventListener("comment-click", handleCommentClick);
+    };
+  }, [editor, onCommentClick]);
+
   if (!editor) {
     return (
       <div className="h-full flex items-center justify-center">
@@ -1249,6 +1310,22 @@ export default function DocumentEditor({
           title="Link"
         >
           <LinkIcon className="w-4 h-4" />
+        </button>
+        <div className="w-px h-5 bg-gray-200 mx-1" />
+        <button
+          onClick={() => {
+            const { from, to } = editor.state.selection;
+            const selectedText = editor.state.doc.textBetween(from, to, " ");
+            onAddComment?.(selectedText, from, to);
+          }}
+          className={`p-1.5 rounded transition-colors ${
+            editor.isActive("comment")
+              ? "bg-yellow-100 text-yellow-600"
+              : "text-gray-600 hover:bg-gray-100"
+          }`}
+          title="Add Comment"
+        >
+          <MessageSquare className="w-4 h-4" />
         </button>
 
         {/* Link Dialog */}
@@ -1392,4 +1469,6 @@ export default function DocumentEditor({
       )}
     </div>
   );
-}
+});
+
+export default DocumentEditorInner;

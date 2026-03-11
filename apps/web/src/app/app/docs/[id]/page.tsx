@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import {
   ArrowLeft,
@@ -11,12 +11,15 @@ import {
   Share2,
   Star,
   Trash2,
-  Users,
+  MessageSquare,
+  X,
 } from "lucide-react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import dynamic from "next/dynamic";
-import type { Collaborator } from "@/components/DocumentEditor";
+import type { Collaborator, DocumentEditorHandle } from "@/components/DocumentEditor";
+import CommentsPanel from "@/components/CommentsPanel";
+import AddCommentDialog from "@/components/AddCommentDialog";
 
 // Dynamically import the editor to avoid SSR issues with Yjs
 const DocumentEditor = dynamic(
@@ -81,6 +84,19 @@ export default function DocumentEditorPage() {
   const [editedTitle, setEditedTitle] = useState("");
   const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
 
+  // Comments state
+  const [showCommentsPanel, setShowCommentsPanel] = useState(false);
+  const [showAddCommentDialog, setShowAddCommentDialog] = useState(false);
+  const [pendingComment, setPendingComment] = useState<{
+    selectedText: string;
+    from: number;
+    to: number;
+  } | null>(null);
+  const [selectedCommentId, setSelectedCommentId] = useState<string | null>(null);
+  const [commentsPanelKey, setCommentsPanelKey] = useState(0);
+
+  const editorRef = useRef<DocumentEditorHandle>(null);
+
   // Fetch user and document data
   useEffect(() => {
     const sessionToken = getCookie("session_token");
@@ -124,8 +140,8 @@ export default function DocumentEditorPage() {
         }
 
         const docData = await docRes.json();
-        setDocument(docData.document);
-        setEditedTitle(docData.document.title);
+        setDocument(docData);
+        setEditedTitle(docData.title);
         setIsLoading(false);
       } catch (err) {
         console.error("Failed to fetch data:", err);
@@ -199,6 +215,91 @@ export default function DocumentEditorPage() {
   const handleCollaboratorsChange = useCallback((newCollaborators: Collaborator[]) => {
     setCollaborators(newCollaborators);
   }, []);
+
+  // Handle add comment request from editor
+  const handleAddComment = useCallback(
+    (selectedText: string, from: number, to: number) => {
+      if (!selectedText.trim()) return;
+      setPendingComment({ selectedText, from, to });
+      setShowAddCommentDialog(true);
+    },
+    []
+  );
+
+  // Handle comment click from editor
+  const handleCommentClick = useCallback((commentId: string) => {
+    setSelectedCommentId(commentId);
+    setShowCommentsPanel(true);
+  }, []);
+
+  // Handle comment submit
+  const handleCommentSubmit = useCallback(
+    async (content: string) => {
+      if (!token || !pendingComment) return;
+
+      try {
+        // Generate a temporary ID that will be replaced by the server response
+        const res = await fetch(`/api/documents/${documentId}/comments`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            content,
+            blockId: `${pendingComment.from}-${pendingComment.to}`,
+          }),
+        });
+
+        if (!res.ok) {
+          throw new Error("Failed to create comment");
+        }
+
+        const data = await res.json();
+        const commentId = data.comment.id;
+
+        // Set the comment mark in the editor
+        editorRef.current?.setCommentMark(
+          commentId,
+          pendingComment.from,
+          pendingComment.to
+        );
+
+        // Open comments panel and select the new comment
+        setShowCommentsPanel(true);
+        setSelectedCommentId(commentId);
+
+        // Refresh comments panel
+        setCommentsPanelKey((prev) => prev + 1);
+      } catch (err) {
+        console.error("Failed to create comment:", err);
+        throw err;
+      } finally {
+        setPendingComment(null);
+      }
+    },
+    [documentId, pendingComment, token]
+  );
+
+  // Handle comment resolved/reopened
+  const handleCommentResolved = useCallback(
+    (commentId: string, resolved: boolean) => {
+      if (resolved) {
+        editorRef.current?.resolveComment(commentId);
+      } else {
+        editorRef.current?.unresolveComment(commentId);
+      }
+    },
+    []
+  );
+
+  // Handle comment deleted
+  const handleCommentDeleted = useCallback((commentId: string) => {
+    editorRef.current?.removeCommentMark(commentId);
+    if (selectedCommentId === commentId) {
+      setSelectedCommentId(null);
+    }
+  }, [selectedCommentId]);
 
   if (isLoading) {
     return (
@@ -350,6 +451,19 @@ export default function DocumentEditorPage() {
             </Tooltip.Provider>
           )}
 
+          {/* Comments button */}
+          <button
+            onClick={() => setShowCommentsPanel(!showCommentsPanel)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+              showCommentsPanel
+                ? "bg-yellow-100 text-yellow-700"
+                : "text-gray-700 hover:bg-gray-100"
+            }`}
+          >
+            <MessageSquare className="w-4 h-4" />
+            <span>Comments</span>
+          </button>
+
           {/* Share button */}
           <button
             onClick={() => {
@@ -405,17 +519,60 @@ export default function DocumentEditorPage() {
         </div>
       </header>
 
-      {/* Editor */}
-      <div className="flex-1 overflow-hidden">
-        <DocumentEditor
-          documentId={document.id}
-          yjsDocId={document.yjsDocId}
-          token={token}
-          userName={user.displayName || user.email}
-          onSyncStatusChange={handleSyncStatusChange}
-          onCollaboratorsChange={handleCollaboratorsChange}
-        />
+      {/* Main content area */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Editor */}
+        <div className={`flex-1 overflow-hidden ${showCommentsPanel ? "" : ""}`}>
+          <DocumentEditor
+            ref={editorRef}
+            documentId={document.id}
+            yjsDocId={document.yjsDocId}
+            token={token}
+            userName={user.displayName || user.email}
+            onSyncStatusChange={handleSyncStatusChange}
+            onCollaboratorsChange={handleCollaboratorsChange}
+            onAddComment={handleAddComment}
+            onCommentClick={handleCommentClick}
+          />
+        </div>
+
+        {/* Comments Panel */}
+        {showCommentsPanel && (
+          <div className="w-80 border-l border-gray-200 flex flex-col">
+            <div className="flex items-center justify-end px-2 py-1 border-b border-gray-100">
+              <button
+                onClick={() => setShowCommentsPanel(false)}
+                className="p-1 text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-hidden">
+              <CommentsPanel
+                key={commentsPanelKey}
+                documentId={documentId}
+                token={token}
+                currentUserId={user.id}
+                selectedCommentId={selectedCommentId}
+                onCommentClick={handleCommentClick}
+                onCommentResolved={handleCommentResolved}
+                onCommentDeleted={handleCommentDeleted}
+              />
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Add Comment Dialog */}
+      <AddCommentDialog
+        isOpen={showAddCommentDialog}
+        onClose={() => {
+          setShowAddCommentDialog(false);
+          setPendingComment(null);
+        }}
+        onSubmit={handleCommentSubmit}
+        selectedText={pendingComment?.selectedText}
+      />
     </div>
   );
 }

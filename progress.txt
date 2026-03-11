@@ -56,3 +56,4 @@
 [2026-03-10 17:48] US-053 — Block editor - TipTap with basic blocks — PASS
 [2026-03-10 21:45] US-054 — Block editor - advanced blocks — PASS
 [2026-03-10 23:55] US-055 — Document collaboration - cursors and presence — PASS
+[2026-03-11 04:10] US-056 — Document comments — PASS

@@ -12,6 +12,7 @@ import { notificationsRoutes } from "./routes/notifications";
 import { topicsRoutes } from "./routes/topics";
 import { eventsRoutes, meetingRoomsRoutes } from "./routes/events";
 import { documentsRoutes } from "./routes/documents";
+import { documentCommentsRoutes } from "./routes/document-comments";
 import { uploadsRoutes } from "./routes/uploads";
 import { wsRoutes } from "./routes/ws";
 import { closeRedis } from "./lib/redis";
@@ -40,6 +41,7 @@ await fastify.register(topicsRoutes);
 await fastify.register(eventsRoutes);
 await fastify.register(meetingRoomsRoutes);
 await fastify.register(documentsRoutes);
+await fastify.register(documentCommentsRoutes);
 await fastify.register(uploadsRoutes);
 await fastify.register(wsRoutes);
 

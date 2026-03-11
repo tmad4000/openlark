@@ -935,8 +935,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 56,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented document comments with full API and UI support. API: Created document-comments.ts with GET /documents/:documentId/comments (list with pagination and resolved filter), GET /documents/:documentId/comments/:commentId (with replies), POST /documents/:documentId/comments (create comment or reply via threadId), PATCH /documents/:documentId/comments/:commentId (update content or resolve/reopen), DELETE /documents/:documentId/comments/:commentId. UI: Created Comment TipTap mark extension with yellow highlight for active comments, gray dashed for resolved. BubbleMenu has comment button that opens AddCommentDialog. CommentsPanel on right sidebar shows all comments with threaded replies, reply input, resolve/reopen buttons, delete option. Comments synced via commentsPanelKey refresh. Editor exposes ref handle for setCommentMark, resolveComment, unresolveComment, removeCommentMark. Typecheck passes."
     },
     {
       "id": "US-057",
