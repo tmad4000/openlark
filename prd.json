@@ -816,8 +816,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 49,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created EventCreationDialog component (apps/web/src/components/EventCreationDialog.tsx) with: title input, date/time pickers (start/end), timezone selector (12 common timezones), location input, description textarea, all-day toggle. Attendee picker uses GET /contacts API with debounced search, displays chips for selected attendees. Room booking via new GET /meeting-rooms API endpoint that checks room availability for selected time slot and shows conflicts. Recurrence selector with none/daily/weekly/monthly/yearly options (iCal RRULE format). Video meeting toggle generates placeholder meeting link. Save button creates event via POST /events API and refreshes calendar. Calendar page updated to open dialog on Create button click or date cell click with pre-filled date. Typecheck passes."
     },
     {
       "id": "US-050",

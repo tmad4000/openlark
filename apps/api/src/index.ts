@@ -10,7 +10,7 @@ import { chatsRoutes } from "./routes/chats";
 import { messagesRoutes } from "./routes/messages";
 import { notificationsRoutes } from "./routes/notifications";
 import { topicsRoutes } from "./routes/topics";
-import { eventsRoutes } from "./routes/events";
+import { eventsRoutes, meetingRoomsRoutes } from "./routes/events";
 import { wsRoutes } from "./routes/ws";
 import { closeRedis } from "./lib/redis";
 
@@ -36,6 +36,7 @@ await fastify.register(messagesRoutes);
 await fastify.register(notificationsRoutes);
 await fastify.register(topicsRoutes);
 await fastify.register(eventsRoutes);
+await fastify.register(meetingRoomsRoutes);
 await fastify.register(wsRoutes);
 
 fastify.get("/", async () => {

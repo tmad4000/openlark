@@ -1256,3 +1256,112 @@ function calculateFreeSlots(
 
   return freeSlots;
 }
+
+/**
+ * Meeting Rooms Routes
+ */
+export const meetingRoomsRoutes = async (fastify: FastifyInstance) => {
+  /**
+   * GET /meeting-rooms - Get available meeting rooms
+   * Query: start (ISO date), end (ISO date) - optional, to filter by availability
+   */
+  fastify.get<{
+    Querystring: { start?: string; end?: string };
+  }>(
+    "/meeting-rooms",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { start, end } = request.query;
+      const orgId = request.user.orgId;
+
+      if (!orgId) {
+        return reply.status(400).send({
+          error: "User must belong to an organization",
+        });
+      }
+
+      // Get all meeting rooms for the organization
+      const rooms = await db
+        .select()
+        .from(meetingRooms)
+        .where(eq(meetingRooms.orgId, orgId))
+        .orderBy(meetingRooms.name);
+
+      // If time range provided, calculate availability
+      if (start && end) {
+        const startDate = new Date(start);
+        const endDate = new Date(end);
+
+        if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+          return reply.status(400).send({
+            error: "Invalid date format for start or end",
+          });
+        }
+
+        // Get all events that use these rooms in the time range
+        const roomIds = rooms.map((r) => r.id);
+
+        if (roomIds.length > 0) {
+          const conflictingEvents = await db
+            .select({
+              roomId: calendarEvents.roomId,
+              eventId: calendarEvents.id,
+              title: calendarEvents.title,
+              startTime: calendarEvents.startTime,
+              endTime: calendarEvents.endTime,
+            })
+            .from(calendarEvents)
+            .where(
+              and(
+                inArray(calendarEvents.roomId, roomIds),
+                isNull(calendarEvents.deletedAt),
+                // Event overlaps with requested range
+                lte(calendarEvents.startTime, endDate),
+                gte(calendarEvents.endTime, startDate)
+              )
+            );
+
+          // Group conflicts by room
+          const conflictsByRoom: Record<
+            string,
+            Array<{ eventId: string; title: string; start: string; end: string }>
+          > = {};
+
+          for (const event of conflictingEvents) {
+            if (event.roomId) {
+              if (!conflictsByRoom[event.roomId]) {
+                conflictsByRoom[event.roomId] = [];
+              }
+              conflictsByRoom[event.roomId].push({
+                eventId: event.eventId,
+                title: event.title,
+                start: event.startTime.toISOString(),
+                end: event.endTime.toISOString(),
+              });
+            }
+          }
+
+          // Add availability info to each room
+          const roomsWithAvailability = rooms.map((room) => ({
+            ...room,
+            isAvailable: !conflictsByRoom[room.id] || conflictsByRoom[room.id].length === 0,
+            conflicts: conflictsByRoom[room.id] || [],
+          }));
+
+          return reply.status(200).send({
+            rooms: roomsWithAvailability,
+          });
+        }
+      }
+
+      // Return rooms without availability info
+      return reply.status(200).send({
+        rooms: rooms.map((room) => ({
+          ...room,
+          isAvailable: true,
+          conflicts: [],
+        })),
+      });
+    }
+  );
+};

@@ -12,6 +12,7 @@ import {
   Calendar as CalendarIcon,
 } from "lucide-react";
 import * as Popover from "@radix-ui/react-popover";
+import { EventCreationDialog } from "@/components/EventCreationDialog";
 
 interface EventAttendee {
   userId: string;
@@ -352,6 +353,8 @@ export default function CalendarPage() {
     x: number;
     y: number;
   } | null>(null);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [createDialogDate, setCreateDialogDate] = useState<Date | undefined>(undefined);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -508,10 +511,23 @@ export default function CalendarPage() {
     setSelectedEvent(event);
   };
 
-  // Handle date cell click - will trigger create event (placeholder for now)
+  // Handle date cell click - open create event dialog with this date
   const handleDateClick = (cell: (typeof calendarGrid)[0]) => {
-    setSelectedDate(new Date(cell.year, cell.month, cell.day));
-    // TODO: Open create event dialog with this date pre-filled
+    const clickedDate = new Date(cell.year, cell.month, cell.day);
+    setSelectedDate(clickedDate);
+    setCreateDialogDate(clickedDate);
+    setShowCreateDialog(true);
+  };
+
+  // Handle create button click
+  const handleCreateClick = () => {
+    setCreateDialogDate(selectedDate);
+    setShowCreateDialog(true);
+  };
+
+  // Handle event created - refresh the events list
+  const handleEventCreated = () => {
+    fetchEvents();
   };
 
   if (isLoading) {
@@ -527,7 +543,10 @@ export default function CalendarPage() {
       {/* Left sidebar with mini calendar */}
       <aside className="w-64 bg-white border-r border-gray-200 flex flex-col p-4">
         {/* Create event button */}
-        <button className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors mb-4">
+        <button
+          onClick={handleCreateClick}
+          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors mb-4"
+        >
           <Plus className="w-5 h-5" />
           <span>Create</span>
         </button>
@@ -684,6 +703,14 @@ export default function CalendarPage() {
           </Popover.Portal>
         </Popover.Root>
       )}
+
+      {/* Event creation dialog */}
+      <EventCreationDialog
+        open={showCreateDialog}
+        onOpenChange={setShowCreateDialog}
+        initialDate={createDialogDate}
+        onEventCreated={handleEventCreated}
+      />
     </div>
   );
 }
