@@ -2319,3 +2319,63 @@ Critical gap filled: CreateEventDialog now supports adding attendees to calendar
 - `next lint` deprecation warning
 
 ---
+
+## 2026-03-10 - Iteration 23 - T-004 (Room Booking UI)
+
+### What was implemented
+Added room booking UI to complete T-004 subtask 3:
+
+1. **CreateEventDialog room selection** (`apps/web/src/components/calendar/create-event-dialog.tsx`):
+   - Added `rooms` and `selectedRoomId` state
+   - Load rooms via `api.getMeetingRooms()` when dialog opens
+   - Room dropdown selector showing room name and capacity
+   - "No room (virtual or offsite)" default option
+   - Reset room selection when dialog closes
+   - Pass `roomId` to `createEvent` API when room selected
+
+2. **EventDetails room display** (`apps/web/src/components/calendar/event-details.tsx`):
+   - When event has `roomId`, fetch rooms and find matching room
+   - Display room info: name, capacity, and location
+   - Building2 icon from Lucide for visual consistency
+   - Non-critical error handling (room load failures don't break component)
+
+### Files changed
+- `apps/web/src/components/calendar/create-event-dialog.tsx` - Added room selection UI
+- `apps/web/src/components/calendar/create-event-dialog.test.tsx` - Added 5 room booking tests
+- `apps/web/src/components/calendar/event-details.tsx` - Added room display
+- `apps/web/src/components/calendar/event-details.test.tsx` - Added 3 room display tests
+- `agent-colony/plan.json` - Vote, claim, comment
+
+### Tests added
+- **5 CreateEventDialog tests**:
+  - Shows meeting room selector
+  - Loads and displays meeting rooms
+  - Selects a meeting room
+  - Includes roomId when creating event with room
+  - Does not include roomId when no room selected
+- **3 EventDetails tests**:
+  - Displays meeting room name when event has roomId
+  - Displays room capacity
+  - Does not show room section when no roomId
+
+### Plan deviations
+- None — followed established patterns exactly
+
+### Learnings for future iterations
+- **Pattern reinforced**: Room booking UI follows the same pattern as attendee selection (load data on dialog open, state management, conditional rendering)
+- **Pattern reinforced**: Non-critical API calls (room info for display) should fail gracefully without breaking the main flow
+- **Gap noted**: No `GET /calendar/rooms/:id` endpoint exists — had to fetch all rooms and filter. Consider adding single-room endpoint if this becomes a performance issue.
+- **Self-reflection**: The backend had full room booking support (`getMeetingRooms`, `roomId` on events) but the frontend was missing. This pattern (backend complete, frontend gap) appeared multiple times in Calendar module iterations.
+
+### Tech debt addressed
+- ✅ Room booking UI implemented (T-004 subtask 3 complete)
+
+### Tech debt remaining
+- T-004 subtask 4 (shared calendars, iCal import/export, drag-and-drop rescheduling)
+- Static method pattern fragile (`chat-list.tsx`, `message-list.tsx`, `event-list.tsx`)
+- Auto-generated tabs not implemented (FR-2.15 partial)
+- Typing/presence tests skipped
+- Login needs org context for multi-tenant
+- `next lint` deprecation warning
+
+---

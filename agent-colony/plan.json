@@ -511,7 +511,7 @@
         },
         {
           "description": "Build room booking and availability search",
-          "done": false
+          "done": true
         },
         {
           "description": "Add shared calendars, iCal import/export, drag-and-drop UI",
@@ -640,6 +640,11 @@
           "iteration": 22,
           "role": "implementer",
           "message": "Iteration 22: Added attendee selection to CreateEventDialog. Created GET /auth/users endpoint for searching org members. Frontend now has typeahead user search with selected attendees displayed as tags. Events can now be created with attendees. Added 10 new tests (3 backend unit, 3 integration, 4 frontend)."
+        },
+        {
+          "iteration": 23,
+          "role": "implementer",
+          "message": "Iteration 23: Added room booking UI to CreateEventDialog and EventDetails. Users can now select a meeting room when creating events, and view room info (name, capacity, location) in event details. Added 8 new tests. T-004 subtask 3 complete."
         }
       ],
       "status": "in-progress",
