@@ -21,6 +21,7 @@ interface CreateDmBody {
 interface CreateGroupBody {
   name: string;
   member_ids: string[];
+  type?: "group" | "topic_group";
 }
 
 /**
@@ -533,12 +534,20 @@ export async function chatsRoutes(fastify: FastifyInstance) {
     "/chats/group",
     { preHandler: authMiddleware },
     async (request, reply) => {
-      const { name, member_ids } = request.body;
+      const { name, member_ids, type = "group" } = request.body;
 
       // Validate name is provided
       if (!name || typeof name !== "string" || name.trim().length === 0) {
         return reply.status(400).send({
           error: "name is required and must be a non-empty string",
+        });
+      }
+
+      // Validate type if provided
+      const validTypes = ["group", "topic_group"];
+      if (!validTypes.includes(type)) {
+        return reply.status(400).send({
+          error: `type must be one of: ${validTypes.join(", ")}`,
         });
       }
 
@@ -604,7 +613,7 @@ export async function chatsRoutes(fastify: FastifyInstance) {
       const [newChat] = await db
         .insert(chats)
         .values({
-          type: "group",
+          type,
           name: name.trim(),
           orgId,
         })
@@ -636,7 +645,7 @@ export async function chatsRoutes(fastify: FastifyInstance) {
 
       // Create system message for group creation
       await createSystemMessage(newChat.id, currentUserId, {
-        action: "group_created",
+        action: type === "topic_group" ? "topic_group_created" : "group_created",
         createdBy: request.user.displayName,
         groupName: name.trim(),
       });

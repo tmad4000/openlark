@@ -15,6 +15,10 @@ import {
 import { organizations } from "./organizations";
 import { users } from "./users";
 
+// Forward reference for topics table (defined in topics.ts)
+// We use AnyPgColumn to avoid circular dependencies
+declare const topicsTable: { id: ReturnType<typeof uuid> };
+
 // Chat type enum
 export const chatTypeEnum = pgEnum("chat_type", [
   "dm",
@@ -108,6 +112,7 @@ export const messages = pgTable(
     replyToId: uuid("reply_to_id").references((): AnyPgColumn => messages.id),
     forwardedFromMessageId: uuid("forwarded_from_message_id").references((): AnyPgColumn => messages.id),
     forwardedFromChatId: uuid("forwarded_from_chat_id").references(() => chats.id),
+    topicId: uuid("topic_id"), // References topics.id - FK added in migration to avoid circular import
     editedAt: timestamp("edited_at", { withTimezone: true }),
     recalledAt: timestamp("recalled_at", { withTimezone: true }),
     scheduledFor: timestamp("scheduled_for", { withTimezone: true }),
@@ -118,6 +123,7 @@ export const messages = pgTable(
   (table) => [
     index("messages_chat_id_created_at_idx").on(table.chatId, table.createdAt),
     index("messages_thread_id_idx").on(table.threadId),
+    index("messages_topic_id_idx").on(table.topicId),
   ]
 );
 

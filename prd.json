@@ -714,8 +714,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 43,
-      "passes": false,
-      "notes": "Topic groups are chat_type=topic_group. Regular group messages go through threads; topic groups force all messages into topics."
+      "passes": true,
+      "notes": "Implemented: (1) topics schema with topics and topic_subscriptions tables, (2) topicId column added to messages, (3) Full topics API: POST/GET /chats/:id/topics, GET/POST/PATCH /topics/:id, POST/DELETE /topics/:id/subscribe, (4) TopicGroupView component with topic list, create dialog, topic view with messages and reply input, (5) NewChatDialog updated with Topic Group tab to create topic_group chats."
     },
     {
       "id": "US-044",

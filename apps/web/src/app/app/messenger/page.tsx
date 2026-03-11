@@ -6,6 +6,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import * as ContextMenu from "@radix-ui/react-context-menu";
 import MessageInput, { MentionUser } from "@/components/MessageInput";
 import { CodeBlockRenderer } from "@/components/CodeBlockRenderer";
+import { TopicGroupView } from "@/components/TopicGroupView";
 import { useWebSocket, ConnectionStatus, WebSocketMessage, TypingEvent, PresenceEvent, ReadReceiptEvent, ReactionEvent } from "@/hooks/useWebSocket";
 import data from "@emoji-mart/data";
 import Picker from "@emoji-mart/react";
@@ -5622,7 +5623,7 @@ function NewChatDialog({
   onClose: () => void;
   onChatCreated: (chat: Chat) => void;
 }) {
-  const [tab, setTab] = useState<"dm" | "group">("dm");
+  const [tab, setTab] = useState<"dm" | "group" | "topic_group">("dm");
   const [searchQuery, setSearchQuery] = useState("");
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -5721,7 +5722,7 @@ function NewChatDialog({
     }
   };
 
-  const handleCreateGroup = async () => {
+  const handleCreateGroup = async (groupType: "group" | "topic_group" = "group") => {
     if (!groupName.trim() || selectedUsers.length === 0) return;
 
     const token = getCookie("session_token");
@@ -5740,6 +5741,7 @@ function NewChatDialog({
         body: JSON.stringify({
           name: groupName.trim(),
           member_ids: selectedUsers.map((u) => u.id),
+          type: groupType,
         }),
       });
 
@@ -5814,6 +5816,16 @@ function NewChatDialog({
             >
               Group Chat
             </button>
+            <button
+              onClick={() => setTab("topic_group")}
+              className={`flex-1 px-4 py-2 text-sm font-medium ${
+                tab === "topic_group"
+                  ? "text-blue-600 border-b-2 border-blue-600"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              Topic Group
+            </button>
           </div>
 
           <div className="p-4">
@@ -5823,19 +5835,24 @@ function NewChatDialog({
               </div>
             )}
 
-            {tab === "group" && (
+            {(tab === "group" || tab === "topic_group") && (
               <div className="mb-4">
                 <input
                   type="text"
-                  placeholder="Group name"
+                  placeholder={tab === "topic_group" ? "Topic group name" : "Group name"}
                   value={groupName}
                   onChange={(e) => setGroupName(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
+                {tab === "topic_group" && (
+                  <p className="mt-1 text-xs text-gray-500">
+                    Topic groups organize discussions into separate topics
+                  </p>
+                )}
               </div>
             )}
 
-            {tab === "group" && selectedUsers.length > 0 && (
+            {(tab === "group" || tab === "topic_group") && selectedUsers.length > 0 && (
               <div className="mb-4 flex flex-wrap gap-2">
                 {selectedUsers.map((user) => (
                   <span
@@ -5910,7 +5927,7 @@ function NewChatDialog({
                           </div>
                           <div className="text-xs text-gray-500">{user.email}</div>
                         </div>
-                        {tab === "group" && isSelected && (
+                        {(tab === "group" || tab === "topic_group") && isSelected && (
                           <div className="w-5 h-5 rounded-full bg-blue-600 flex items-center justify-center">
                             <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
@@ -5924,14 +5941,14 @@ function NewChatDialog({
               )}
             </div>
 
-            {tab === "group" && (
+            {(tab === "group" || tab === "topic_group") && (
               <div className="mt-4 pt-4 border-t border-gray-200">
                 <button
-                  onClick={handleCreateGroup}
+                  onClick={() => handleCreateGroup(tab === "topic_group" ? "topic_group" : "group")}
                   disabled={isCreating || !groupName.trim() || selectedUsers.length === 0}
                   className="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
-                  {isCreating ? "Creating..." : "Create Group"}
+                  {isCreating ? "Creating..." : tab === "topic_group" ? "Create Topic Group" : "Create Group"}
                 </button>
               </div>
             )}
@@ -6593,17 +6610,24 @@ export default function MessengerPage() {
       {/* Center Panel - Chat View */}
       <div className="flex-1 flex flex-col bg-gray-50">
         {selectedChat && currentUserId ? (
-          <ChatView
-            chat={selectedChat}
-            currentUserId={currentUserId}
-            incomingMessage={incomingMessage}
-            updatedMessage={updatedMessage}
-            typingUsers={typingByChat[selectedChat.id] || []}
-            onTypingStart={() => sendTypingStart(selectedChat.id)}
-            onTypingStop={() => sendTypingStop(selectedChat.id)}
-            onlineUsers={onlineUsers}
-            reactionEvent={lastReactionEvent}
-          />
+          selectedChat.type === "topic_group" ? (
+            <TopicGroupView
+              chat={selectedChat}
+              currentUserId={currentUserId}
+            />
+          ) : (
+            <ChatView
+              chat={selectedChat}
+              currentUserId={currentUserId}
+              incomingMessage={incomingMessage}
+              updatedMessage={updatedMessage}
+              typingUsers={typingByChat[selectedChat.id] || []}
+              onTypingStart={() => sendTypingStart(selectedChat.id)}
+              onTypingStop={() => sendTypingStop(selectedChat.id)}
+              onlineUsers={onlineUsers}
+              reactionEvent={lastReactionEvent}
+            />
+          )
         ) : selectedChat ? (
           <div className="flex-1 flex items-center justify-center text-gray-500">
             Loading...

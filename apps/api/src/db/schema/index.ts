@@ -8,3 +8,4 @@ export * from "./invitations";
 export * from "./chats";
 export * from "./messenger-support";
 export * from "./notifications";
+export * from "./topics";
