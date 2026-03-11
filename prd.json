@@ -902,8 +902,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 54,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented advanced block types: (1) Callout extension (Callout.ts) with info/warning/success/error types, colored sidebar + icons (blue/yellow/green/red backgrounds); (2) Table extension using @tiptap/extension-table with resizable columns, add/remove row/column buttons in floating toolbar when table selected, header row support; (3) Image extension with upload dialog supporting file upload + URL input, drag-and-drop support via handleDrop, paste support via handlePaste; (4) FileAttachment extension for non-image files with download link, file type icon, size display; (5) Toggle/collapsible extension (Toggle.ts, ToggleSummary, ToggleContent) for expandable sections. All blocks available in slash (/) menu grouped by category (Basic, Lists, Content, Callouts, Advanced). S3 upload infrastructure added to API (lib/s3.ts, routes/uploads.ts) with direct upload and presigned URL endpoints. Typecheck passes."
     },
     {
       "id": "US-055",
