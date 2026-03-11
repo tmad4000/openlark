@@ -2876,3 +2876,70 @@ From progress log that held true this iteration:
 - ✅ Single service instance exported from module — now applied to DocsService
 
 ---
+
+## 2026-03-10 - Iteration 29 - code-ydq (Security Fix)
+
+### What was implemented
+Fixed P1 security bug: PATCH and DELETE `/permissions/:permissionId` routes now require manager role on the document.
+
+1. **Added `getPermissionById` method** (`docs.service.ts`):
+   - Fetches permission by ID to get the associated documentId
+   - Used by routes to check authorization before modifying permissions
+
+2. **Fixed PATCH `/permissions/:permissionId`** (`docs.routes.ts:245-280`):
+   - Fetch permission first to get documentId
+   - Check if user has manager role on document via `checkPermission(documentId, userId, "manager")`
+   - Return 403 Forbidden if not authorized
+   - Only then perform the update
+
+3. **Fixed DELETE `/permissions/:permissionId`** (`docs.routes.ts:291-326`):
+   - Same pattern: fetch permission, check manager role, then delete
+   - Consistent error messages across both endpoints
+
+4. **Integration tests** (`docs.integration.test.ts`):
+   - 12 new tests covering permission authorization:
+     - Manager can update/delete permissions
+     - Non-manager (viewer, editor) cannot update/delete
+     - User with no access cannot update/delete
+     - 404 for non-existent permission
+   - 4 tests covering basic document CRUD
+
+5. **Updated all integration test cleanups**:
+   - auth.integration.test.ts, messenger.integration.test.ts, websocket.integration.test.ts
+   - Added docs table cleanup (yjsUpdates, documentComments, documentVersions, documentPermissions, documents)
+   - Fixed FK constraint violations that occurred after adding document_permissions.created_by FK to users
+
+### Files changed
+- `apps/api/src/modules/docs/docs.service.ts` - Added getPermissionById method
+- `apps/api/src/modules/docs/docs.routes.ts` - Fixed PATCH and DELETE permission routes
+- `apps/api/src/__tests__/docs.integration.test.ts` - New (12 tests)
+- `apps/api/src/__tests__/auth.integration.test.ts` - Updated cleanup
+- `apps/api/src/__tests__/messenger.integration.test.ts` - Updated cleanup
+- `apps/api/src/__tests__/websocket.integration.test.ts` - Updated cleanup
+
+### Tests added
+- **8 Permission authorization tests**:
+  - PATCH: manager can update, viewer cannot, no-access cannot, editor cannot
+  - DELETE: manager can delete, viewer cannot, no-access cannot, 404 on missing
+- **4 Document CRUD tests**: create, list, get single, 403 on no access
+
+### Plan deviations
+- None — fixed exactly the bug documented in `code-ydq`
+
+### Learnings for future iterations
+- **Gap identified**: P1 security bugs should be prioritized over feature work
+- **Pattern reinforced**: Test cleanup order matters due to FK constraints — delete child tables first
+- **Gotcha**: Database schema changes (like adding FK constraints) can break existing tests if their cleanups don't account for the new relationships
+- **Self-reflection**: The bug was introduced in iteration 25 with TODO comments acknowledging it needed fixing. Should have been fixed in the same iteration or immediately after.
+
+### Tech debt addressed
+- ✅ `code-ydq`: Security: Add authorization to docs permission routes (P1 bug closed)
+
+### Tech debt remaining
+- T-005 subtasks 3-5 (slash commands, floating toolbar, permissions UI, comments, synced blocks)
+- Static method pattern fragile (4 components)
+- Auto-generated tabs not implemented (FR-2.15 partial)
+- Typing/presence tests skipped (timing sensitivity)
+- Login needs org context for multi-tenant
+
+---
