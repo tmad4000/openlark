@@ -1077,8 +1077,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 64,
-      "passes": false,
-      "notes": "Use a virtualized table component for performance with many records."
+      "passes": true,
+      "notes": "Created /app/base page listing all bases with search, create dialog, and grid/card view. Created /app/base/[id] page with table tabs at top and view tabs below. Grid view uses @tanstack/react-virtual for virtualization with estimated row height of 36px. Rows are records, columns are fields. Click any cell to edit inline with type-specific editors: text input for text/long_text/url/email/phone, number input for number/currency/percent, date/datetime picker, checkbox toggle, and select dropdown for single_select. Add row button at bottom, add field button (+) at right side of column headers. Column headers show field name with type icon (Type, Hash, Calendar, CheckSquare, etc.); clicking header dropdown allows rename, change type, or delete. Row selection with checkbox column, supporting select all/none with indeterminate state. CellDisplay component formats values per type (URL as links, email as mailto, ratings as stars, etc.). Typecheck passes."
     },
     {
       "id": "US-065",
