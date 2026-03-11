@@ -593,8 +593,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 36,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented chat tabs with: (1) Default tabs: Chat, Docs, Files, Pins with badge counts; (2) API endpoints for custom tabs CRUD at /chats/:id/tabs; (3) Docs tab extracts document URLs from messages (Google Docs, Notion, PDF links, etc.); (4) Files tab extracts file attachments from messages; (5) Pins tab shows pinned messages with PinsTabContent component; (6) Custom tabs with drag-and-drop reordering using HTML5 Drag API; (7) Add tab dialog with name/URL inputs; (8) Max 20 custom tabs enforced; (9) Custom tabs open external URLs in new windows; (10) Existing chatTabs schema in messenger-support.ts leveraged."
     },
     {
       "id": "US-037",

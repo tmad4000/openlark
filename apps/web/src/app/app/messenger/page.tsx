@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { Search, Plus, MessageCircle, Users, Bell, BellOff, AtSign, Info, Wifi, WifiOff, Loader2, Check, CheckCheck, Circle, MoreHorizontal, Reply, X, MessageSquare, Pin, Star, Pencil, Trash2, Forward, Square, CheckSquare, Tag } from "lucide-react";
+import { Search, Plus, MessageCircle, Users, Bell, BellOff, AtSign, Info, Wifi, WifiOff, Loader2, Check, CheckCheck, Circle, MoreHorizontal, Reply, X, MessageSquare, Pin, Star, Pencil, Trash2, Forward, Square, CheckSquare, Tag, FileText, File, FolderOpen, ExternalLink, GripVertical } from "lucide-react";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as ContextMenu from "@radix-ui/react-context-menu";
 import MessageInput, { MentionUser } from "@/components/MessageInput";
@@ -169,6 +169,43 @@ interface MessageReadStatus {
   totalMembers: number;
   readCount: number;
   receipts: ReadReceipt[];
+}
+
+interface ChatTab {
+  id: string;
+  chatId: string;
+  type: "auto" | "custom";
+  name: string;
+  url: string | null;
+  position: number;
+}
+
+type ChatTabType = "chat" | "docs" | "files" | "pins" | "custom";
+
+interface SharedFile {
+  messageId: string;
+  filename: string;
+  url: string;
+  mimeType: string;
+  size: number;
+  sharedBy: {
+    id: string;
+    displayName: string | null;
+    avatarUrl: string | null;
+  };
+  sharedAt: string;
+}
+
+interface SharedDoc {
+  messageId: string;
+  url: string;
+  title: string;
+  sharedBy: {
+    id: string;
+    displayName: string | null;
+    avatarUrl: string | null;
+  };
+  sharedAt: string;
 }
 
 function formatMessageTime(dateStr: string): string {
@@ -1353,6 +1390,16 @@ function ChatView({
   // Thread panel state
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
 
+  // Chat tabs state
+  const [activeTab, setActiveTab] = useState<ChatTabType>("chat");
+  const [customTabs, setCustomTabs] = useState<ChatTab[]>([]);
+  const [showAddTabDialog, setShowAddTabDialog] = useState(false);
+  const [newTabName, setNewTabName] = useState("");
+  const [newTabUrl, setNewTabUrl] = useState("");
+  const [sharedFiles, setSharedFiles] = useState<SharedFile[]>([]);
+  const [sharedDocs, setSharedDocs] = useState<SharedDoc[]>([]);
+  const [draggedTabId, setDraggedTabId] = useState<string | null>(null);
+
   // Chat members for @mention autocomplete
   const [chatMembers, setChatMembers] = useState<MentionUser[]>([]);
 
@@ -1813,6 +1860,172 @@ function ChatView({
     }
   }, []);
 
+  // Load custom tabs for the chat
+  const loadTabs = useCallback(async () => {
+    const token = getCookie("session_token");
+    if (!token) return;
+
+    try {
+      const res = await fetch(`/api/chats/${chat.id}/tabs`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setCustomTabs(data.tabs || []);
+      }
+    } catch {
+      // Silent fail
+    }
+  }, [chat.id]);
+
+  // Add a custom tab
+  const addCustomTab = useCallback(async (name: string, url: string) => {
+    const token = getCookie("session_token");
+    if (!token) return false;
+
+    try {
+      const res = await fetch(`/api/chats/${chat.id}/tabs`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ name, url }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setCustomTabs((prev) => [...prev, data.tab]);
+        return true;
+      }
+    } catch {
+      // Silent fail
+    }
+    return false;
+  }, [chat.id]);
+
+  // Delete a custom tab
+  const deleteCustomTab = useCallback(async (tabId: string) => {
+    const token = getCookie("session_token");
+    if (!token) return;
+
+    // Optimistic update
+    setCustomTabs((prev) => prev.filter((t) => t.id !== tabId));
+
+    try {
+      await fetch(`/api/chats/${chat.id}/tabs/${tabId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch {
+      // Revert on error
+      loadTabs();
+    }
+  }, [chat.id, loadTabs]);
+
+  // Reorder tabs via drag-and-drop
+  const reorderTabs = useCallback(async (tabIds: string[]) => {
+    const token = getCookie("session_token");
+    if (!token) return;
+
+    // Optimistic update
+    const reorderedTabs = tabIds
+      .map((id) => customTabs.find((t) => t.id === id))
+      .filter((t): t is ChatTab => t !== undefined)
+      .map((t, i) => ({ ...t, position: i }));
+    setCustomTabs(reorderedTabs);
+
+    try {
+      await fetch(`/api/chats/${chat.id}/tabs/reorder`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ tabIds }),
+      });
+    } catch {
+      // Revert on error
+      loadTabs();
+    }
+  }, [chat.id, customTabs, loadTabs]);
+
+  // Extract shared files and docs from messages
+  const extractSharedContent = useCallback((msgs: Message[]) => {
+    const files: SharedFile[] = [];
+    const docs: SharedDoc[] = [];
+
+    for (const msg of msgs) {
+      const content = msg.content;
+
+      // Check for file attachments
+      if (content.file || content.attachment || content.files) {
+        const fileContent = content.file || content.attachment;
+        if (fileContent && typeof fileContent === "object") {
+          const fileObj = fileContent as { filename?: string; name?: string; url?: string; mimeType?: string; type?: string; size?: number };
+          files.push({
+            messageId: msg.id,
+            filename: fileObj.filename || fileObj.name || "Unknown file",
+            url: fileObj.url || "",
+            mimeType: fileObj.mimeType || fileObj.type || "application/octet-stream",
+            size: fileObj.size || 0,
+            sharedBy: msg.sender,
+            sharedAt: msg.createdAt,
+          });
+        }
+        // Handle array of files
+        if (Array.isArray(content.files)) {
+          for (const f of content.files) {
+            if (f && typeof f === "object") {
+              const fileObj = f as { filename?: string; name?: string; url?: string; mimeType?: string; type?: string; size?: number };
+              files.push({
+                messageId: msg.id,
+                filename: fileObj.filename || fileObj.name || "Unknown file",
+                url: fileObj.url || "",
+                mimeType: fileObj.mimeType || fileObj.type || "application/octet-stream",
+                size: fileObj.size || 0,
+                sharedBy: msg.sender,
+                sharedAt: msg.createdAt,
+              });
+            }
+          }
+        }
+      }
+
+      // Check for URL links (docs)
+      if (content.text && typeof content.text === "string") {
+        const urlRegex = /(https?:\/\/[^\s<]+)/g;
+        const urls = content.text.match(urlRegex);
+        if (urls) {
+          for (const url of urls) {
+            // Check if it looks like a document link
+            const isDoc = /\.(pdf|doc|docx|xls|xlsx|ppt|pptx|txt|md|csv)$/i.test(url) ||
+              url.includes("docs.google.com") ||
+              url.includes("notion.so") ||
+              url.includes("confluence") ||
+              url.includes("sharepoint");
+
+            if (isDoc) {
+              docs.push({
+                messageId: msg.id,
+                url,
+                title: url.split("/").pop() || url,
+                sharedBy: msg.sender,
+                sharedAt: msg.createdAt,
+              });
+            }
+          }
+        }
+      }
+    }
+
+    // Sort by date, newest first
+    files.sort((a, b) => new Date(b.sharedAt).getTime() - new Date(a.sharedAt).getTime());
+    docs.sort((a, b) => new Date(b.sharedAt).getTime() - new Date(a.sharedAt).getTime());
+
+    setSharedFiles(files);
+    setSharedDocs(docs);
+  }, []);
+
   // Load messages
   const loadMessages = useCallback(async (cursor?: string) => {
     const token = getCookie("session_token");
@@ -1875,11 +2088,23 @@ function ChatView({
     setSelectedMessageForReceipts(null);
     setActiveThreadId(null);
     setShowPinsPanel(false);
+    setActiveTab("chat");
+    setCustomTabs([]);
+    setSharedFiles([]);
+    setSharedDocs([]);
     lastMarkedReadRef.current = null;
     loadMessages();
     loadPinnedMessages();
     loadFavorites();
-  }, [chat.id, loadMessages, loadPinnedMessages, loadFavorites]);
+    loadTabs();
+  }, [chat.id, loadMessages, loadPinnedMessages, loadFavorites, loadTabs]);
+
+  // Extract shared files and docs when messages change
+  useEffect(() => {
+    if (messages.length > 0) {
+      extractSharedContent(messages);
+    }
+  }, [messages, extractSharedContent]);
 
   // Fetch chat members for @mention autocomplete
   useEffect(() => {
@@ -2287,12 +2512,209 @@ function ChatView({
         </div>
       )}
 
-      {/* Messages Area */}
-      <div
-        ref={messagesContainerRef}
-        onScroll={handleScroll}
-        className="flex-1 overflow-y-auto px-4 py-2 bg-gray-50"
-      >
+      {/* Chat Tabs */}
+      <div className="flex-shrink-0 flex items-center gap-1 px-2 py-1.5 border-b border-gray-200 bg-white overflow-x-auto">
+        {/* Default tabs */}
+        <button
+          onClick={() => setActiveTab("chat")}
+          className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+            activeTab === "chat"
+              ? "bg-blue-100 text-blue-700"
+              : "text-gray-600 hover:bg-gray-100"
+          }`}
+        >
+          <MessageCircle className="w-4 h-4" />
+          Chat
+        </button>
+        <button
+          onClick={() => setActiveTab("docs")}
+          className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+            activeTab === "docs"
+              ? "bg-blue-100 text-blue-700"
+              : "text-gray-600 hover:bg-gray-100"
+          }`}
+        >
+          <FileText className="w-4 h-4" />
+          Docs
+          {sharedDocs.length > 0 && (
+            <span className="ml-1 px-1.5 py-0.5 text-xs bg-gray-200 text-gray-600 rounded-full">
+              {sharedDocs.length}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab("files")}
+          className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+            activeTab === "files"
+              ? "bg-blue-100 text-blue-700"
+              : "text-gray-600 hover:bg-gray-100"
+          }`}
+        >
+          <File className="w-4 h-4" />
+          Files
+          {sharedFiles.length > 0 && (
+            <span className="ml-1 px-1.5 py-0.5 text-xs bg-gray-200 text-gray-600 rounded-full">
+              {sharedFiles.length}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab("pins")}
+          className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+            activeTab === "pins"
+              ? "bg-blue-100 text-blue-700"
+              : "text-gray-600 hover:bg-gray-100"
+          }`}
+        >
+          <Pin className="w-4 h-4" />
+          Pins
+          {pinnedMessageIds.size > 0 && (
+            <span className="ml-1 px-1.5 py-0.5 text-xs bg-gray-200 text-gray-600 rounded-full">
+              {pinnedMessageIds.size}
+            </span>
+          )}
+        </button>
+
+        {/* Divider before custom tabs */}
+        {customTabs.length > 0 && (
+          <div className="h-5 w-px bg-gray-300 mx-1" />
+        )}
+
+        {/* Custom tabs with drag-and-drop */}
+        {customTabs.map((tab) => (
+          <div
+            key={tab.id}
+            draggable
+            onDragStart={() => setDraggedTabId(tab.id)}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => {
+              e.preventDefault();
+              if (draggedTabId && draggedTabId !== tab.id) {
+                const currentIndex = customTabs.findIndex((t) => t.id === draggedTabId);
+                const targetIndex = customTabs.findIndex((t) => t.id === tab.id);
+                const newOrder = [...customTabs];
+                const [removed] = newOrder.splice(currentIndex, 1);
+                newOrder.splice(targetIndex, 0, removed);
+                reorderTabs(newOrder.map((t) => t.id));
+              }
+              setDraggedTabId(null);
+            }}
+            onDragEnd={() => setDraggedTabId(null)}
+            className={`flex-shrink-0 flex items-center gap-1 group ${
+              draggedTabId === tab.id ? "opacity-50" : ""
+            }`}
+          >
+            <button
+              onClick={() => {
+                if (tab.url) {
+                  window.open(tab.url, "_blank", "noopener,noreferrer");
+                }
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md text-gray-600 hover:bg-gray-100 transition-colors"
+            >
+              <GripVertical className="w-3 h-3 text-gray-400 cursor-grab" />
+              <ExternalLink className="w-3 h-3" />
+              {tab.name}
+            </button>
+            <button
+              onClick={() => deleteCustomTab(tab.id)}
+              className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+              title="Remove tab"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+        ))}
+
+        {/* Add tab button */}
+        {customTabs.length < 20 && (
+          <button
+            onClick={() => setShowAddTabDialog(true)}
+            className="flex-shrink-0 p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
+            title="Add custom tab"
+          >
+            <Plus className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+
+      {/* Add Tab Dialog */}
+      <Dialog.Root open={showAddTabDialog} onOpenChange={setShowAddTabDialog}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 bg-black/50" />
+          <Dialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+            <Dialog.Title className="text-lg font-semibold text-gray-900 mb-4">
+              Add Custom Tab
+            </Dialog.Title>
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="tab-name" className="block text-sm font-medium text-gray-700 mb-1">
+                  Tab Name
+                </label>
+                <input
+                  id="tab-name"
+                  type="text"
+                  value={newTabName}
+                  onChange={(e) => setNewTabName(e.target.value)}
+                  placeholder="e.g., Project Wiki"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  maxLength={100}
+                />
+              </div>
+              <div>
+                <label htmlFor="tab-url" className="block text-sm font-medium text-gray-700 mb-1">
+                  URL
+                </label>
+                <input
+                  id="tab-url"
+                  type="url"
+                  value={newTabUrl}
+                  onChange={(e) => setNewTabUrl(e.target.value)}
+                  placeholder="https://..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => {
+                  setShowAddTabDialog(false);
+                  setNewTabName("");
+                  setNewTabUrl("");
+                }}
+                className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-md transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  if (newTabName.trim() && newTabUrl.trim()) {
+                    const success = await addCustomTab(newTabName.trim(), newTabUrl.trim());
+                    if (success) {
+                      setShowAddTabDialog(false);
+                      setNewTabName("");
+                      setNewTabUrl("");
+                    }
+                  }
+                }}
+                disabled={!newTabName.trim() || !newTabUrl.trim()}
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Add Tab
+              </button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+
+      {/* Tab Content Areas */}
+      {activeTab === "chat" ? (
+        /* Messages Area */
+        <div
+          ref={messagesContainerRef}
+          onScroll={handleScroll}
+          className="flex-1 overflow-y-auto px-4 py-2 bg-gray-50"
+        >
         {isLoading ? (
           <div className="flex items-center justify-center h-full text-gray-500">
             Loading messages...
@@ -2386,11 +2808,122 @@ function ChatView({
           </>
         )}
         </div>
+      ) : activeTab === "docs" ? (
+        /* Docs Tab Content */
+        <div className="flex-1 overflow-y-auto px-4 py-4 bg-gray-50">
+          {sharedDocs.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-gray-500">
+              <FileText className="w-12 h-12 mb-3 text-gray-300" />
+              <p className="text-sm">No documents shared yet</p>
+              <p className="text-xs mt-1">Share document links in chat to see them here</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <h3 className="text-sm font-medium text-gray-700 mb-3">
+                {sharedDocs.length} document{sharedDocs.length !== 1 ? "s" : ""} shared
+              </h3>
+              {sharedDocs.map((doc) => (
+                <a
+                  key={`${doc.messageId}-${doc.url}`}
+                  href={doc.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-200 hover:border-blue-300 hover:shadow-sm transition-all"
+                >
+                  <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
+                    <FileText className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">{doc.title}</p>
+                    <p className="text-xs text-gray-500 truncate">{doc.url}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      {doc.sharedBy.avatarUrl ? (
+                        <img
+                          src={doc.sharedBy.avatarUrl}
+                          alt=""
+                          className="w-4 h-4 rounded-full"
+                        />
+                      ) : (
+                        <div className="w-4 h-4 rounded-full bg-gray-200" />
+                      )}
+                      <span className="text-xs text-gray-500">
+                        {doc.sharedBy.displayName || "Unknown"} · {formatTimestamp(doc.sharedAt)}
+                      </span>
+                    </div>
+                  </div>
+                  <ExternalLink className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                </a>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : activeTab === "files" ? (
+        /* Files Tab Content */
+        <div className="flex-1 overflow-y-auto px-4 py-4 bg-gray-50">
+          {sharedFiles.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full text-gray-500">
+              <FolderOpen className="w-12 h-12 mb-3 text-gray-300" />
+              <p className="text-sm">No files shared yet</p>
+              <p className="text-xs mt-1">Share files in chat to see them here</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <h3 className="text-sm font-medium text-gray-700 mb-3">
+                {sharedFiles.length} file{sharedFiles.length !== 1 ? "s" : ""} shared
+              </h3>
+              {sharedFiles.map((file) => (
+                <a
+                  key={`${file.messageId}-${file.url}`}
+                  href={file.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-200 hover:border-blue-300 hover:shadow-sm transition-all"
+                >
+                  <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-purple-50 flex items-center justify-center">
+                    <File className="w-5 h-5 text-purple-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">{file.filename}</p>
+                    <p className="text-xs text-gray-500">
+                      {file.mimeType} {file.size > 0 && `· ${(file.size / 1024).toFixed(1)} KB`}
+                    </p>
+                    <div className="flex items-center gap-2 mt-1">
+                      {file.sharedBy.avatarUrl ? (
+                        <img
+                          src={file.sharedBy.avatarUrl}
+                          alt=""
+                          className="w-4 h-4 rounded-full"
+                        />
+                      ) : (
+                        <div className="w-4 h-4 rounded-full bg-gray-200" />
+                      )}
+                      <span className="text-xs text-gray-500">
+                        {file.sharedBy.displayName || "Unknown"} · {formatTimestamp(file.sharedAt)}
+                      </span>
+                    </div>
+                  </div>
+                  <ExternalLink className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                </a>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : activeTab === "pins" ? (
+        /* Pins Tab Content */
+        <div className="flex-1 overflow-y-auto px-4 py-4 bg-gray-50">
+          <PinsTabContent
+            chatId={chat.id}
+            pinnedMessageIds={pinnedMessageIds}
+            onUnpin={togglePin}
+          />
+        </div>
+      ) : null}
 
-        {/* Typing Indicator */}
-        <TypingIndicator typingUsers={typingUsers} />
+      {/* Typing Indicator - only show on chat tab */}
+      {activeTab === "chat" && <TypingIndicator typingUsers={typingUsers} />}
 
-        {/* Message Input */}
+      {/* Message Input - only show on chat tab */}
+      {activeTab === "chat" && (
         <div className="flex-shrink-0 bg-white p-3">
           <MessageInput
             onSend={(content) => {
@@ -2405,6 +2938,7 @@ function ChatView({
             members={chatMembers}
           />
         </div>
+      )}
       </div>
 
       {/* Thread Panel */}
@@ -2976,6 +3510,135 @@ interface PinnedMessage {
     displayName: string | null;
     avatarUrl: string | null;
   };
+}
+
+function PinsTabContent({
+  chatId,
+  pinnedMessageIds,
+  onUnpin,
+}: {
+  chatId: string;
+  pinnedMessageIds: Set<string>;
+  onUnpin: (messageId: string) => void;
+}) {
+  const [pins, setPins] = useState<PinnedMessage[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadPins = async () => {
+      const token = getCookie("session_token");
+      if (!token) return;
+
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const res = await fetch(`/api/chats/${chatId}/pins`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (!res.ok) {
+          throw new Error("Failed to load pinned messages");
+        }
+
+        const data = await res.json();
+        setPins(data.pins || []);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadPins();
+  }, [chatId, pinnedMessageIds]); // Reload when pins change
+
+  const handleUnpin = (messageId: string) => {
+    setPins((prev) => prev.filter((p) => p.message.id !== messageId));
+    onUnpin(messageId);
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-full text-gray-500">
+        Loading pinned messages...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-full text-red-500">
+        {error}
+      </div>
+    );
+  }
+
+  if (pins.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-gray-500">
+        <Pin className="w-12 h-12 mb-3 text-gray-300" />
+        <p className="text-sm">No pinned messages</p>
+        <p className="text-xs mt-1">Pin important messages to access them quickly</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <h3 className="text-sm font-medium text-gray-700 mb-3">
+        {pins.length} pinned message{pins.length !== 1 ? "s" : ""}
+      </h3>
+      {pins.map((pin) => (
+        <div
+          key={pin.message.id}
+          className="flex items-start gap-3 p-3 bg-white rounded-lg border border-gray-200 hover:border-blue-300 hover:shadow-sm transition-all"
+        >
+          {/* Sender avatar */}
+          <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-200 flex-shrink-0">
+            {pin.sender.avatarUrl ? (
+              <img
+                src={pin.sender.avatarUrl}
+                alt={pin.sender.displayName || "User"}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center bg-blue-600 text-white text-sm font-medium">
+                {pin.sender.displayName?.charAt(0).toUpperCase() || "?"}
+              </div>
+            )}
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-sm font-medium text-gray-900">
+                {pin.sender.displayName || "Unknown"}
+              </span>
+              <span className="text-xs text-gray-400">
+                {formatTimestamp(pin.message.createdAt)}
+              </span>
+            </div>
+            <p className="text-sm text-gray-600 line-clamp-3">
+              {typeof pin.message.content.text === "string"
+                ? pin.message.content.text
+                : typeof pin.message.content.html === "string"
+                  ? pin.message.content.html.replace(/<[^>]*>/g, "")
+                  : "Message"}
+            </p>
+            <button
+              onClick={() => handleUnpin(pin.message.id)}
+              className="text-xs text-red-500 hover:text-red-600 mt-2 flex items-center gap-1"
+            >
+              <X className="w-3 h-3" />
+              Unpin
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function PinsPanel({

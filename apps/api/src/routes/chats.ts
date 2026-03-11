@@ -1,6 +1,6 @@
 import { FastifyInstance } from "fastify";
 import { db } from "../db";
-import { chats, chatMembers, users, messages, pins } from "../db/schema";
+import { chats, chatMembers, users, messages, pins, chatTabs } from "../db/schema";
 import { eq, and, or, inArray, desc, gt, sql, isNull } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
 import { createSystemMessage } from "./messages";
@@ -1110,6 +1110,293 @@ export async function chatsRoutes(fastify: FastifyInstance) {
         pinned: updated.pinned,
         label: updated.label,
       });
+    }
+  );
+
+  /**
+   * GET /chats/:id/tabs - Get all tabs for a chat
+   * Returns: { tabs: Array<{ id, chatId, type, name, url, position }> }
+   */
+  fastify.get<{ Params: { id: string } }>(
+    "/chats/:id/tabs",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id: chatId } = request.params;
+
+      // Validate UUID format
+      if (!UUID_REGEX.test(chatId)) {
+        return reply.status(400).send({
+          error: "Invalid chat ID format",
+        });
+      }
+
+      const currentUserId = request.user.id;
+
+      // Verify user is a member of this chat
+      const [membership] = await db
+        .select()
+        .from(chatMembers)
+        .where(
+          and(
+            eq(chatMembers.chatId, chatId),
+            eq(chatMembers.userId, currentUserId)
+          )
+        )
+        .limit(1);
+
+      if (!membership) {
+        return reply.status(403).send({
+          error: "Access denied - not a member of this chat",
+        });
+      }
+
+      // Get all custom tabs for this chat
+      const tabs = await db
+        .select()
+        .from(chatTabs)
+        .where(eq(chatTabs.chatId, chatId))
+        .orderBy(chatTabs.position);
+
+      return reply.status(200).send({ tabs });
+    }
+  );
+
+  /**
+   * POST /chats/:id/tabs - Create a new custom tab for a chat
+   * Body: { name: string, url: string }
+   * Returns: { tab: { id, chatId, type, name, url, position } }
+   */
+  fastify.post<{ Params: { id: string }; Body: { name: string; url: string } }>(
+    "/chats/:id/tabs",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id: chatId } = request.params;
+      const { name, url } = request.body;
+
+      // Validate UUID format
+      if (!UUID_REGEX.test(chatId)) {
+        return reply.status(400).send({
+          error: "Invalid chat ID format",
+        });
+      }
+
+      // Validate name
+      if (!name || typeof name !== "string" || name.trim().length === 0) {
+        return reply.status(400).send({
+          error: "name is required and must be a non-empty string",
+        });
+      }
+
+      if (name.length > 100) {
+        return reply.status(400).send({
+          error: "name must be at most 100 characters",
+        });
+      }
+
+      // Validate url
+      if (!url || typeof url !== "string" || url.trim().length === 0) {
+        return reply.status(400).send({
+          error: "url is required and must be a non-empty string",
+        });
+      }
+
+      const currentUserId = request.user.id;
+
+      // Verify user is a member of this chat
+      const [membership] = await db
+        .select()
+        .from(chatMembers)
+        .where(
+          and(
+            eq(chatMembers.chatId, chatId),
+            eq(chatMembers.userId, currentUserId)
+          )
+        )
+        .limit(1);
+
+      if (!membership) {
+        return reply.status(403).send({
+          error: "Access denied - not a member of this chat",
+        });
+      }
+
+      // Check tab count limit (max 20 per chat)
+      const existingTabs = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(chatTabs)
+        .where(eq(chatTabs.chatId, chatId));
+
+      if (existingTabs[0]?.count >= 20) {
+        return reply.status(400).send({
+          error: "Maximum of 20 custom tabs per chat",
+        });
+      }
+
+      // Get the next position
+      const [maxPosition] = await db
+        .select({ max: sql<number>`coalesce(max(position), -1)::int` })
+        .from(chatTabs)
+        .where(eq(chatTabs.chatId, chatId));
+
+      const nextPosition = (maxPosition?.max ?? -1) + 1;
+
+      // Create the tab
+      const [newTab] = await db
+        .insert(chatTabs)
+        .values({
+          chatId,
+          type: "custom",
+          name: name.trim(),
+          url: url.trim(),
+          position: nextPosition,
+        })
+        .returning();
+
+      return reply.status(201).send({ tab: newTab });
+    }
+  );
+
+  /**
+   * DELETE /chats/:id/tabs/:tabId - Delete a custom tab
+   * Returns: { success: true }
+   */
+  fastify.delete<{ Params: { id: string; tabId: string } }>(
+    "/chats/:id/tabs/:tabId",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id: chatId, tabId } = request.params;
+
+      // Validate UUID formats
+      if (!UUID_REGEX.test(chatId)) {
+        return reply.status(400).send({
+          error: "Invalid chat ID format",
+        });
+      }
+
+      if (!UUID_REGEX.test(tabId)) {
+        return reply.status(400).send({
+          error: "Invalid tab ID format",
+        });
+      }
+
+      const currentUserId = request.user.id;
+
+      // Verify user is a member of this chat
+      const [membership] = await db
+        .select()
+        .from(chatMembers)
+        .where(
+          and(
+            eq(chatMembers.chatId, chatId),
+            eq(chatMembers.userId, currentUserId)
+          )
+        )
+        .limit(1);
+
+      if (!membership) {
+        return reply.status(403).send({
+          error: "Access denied - not a member of this chat",
+        });
+      }
+
+      // Delete the tab (only custom tabs can be deleted)
+      const result = await db
+        .delete(chatTabs)
+        .where(
+          and(
+            eq(chatTabs.id, tabId),
+            eq(chatTabs.chatId, chatId),
+            eq(chatTabs.type, "custom")
+          )
+        )
+        .returning();
+
+      if (result.length === 0) {
+        return reply.status(404).send({
+          error: "Tab not found or cannot be deleted",
+        });
+      }
+
+      return reply.status(200).send({ success: true });
+    }
+  );
+
+  /**
+   * PUT /chats/:id/tabs/reorder - Reorder tabs in a chat
+   * Body: { tabIds: string[] } - Array of tab IDs in desired order
+   * Returns: { tabs: Array<{ id, chatId, type, name, url, position }> }
+   */
+  fastify.put<{ Params: { id: string }; Body: { tabIds: string[] } }>(
+    "/chats/:id/tabs/reorder",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id: chatId } = request.params;
+      const { tabIds } = request.body;
+
+      // Validate UUID format
+      if (!UUID_REGEX.test(chatId)) {
+        return reply.status(400).send({
+          error: "Invalid chat ID format",
+        });
+      }
+
+      // Validate tabIds is an array
+      if (!tabIds || !Array.isArray(tabIds)) {
+        return reply.status(400).send({
+          error: "tabIds must be an array",
+        });
+      }
+
+      // Validate each tabId format
+      for (const tabId of tabIds) {
+        if (!UUID_REGEX.test(tabId)) {
+          return reply.status(400).send({
+            error: `Invalid tab ID format: ${tabId}`,
+          });
+        }
+      }
+
+      const currentUserId = request.user.id;
+
+      // Verify user is a member of this chat
+      const [membership] = await db
+        .select()
+        .from(chatMembers)
+        .where(
+          and(
+            eq(chatMembers.chatId, chatId),
+            eq(chatMembers.userId, currentUserId)
+          )
+        )
+        .limit(1);
+
+      if (!membership) {
+        return reply.status(403).send({
+          error: "Access denied - not a member of this chat",
+        });
+      }
+
+      // Update positions for each tab
+      for (let i = 0; i < tabIds.length; i++) {
+        await db
+          .update(chatTabs)
+          .set({ position: i })
+          .where(
+            and(
+              eq(chatTabs.id, tabIds[i]),
+              eq(chatTabs.chatId, chatId)
+            )
+          );
+      }
+
+      // Return updated tabs
+      const tabs = await db
+        .select()
+        .from(chatTabs)
+        .where(eq(chatTabs.chatId, chatId))
+        .orderBy(chatTabs.position);
+
+      return reply.status(200).send({ tabs });
     }
   );
 }
