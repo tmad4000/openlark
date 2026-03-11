@@ -159,6 +159,12 @@
           "role": "reviewer",
           "value": 1,
           "reason": "Iter 15 review: Auth foundation stable. 2/6 subtasks complete. JWT_SECRET production validation resolved. Known limitation: login needs org context for true multi-tenant (auth.service.ts:122). Remaining subtasks (RLS, magic link, 2FA, departments, API keys) are correctly deferred as lower priority."
+        },
+        {
+          "iteration": 18,
+          "role": "reviewer",
+          "value": 1,
+          "reason": "Iter 18 review: Auth foundation remains stable. 2/6 subtasks complete. Known limitation: login needs org context for true multi-tenant (auth.service.ts:122). Remaining subtasks (RLS, magic link, 2FA, departments, API keys) are correctly deferred as lower priority."
         }
       ],
       "comments": [
@@ -352,6 +358,12 @@
           "role": "implementer",
           "value": 1,
           "reason": "Core messenger functionality is solid (4/6 subtasks done). WebSocket message delivery, reactions, pins, favorites, chat tabs, announcements all working. Frontend UI integrated. Remaining subtasks (threads, rich text, typing/presence UI) are incremental polish for Phase 2."
+        },
+        {
+          "iteration": 18,
+          "role": "reviewer",
+          "value": 1,
+          "reason": "Iter 18 review: 4/6 subtasks complete. Messenger core functionality solid. Same fragile static method pattern (ChatList.addChat, MessageList.addMessage) still present - flagged since iter 12. Remaining: subtask 3 (threads, rich text, forwarding) and subtask 4 (typing/presence UI)."
         }
       ],
       "comments": [
@@ -523,6 +535,12 @@
           "role": "implementer",
           "value": 1,
           "reason": "Iteration 17: Calendar backend is solid (81 tests, full CRUD, RSVP). However, there is no frontend UI at all - no /calendar page exists. Need to add subtask for basic calendar frontend UI (event list, create event, RSVP) similar to how T-003 got subtask 6 for messenger frontend."
+        },
+        {
+          "iteration": 18,
+          "role": "reviewer",
+          "value": 1,
+          "reason": "Iter 18 review: Calendar module well-implemented. 3/5 subtasks complete. Backend has full CRUD for events, calendars, rooms, RSVP. Frontend has EventList and CreateEventDialog. One bug found: frontend rsvpEvent sends {rsvp:} but backend expects {response:} (apps/web/src/lib/api.ts:233). Static method pattern (EventList.addEvent) reuses fragile pattern from Messenger. Tests pass (320 total)."
         }
       ],
       "comments": [
@@ -540,6 +558,21 @@
           "iteration": 17,
           "role": "implementer",
           "message": "Iteration 17: Implemented T-004 subtask 5 (calendar frontend UI). Added calendar types and API methods to api.ts. Created EventList component with loading/empty/error states. Created CreateEventDialog for creating new events. Added CalendarPage at /calendar route. Added 15 tests for components. All tests pass (320 total). Build and lint pass."
+        },
+        {
+          "iteration": 18,
+          "role": "reviewer",
+          "message": "Iter 18 review BUG: apps/web/src/lib/api.ts:233 sends {rsvp: value} but apps/api/src/modules/calendar/calendar.schemas.ts:117 rsvpSchema expects {response: value}. RSVP calls will fail with 400 validation error. Fix: change api.ts:233 from JSON.stringify({ rsvp }) to JSON.stringify({ response: rsvp })"
+        },
+        {
+          "iteration": 18,
+          "role": "reviewer",
+          "message": "Iter 18 review: EventList uses static method pattern (line 55: EventList.addEvent = addEvent) for cross-component state updates, same fragile pattern flagged in Messenger review (iter 12). This works for single-instance components but breaks with multiple instances or remount cycles. Consider deferring refactor to React Query + subscription pattern when tackling other modules."
+        },
+        {
+          "iteration": 18,
+          "role": "reviewer",
+          "message": "Iter 18 review: Calendar page is minimal - shows EventList and CreateEventDialog but no actual calendar view (weekly/monthly grid). Per goal.md FR-6.13, drag-and-drop rescheduling requires a visual calendar component. This is captured in subtask 4 but should be high priority for usable Calendar UX."
         }
       ],
       "status": "in-progress",
@@ -1286,7 +1319,7 @@
   ],
   "metadata": {
     "createdAt": "2026-03-04T21:00:00Z",
-    "totalIterations": 27,
+    "totalIterations": 28,
     "iterationLog": [
       {
         "iteration": 1,
@@ -1446,6 +1479,12 @@
       },
       {
         "iteration": 27,
+        "role": "implementer",
+        "taskWorked": "T-004",
+        "contextCompacted": false
+      },
+      {
+        "iteration": 28,
         "role": "implementer",
         "taskWorked": "T-004",
         "contextCompacted": false

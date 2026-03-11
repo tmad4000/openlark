@@ -1970,3 +1970,75 @@ Calendar frontend UI to make the calendar module usable (T-004 subtask 5):
 - `next lint` deprecation warning
 
 ---
+
+## 2026-03-10 - Iteration 18 - REVIEW
+
+### Code quality observations
+
+**What looks good:**
+- Calendar module follows established patterns exactly (routes.ts, service.ts, schemas.ts structure)
+- Comprehensive test coverage: 320 tests total, all passing (219 API + 101 web)
+- CalendarService is well-organized with clear sections (calendar, subscription, room, event, attendee, availability)
+- Room booking includes availability checking and conflict detection (FR-6.4, FR-6.7)
+- Frontend components follow existing messenger patterns (AppShell integration, static method for updates)
+- Zod schemas include cross-field validation (startTime < endTime) using `.refine()`
+
+**Issues found:**
+1. **BUG: RSVP API mismatch** (`apps/web/src/lib/api.ts:233`): Frontend sends `{ rsvp: "yes" }` but backend rsvpSchema expects `{ response: "yes" }`. RSVP calls will fail with 400 validation error. This is a critical bug in T-004.
+
+2. **Calendar view missing**: The calendar page shows EventList sidebar but no actual calendar view (weekly/monthly grid). This means FR-6.13 (drag-and-drop rescheduling) cannot be implemented until a visual calendar exists.
+
+3. **Static method pattern continues**: EventList.addEvent (line 55) uses same fragile pattern flagged in Messenger review (iter 12). Three components now use this pattern: ChatList, MessageList, EventList.
+
+### Commit history review
+
+Recent commits are well-structured:
+- `f84c9de` docs: update progress log for iteration 17 (calendar frontend T-004)
+- `0045098` feat(calendar): add calendar frontend UI with event list and create dialog (T-004)
+- `802ecd8` docs: update progress log for iteration 16 (calendar module T-004)
+- `cfdc771` feat(calendar): add Calendar module with events CRUD and RSVP (T-004)
+- `885e158` docs: update progress log for iteration 15 (review)
+
+Pattern: Each implementation iteration followed by progress log update, with meaningful commit messages referencing task IDs.
+
+### Plan assessment
+
+**T-002 (Auth):** Stable at 2/6 subtasks. Remaining work (RLS, magic link, 2FA, departments, API keys) correctly deferred. Known limitation: login needs org context for multi-tenant (auth.service.ts:122).
+
+**T-003 (Messenger):** Solid at 4/6 subtasks. Core functionality complete. Static method pattern flagged 6 iterations ago, still present. Remaining: threads/rich text/forwarding (subtask 3), typing/presence UI (subtask 4).
+
+**T-004 (Calendar):** Good progress at 3/5 subtasks. Backend is comprehensive. Frontend needs: actual calendar view, RSVP UI, room booking integration. RSVP bug must be fixed.
+
+**Phase 1 status:** Auth → Messenger → Calendar foundation is mostly complete. Each module delivers standalone value (can authenticate, can chat, can schedule events). The RSVP bug breaks calendar event confirmation flow.
+
+### Nudges left
+
+1. **T-004 comment**: RSVP API mismatch bug with fix instructions
+2. **T-004 comment**: Static method pattern concern (consistent with previous review)
+3. **T-004 comment**: Calendar grid view needed for FR-6.13
+
+### Tech debt items
+
+**Critical (blocks functionality):**
+- RSVP API mismatch: `api.ts:233` sends wrong field name
+
+**Medium (UX limitations):**
+- No calendar grid view (weekly/monthly)
+- Event details view is placeholder
+- Raw UUID input for chat creation (no user search)
+
+**Low (code quality):**
+- Static method pattern in 3 components (fragile but functional)
+- `next lint` deprecation warning
+- Typing/presence tests skipped (flaky in CI)
+- Auto-generated tabs not implemented (FR-2.15)
+
+### Reinforced patterns
+
+1. **Module structure** (routes, service, schemas) - Calendar followed this exactly
+2. **Auth middleware reuse** - `preHandler: authenticate` and `preHandler: requireAdmin` work across modules
+3. **Zod `.refine()` for cross-field validation** - Calendar uses this for time range validation
+4. **Test organization** - Schema validation tests + auth requirement tests per module
+5. **Progress log format** - Implementation sections with "What was implemented", "Files changed", "Tests added", "Plan deviations", "Learnings"
+
+---
