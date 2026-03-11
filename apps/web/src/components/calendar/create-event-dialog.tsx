@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { api, type CalendarEvent, type Calendar, type UserSearchResult } from "@/lib/api";
+import { api, type CalendarEvent, type Calendar, type UserSearchResult, type MeetingRoom } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,6 +34,10 @@ export function CreateEventDialog({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Meeting room state
+  const [rooms, setRooms] = useState<MeetingRoom[]>([]);
+  const [selectedRoomId, setSelectedRoomId] = useState<string>("");
+
   // Attendee selection state
   const [attendeeQuery, setAttendeeQuery] = useState("");
   const [attendeeResults, setAttendeeResults] = useState<UserSearchResult[]>([]);
@@ -42,10 +46,11 @@ export function CreateEventDialog({
   const [searchLoading, setSearchLoading] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Load calendars when dialog opens
+  // Load calendars and rooms when dialog opens
   useEffect(() => {
     if (open) {
       loadCalendars();
+      loadRooms();
     }
   }, [open]);
 
@@ -62,6 +67,7 @@ export function CreateEventDialog({
       setAttendeeResults([]);
       setSelectedAttendees([]);
       setShowDropdown(false);
+      setSelectedRoomId("");
     }
   }, [open]);
 
@@ -119,6 +125,15 @@ export function CreateEventDialog({
     }
   }
 
+  async function loadRooms() {
+    try {
+      const response = await api.getMeetingRooms();
+      setRooms(response.rooms);
+    } catch (err) {
+      console.error("Failed to load meeting rooms:", err);
+    }
+  }
+
   function addAttendee(user: UserSearchResult) {
     setSelectedAttendees((prev) => [...prev, user]);
     setAttendeeQuery("");
@@ -154,6 +169,7 @@ export function CreateEventDialog({
           selectedAttendees.length > 0
             ? selectedAttendees.map((a) => a.id)
             : undefined,
+        roomId: selectedRoomId || undefined,
       });
 
       onEventCreated?.(response.event);
@@ -289,6 +305,24 @@ export function CreateEventDialog({
                 ))}
               </div>
             )}
+          </div>
+
+          {/* Meeting Room */}
+          <div className="space-y-2">
+            <Label htmlFor="room">Meeting Room</Label>
+            <select
+              id="room"
+              value={selectedRoomId}
+              onChange={(e) => setSelectedRoomId(e.target.value)}
+              className="w-full px-3 py-2 text-sm border rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">No room (virtual or offsite)</option>
+              {rooms.map((room) => (
+                <option key={room.id} value={room.id}>
+                  {room.name} ({room.capacity} people)
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Start Time */}

@@ -2,7 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import userEvent from "@testing-library/user-event";
 import { EventDetails } from "./event-details";
-import { api, type CalendarEvent, type EventAttendee } from "@/lib/api";
+import { api, type CalendarEvent, type EventAttendee, type MeetingRoom } from "@/lib/api";
 
 // Mock the api module
 vi.mock("@/lib/api", () => ({
@@ -10,8 +10,30 @@ vi.mock("@/lib/api", () => ({
     getEvent: vi.fn(),
     getEventAttendees: vi.fn(),
     rsvpEvent: vi.fn(),
+    getMeetingRooms: vi.fn(),
   },
 }));
+
+const mockRooms: MeetingRoom[] = [
+  {
+    id: "room-1",
+    orgId: "org-1",
+    name: "Conference Room A",
+    capacity: 10,
+    equipment: ["projector", "whiteboard"],
+    location: "Floor 1",
+    floor: "1",
+  },
+  {
+    id: "room-2",
+    orgId: "org-1",
+    name: "Board Room",
+    capacity: 20,
+    equipment: ["video conferencing", "screen"],
+    location: "Floor 2",
+    floor: "2",
+  },
+];
 
 const mockEvent: CalendarEvent = {
   id: "event-1",
@@ -66,6 +88,7 @@ const mockAttendees: EventAttendee[] = [
 describe("EventDetails", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(api.getMeetingRooms).mockResolvedValue({ rooms: [] });
   });
 
   it("shows loading state initially", () => {
@@ -227,6 +250,55 @@ describe("EventDetails", () => {
 
     await waitFor(() => {
       expect(api.getEvent).toHaveBeenCalledWith("event-2");
+    });
+  });
+
+  // Room display tests (T-004 subtask 3)
+  describe("meeting room display", () => {
+    it("displays meeting room name when event has roomId", async () => {
+      const eventWithRoom = { ...mockEvent, roomId: "room-1" };
+      vi.mocked(api.getEvent).mockResolvedValue({ event: eventWithRoom });
+      vi.mocked(api.getEventAttendees).mockResolvedValue({
+        attendees: mockAttendees,
+      });
+      vi.mocked(api.getMeetingRooms).mockResolvedValue({ rooms: mockRooms });
+
+      render(<EventDetails eventId="event-1" currentUserId="user-2" />);
+
+      await waitFor(() => {
+        expect(screen.getByText("Conference Room A")).toBeInTheDocument();
+      });
+    });
+
+    it("displays room capacity", async () => {
+      const eventWithRoom = { ...mockEvent, roomId: "room-1" };
+      vi.mocked(api.getEvent).mockResolvedValue({ event: eventWithRoom });
+      vi.mocked(api.getEventAttendees).mockResolvedValue({
+        attendees: mockAttendees,
+      });
+      vi.mocked(api.getMeetingRooms).mockResolvedValue({ rooms: mockRooms });
+
+      render(<EventDetails eventId="event-1" currentUserId="user-2" />);
+
+      await waitFor(() => {
+        expect(screen.getByText(/10 people/)).toBeInTheDocument();
+      });
+    });
+
+    it("does not show room section when no roomId", async () => {
+      vi.mocked(api.getEvent).mockResolvedValue({ event: mockEvent });
+      vi.mocked(api.getEventAttendees).mockResolvedValue({
+        attendees: mockAttendees,
+      });
+
+      render(<EventDetails eventId="event-1" currentUserId="user-2" />);
+
+      await waitFor(() => {
+        expect(screen.getByText("Team Meeting")).toBeInTheDocument();
+      });
+
+      // Should not show "Meeting Room" label when no room
+      expect(screen.queryByText("Meeting Room")).not.toBeInTheDocument();
     });
   });
 });

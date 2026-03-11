@@ -1,7 +1,7 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { CreateEventDialog } from "./create-event-dialog";
-import { api, type CalendarEvent, type EventAttendee, type Calendar } from "@/lib/api";
+import { api, type CalendarEvent, type EventAttendee, type Calendar, type MeetingRoom } from "@/lib/api";
 
 // Mock the api module
 vi.mock("@/lib/api", () => ({
@@ -9,6 +9,7 @@ vi.mock("@/lib/api", () => ({
     getCalendars: vi.fn(),
     createEvent: vi.fn(),
     searchUsers: vi.fn(),
+    getMeetingRooms: vi.fn(),
   },
 }));
 
@@ -56,10 +57,32 @@ const mockAttendees: EventAttendee[] = [
   },
 ];
 
+const mockRooms: MeetingRoom[] = [
+  {
+    id: "room-1",
+    orgId: "org-1",
+    name: "Conference Room A",
+    capacity: 10,
+    equipment: ["projector", "whiteboard"],
+    location: "Floor 1",
+    floor: "1",
+  },
+  {
+    id: "room-2",
+    orgId: "org-1",
+    name: "Board Room",
+    capacity: 20,
+    equipment: ["video conferencing", "screen"],
+    location: "Floor 2",
+    floor: "2",
+  },
+];
+
 describe("CreateEventDialog", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(api.getCalendars).mockResolvedValue({ calendars: mockCalendars });
+    vi.mocked(api.getMeetingRooms).mockResolvedValue({ rooms: [] });
   });
 
   it("renders dialog when open", () => {
@@ -357,6 +380,153 @@ describe("CreateEventDialog", () => {
           attendeeIds: ["user-2"],
         })
       );
+    });
+  });
+
+  // Room booking tests (T-004 subtask 3)
+  describe("room booking", () => {
+    beforeEach(() => {
+      vi.mocked(api.getMeetingRooms).mockResolvedValue({ rooms: mockRooms });
+    });
+
+    it("shows meeting room selector", async () => {
+      render(<CreateEventDialog open={true} onOpenChange={() => {}} />);
+
+      await waitFor(() => {
+        expect(screen.getByLabelText("Meeting Room")).toBeInTheDocument();
+      });
+    });
+
+    it("loads and displays meeting rooms", async () => {
+      render(<CreateEventDialog open={true} onOpenChange={() => {}} />);
+
+      await waitFor(() => {
+        expect(api.getMeetingRooms).toHaveBeenCalled();
+      });
+
+      // Check that rooms are shown in the dropdown
+      const roomSelect = screen.getByLabelText("Meeting Room");
+      expect(roomSelect).toBeInTheDocument();
+
+      // Check for the "No room" option plus rooms
+      await waitFor(() => {
+        expect(screen.getByText("Conference Room A (10 people)")).toBeInTheDocument();
+        expect(screen.getByText("Board Room (20 people)")).toBeInTheDocument();
+      });
+    });
+
+    it("selects a meeting room", async () => {
+      render(<CreateEventDialog open={true} onOpenChange={() => {}} />);
+
+      await waitFor(() => {
+        expect(screen.getByLabelText("Meeting Room")).toBeInTheDocument();
+      });
+
+      // Wait for rooms to load
+      await waitFor(() => {
+        expect(screen.getByText("Conference Room A (10 people)")).toBeInTheDocument();
+      });
+
+      // Select a room
+      const roomSelect = screen.getByLabelText("Meeting Room");
+      fireEvent.change(roomSelect, { target: { value: "room-1" } });
+
+      expect(roomSelect).toHaveValue("room-1");
+    });
+
+    it("includes roomId when creating event with room", async () => {
+      vi.mocked(api.createEvent).mockResolvedValue({
+        event: { ...mockEvent, roomId: "room-1" },
+        attendees: mockAttendees,
+      });
+      const onEventCreated = vi.fn();
+
+      render(
+        <CreateEventDialog
+          open={true}
+          onOpenChange={() => {}}
+          onEventCreated={onEventCreated}
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByLabelText("Title")).toBeInTheDocument();
+      });
+
+      // Wait for rooms to load
+      await waitFor(() => {
+        expect(screen.getByText("Conference Room A (10 people)")).toBeInTheDocument();
+      });
+
+      // Fill in form
+      fireEvent.change(screen.getByLabelText("Title"), {
+        target: { value: "Meeting in Room" },
+      });
+      fireEvent.change(screen.getByLabelText("Start Time"), {
+        target: { value: "2026-03-10T10:00" },
+      });
+      fireEvent.change(screen.getByLabelText("End Time"), {
+        target: { value: "2026-03-10T11:00" },
+      });
+
+      // Select a room
+      const roomSelect = screen.getByLabelText("Meeting Room");
+      fireEvent.change(roomSelect, { target: { value: "room-1" } });
+
+      // Submit
+      const submitButton = screen.getByRole("button", { name: /create/i });
+      fireEvent.click(submitButton);
+
+      await waitFor(() => {
+        expect(api.createEvent).toHaveBeenCalledWith(
+          expect.objectContaining({
+            title: "Meeting in Room",
+            roomId: "room-1",
+          })
+        );
+      });
+    });
+
+    it("does not include roomId when no room selected", async () => {
+      vi.mocked(api.createEvent).mockResolvedValue({
+        event: mockEvent,
+        attendees: mockAttendees,
+      });
+
+      render(<CreateEventDialog open={true} onOpenChange={() => {}} />);
+
+      await waitFor(() => {
+        expect(screen.getByLabelText("Title")).toBeInTheDocument();
+      });
+
+      // Fill in form without selecting a room
+      fireEvent.change(screen.getByLabelText("Title"), {
+        target: { value: "Regular Meeting" },
+      });
+      fireEvent.change(screen.getByLabelText("Start Time"), {
+        target: { value: "2026-03-10T10:00" },
+      });
+      fireEvent.change(screen.getByLabelText("End Time"), {
+        target: { value: "2026-03-10T11:00" },
+      });
+
+      // Submit
+      const submitButton = screen.getByRole("button", { name: /create/i });
+      fireEvent.click(submitButton);
+
+      await waitFor(() => {
+        expect(api.createEvent).toHaveBeenCalledWith(
+          expect.objectContaining({
+            title: "Regular Meeting",
+          })
+        );
+        // roomId should not be included when no room selected
+        expect(api.createEvent).toHaveBeenCalledWith(
+          expect.not.objectContaining({
+            roomId: expect.any(String),
+          })
+        );
+      });
     });
   });
 });

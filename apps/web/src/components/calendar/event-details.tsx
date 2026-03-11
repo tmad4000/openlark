@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { cn } from "@/lib/utils";
-import { api, type CalendarEvent, type EventAttendee } from "@/lib/api";
+import { api, type CalendarEvent, type EventAttendee, type MeetingRoom } from "@/lib/api";
 import {
   Calendar,
   Clock,
@@ -12,6 +12,7 @@ import {
   X,
   HelpCircle,
   AlertCircle,
+  Building2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -23,6 +24,7 @@ interface EventDetailsProps {
 export function EventDetails({ eventId, currentUserId }: EventDetailsProps) {
   const [event, setEvent] = useState<CalendarEvent | null>(null);
   const [attendees, setAttendees] = useState<EventAttendee[]>([]);
+  const [room, setRoom] = useState<MeetingRoom | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [rsvpLoading, setRsvpLoading] = useState(false);
@@ -34,6 +36,7 @@ export function EventDetails({ eventId, currentUserId }: EventDetailsProps) {
     try {
       setIsLoading(true);
       setError(null);
+      setRoom(null);
 
       const [eventResponse, attendeesResponse] = await Promise.all([
         api.getEvent(eventId),
@@ -42,6 +45,22 @@ export function EventDetails({ eventId, currentUserId }: EventDetailsProps) {
 
       setEvent(eventResponse.event);
       setAttendees(attendeesResponse.attendees);
+
+      // Load room info if event has a roomId
+      if (eventResponse.event.roomId) {
+        try {
+          const roomsResponse = await api.getMeetingRooms();
+          const eventRoom = roomsResponse.rooms.find(
+            (r) => r.id === eventResponse.event.roomId
+          );
+          if (eventRoom) {
+            setRoom(eventRoom);
+          }
+        } catch {
+          // Room loading is non-critical, ignore errors
+          console.error("Failed to load room info");
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load event");
     } finally {
@@ -179,6 +198,22 @@ export function EventDetails({ eventId, currentUserId }: EventDetailsProps) {
             <p className="text-sm text-gray-900 dark:text-gray-100">
               {event.location}
             </p>
+          </div>
+        )}
+
+        {/* Meeting Room */}
+        {room && (
+          <div className="flex items-start gap-3">
+            <Building2 className="h-5 w-5 text-gray-400 dark:text-gray-500 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                {room.name}
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                {room.capacity} people
+                {room.location && ` • ${room.location}`}
+              </p>
+            </div>
           </div>
         )}
 

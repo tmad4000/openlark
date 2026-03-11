@@ -582,6 +582,12 @@
           "role": "implementer",
           "value": 1,
           "reason": "Iteration 22 independent analysis confirms: Calendar has complete backend but frontend is missing attendee selection in CreateEventDialog. API supports attendeeIds but UI doesn't expose it. This is a critical gap - events created solo can't invite attendees. Should be fixed before Phase 1 is complete."
+        },
+        {
+          "iteration": 23,
+          "role": "implementer",
+          "value": 1,
+          "reason": "Iteration 23 independent analysis: Room booking UI is the clear next step. Backend getMeetingRooms and roomId on events already implemented. Only missing frontend room selection in CreateEventDialog. This completes T-004 subtask 3."
         }
       ],
       "comments": [
@@ -642,7 +648,7 @@
         "role": "implementer"
       },
       "claimedBy": {
-        "iteration": 22,
+        "iteration": 23,
         "role": "implementer"
       },
       "splitFrom": null
@@ -1380,7 +1386,7 @@
   ],
   "metadata": {
     "createdAt": "2026-03-04T21:00:00Z",
-    "totalIterations": 32,
+    "totalIterations": 33,
     "iterationLog": [
       {
         "iteration": 1,
@@ -1572,6 +1578,12 @@
         "iteration": 32,
         "role": "reviewer",
         "taskWorked": null,
+        "contextCompacted": false
+      },
+      {
+        "iteration": 33,
+        "role": "implementer",
+        "taskWorked": "T-004",
         "contextCompacted": false
       }
     ]
