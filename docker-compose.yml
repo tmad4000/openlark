@@ -31,6 +31,21 @@ services:
       timeout: 5s
       retries: 5
 
+  collab:
+    build:
+      context: .
+      dockerfile: apps/collab/Dockerfile
+    container_name: openlark-collab
+    restart: unless-stopped
+    ports:
+      - "1234:1234"
+    environment:
+      DATABASE_URL: postgresql://openlark:openlark@postgres:5432/openlark
+      COLLAB_PORT: 1234
+    depends_on:
+      postgres:
+        condition: service_healthy
+
 volumes:
   postgres_data:
   redis_data:

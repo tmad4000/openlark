@@ -850,8 +850,8 @@
         "Typecheck passes"
       ],
       "priority": 51,
-      "passes": false,
-      "notes": "Hocuspocus handles WebSocket connections for document editing. Separate from the chat WebSocket."
+      "passes": true,
+      "notes": "Created apps/collab with Hocuspocus server. Added yjsState bytea column to documents table (migration 0015). Server implements: onAuthenticate hook validating session token (SHA256 hash lookup) and checking document permissions (user/department/org principal types, viewer/editor/manager/owner roles). onLoadDocument loads Yjs state from documents.yjs_state column using Y.applyUpdate. onStoreDocument persists using Y.encodeStateAsUpdate to documents.yjs_state. Awareness broadcasts handled automatically by Hocuspocus. Added collab service to docker-compose.yml on port 1234 with Dockerfile. Typecheck passes."
     },
     {
       "id": "US-052",

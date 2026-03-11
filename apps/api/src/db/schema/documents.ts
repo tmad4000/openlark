@@ -35,6 +35,7 @@ export const documents = pgTable("documents", {
     orientation?: "portrait" | "landscape";
     theme?: "light" | "dark" | "system";
   }>(),
+  yjsState: bytea("yjs_state"), // Yjs binary state for real-time collaboration
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),

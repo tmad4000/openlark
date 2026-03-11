@@ -1,0 +1,1 @@
+ALTER TABLE "documents" ADD COLUMN "yjs_state" "bytea";
