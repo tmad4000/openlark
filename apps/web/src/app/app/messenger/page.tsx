@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { Search, Plus, MessageCircle, Users, Bell, BellOff, AtSign, Info, Wifi, WifiOff, Loader2, Check, CheckCheck, Circle, MoreHorizontal, Reply, X, MessageSquare, Pin, Star, Pencil, Trash2, Forward, Square, CheckSquare, Tag, FileText, File, FolderOpen, ExternalLink, GripVertical } from "lucide-react";
+import { Search, Plus, MessageCircle, Users, Bell, BellOff, AtSign, Info, Wifi, WifiOff, Loader2, Check, CheckCheck, Circle, MoreHorizontal, Reply, X, MessageSquare, Pin, Star, Pencil, Trash2, Forward, Square, CheckSquare, Tag, FileText, File, FolderOpen, ExternalLink, GripVertical, Shield, Crown, UserPlus, UserMinus, Settings, Globe, Lock, ChevronDown, ChevronRight, LogOut } from "lucide-react";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as ContextMenu from "@radix-ui/react-context-menu";
 import MessageInput, { MentionUser } from "@/components/MessageInput";
@@ -1386,6 +1386,7 @@ function ChatView({
   const [pinnedMessageIds, setPinnedMessageIds] = useState<Set<string>>(new Set());
   const [favoritedMessageIds, setFavoritedMessageIds] = useState<Set<string>>(new Set());
   const [showPinsPanel, setShowPinsPanel] = useState(false);
+  const [showChatInfoPanel, setShowChatInfoPanel] = useState(false);
 
   // Thread panel state
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
@@ -2474,7 +2475,10 @@ function ChatView({
           </button>
           {/* Info button */}
           <button
-            className="p-2 rounded-full hover:bg-gray-100 text-gray-500 transition-colors"
+            onClick={() => setShowChatInfoPanel(!showChatInfoPanel)}
+            className={`p-2 rounded-full hover:bg-gray-100 transition-colors ${
+              showChatInfoPanel ? "bg-blue-100 text-blue-600" : "text-gray-500"
+            }`}
             title="Chat info"
           >
             <Info className="w-5 h-5" />
@@ -2963,6 +2967,40 @@ function ChatView({
           onClose={() => setShowPinsPanel(false)}
           onUnpin={(messageId) => {
             togglePin(messageId);
+          }}
+        />
+      )}
+
+      {/* Chat Info Panel */}
+      {showChatInfoPanel && (
+        <ChatInfoPanel
+          chatId={chat.id}
+          chatType={chat.type}
+          onClose={() => setShowChatInfoPanel(false)}
+          onMembersUpdated={async () => {
+            // Reload chat members for mentions
+            const token = getCookie("session_token");
+            if (!token) return;
+
+            try {
+              const res = await fetch(`/api/chats/${chat.id}/members`, {
+                headers: { Authorization: `Bearer ${token}` },
+              });
+
+              if (res.ok) {
+                const data = await res.json();
+                const members = (data.members || [])
+                  .filter((m: { userId: string }) => m.userId !== currentUserId)
+                  .map((m: { userId: string; displayName: string | null; avatarUrl: string | null }) => ({
+                    id: m.userId,
+                    displayName: m.displayName,
+                    avatarUrl: m.avatarUrl,
+                  }));
+                setChatMembers(members);
+              }
+            } catch {
+              // Silent fail
+            }
           }}
         />
       )}
@@ -3637,6 +3675,803 @@ function PinsTabContent({
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+interface ChatMemberDetails {
+  userId: string;
+  role: "owner" | "admin" | "member";
+  joinedAt: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+  email: string;
+}
+
+interface ChatDetails {
+  id: string;
+  type: string;
+  name: string | null;
+  avatarUrl: string | null;
+  isPublic: boolean;
+  memberCount: number;
+  settings: {
+    whoCanSendMessages?: "all" | "admins_only";
+    whoCanAddMembers?: "all" | "admins_only";
+    historyVisibleToNewMembers?: boolean;
+  };
+  currentUserRole: "owner" | "admin" | "member";
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface OrgUser {
+  id: string;
+  email: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+}
+
+function ChatInfoPanel({
+  chatId,
+  chatType,
+  onClose,
+  onMembersUpdated,
+}: {
+  chatId: string;
+  chatType: string;
+  onClose: () => void;
+  onMembersUpdated?: () => void;
+}) {
+  const [chatDetails, setChatDetails] = useState<ChatDetails | null>(null);
+  const [members, setMembers] = useState<ChatMemberDetails[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [memberSearchQuery, setMemberSearchQuery] = useState("");
+  const [showSettings, setShowSettings] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [showAddMemberDialog, setShowAddMemberDialog] = useState(false);
+  const [orgUsers, setOrgUsers] = useState<OrgUser[]>([]);
+  const [addMemberSearchQuery, setAddMemberSearchQuery] = useState("");
+  const [selectedUsersToAdd, setSelectedUsersToAdd] = useState<Set<string>>(new Set());
+  const [isAddingMembers, setIsAddingMembers] = useState(false);
+  const [confirmRemoveMember, setConfirmRemoveMember] = useState<string | null>(null);
+
+  // Load chat details and members
+  useEffect(() => {
+    const loadChatInfo = async () => {
+      const token = getCookie("session_token");
+      if (!token) return;
+
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        // Load chat details and members in parallel
+        const [detailsRes, membersRes] = await Promise.all([
+          fetch(`/api/chats/${chatId}`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          fetch(`/api/chats/${chatId}/members`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+        ]);
+
+        if (!detailsRes.ok || !membersRes.ok) {
+          throw new Error("Failed to load chat info");
+        }
+
+        const detailsData = await detailsRes.json();
+        const membersData = await membersRes.json();
+
+        setChatDetails(detailsData);
+        setMembers(membersData.members || []);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadChatInfo();
+  }, [chatId]);
+
+  // Load org users when add member dialog opens
+  useEffect(() => {
+    const loadOrgUsers = async () => {
+      if (!showAddMemberDialog) return;
+
+      const token = getCookie("session_token");
+      if (!token) return;
+
+      try {
+        const res = await fetch("/api/contacts", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setOrgUsers(data.contacts || []);
+        }
+      } catch (err) {
+        console.error("Failed to load org users:", err);
+      }
+    };
+
+    loadOrgUsers();
+  }, [showAddMemberDialog]);
+
+  // Filter members by search
+  const filteredMembers = useMemo(() => {
+    if (!memberSearchQuery.trim()) return members;
+    const query = memberSearchQuery.toLowerCase();
+    return members.filter(
+      (m) =>
+        m.displayName?.toLowerCase().includes(query) ||
+        m.email.toLowerCase().includes(query)
+    );
+  }, [members, memberSearchQuery]);
+
+  // Sort members: owner first, then admins, then members
+  const sortedMembers = useMemo(() => {
+    return [...filteredMembers].sort((a, b) => {
+      const roleOrder = { owner: 0, admin: 1, member: 2 };
+      return roleOrder[a.role] - roleOrder[b.role];
+    });
+  }, [filteredMembers]);
+
+  // Available users to add (not already members)
+  const availableUsersToAdd = useMemo(() => {
+    const memberIds = new Set(members.map((m) => m.userId));
+    const filtered = orgUsers.filter((u) => !memberIds.has(u.id));
+    if (!addMemberSearchQuery.trim()) return filtered;
+    const query = addMemberSearchQuery.toLowerCase();
+    return filtered.filter(
+      (u) =>
+        u.displayName?.toLowerCase().includes(query) ||
+        u.email.toLowerCase().includes(query)
+    );
+  }, [orgUsers, members, addMemberSearchQuery]);
+
+  const canManageMembers = chatDetails?.currentUserRole === "owner" || chatDetails?.currentUserRole === "admin";
+  const canChangeSettings = chatDetails?.currentUserRole === "owner" || chatDetails?.currentUserRole === "admin";
+  const isOwner = chatDetails?.currentUserRole === "owner";
+  const isGroupChat = chatType !== "dm";
+
+  const updateChatSettings = async (updates: Partial<ChatDetails["settings"]> & { name?: string; isPublic?: boolean }) => {
+    const token = getCookie("session_token");
+    if (!token) return;
+
+    setIsUpdating(true);
+    try {
+      const body: Record<string, unknown> = {};
+      if (updates.name !== undefined) body.name = updates.name;
+      if (updates.isPublic !== undefined) body.isPublic = updates.isPublic;
+      if (updates.whoCanSendMessages !== undefined || updates.whoCanAddMembers !== undefined || updates.historyVisibleToNewMembers !== undefined) {
+        body.settings = {
+          whoCanSendMessages: updates.whoCanSendMessages,
+          whoCanAddMembers: updates.whoCanAddMembers,
+          historyVisibleToNewMembers: updates.historyVisibleToNewMembers,
+        };
+      }
+
+      const res = await fetch(`/api/chats/${chatId}`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || "Failed to update settings");
+      }
+
+      const updated = await res.json();
+      setChatDetails((prev) => prev ? { ...prev, ...updated } : null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update");
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const addMembers = async () => {
+    const token = getCookie("session_token");
+    if (!token || selectedUsersToAdd.size === 0) return;
+
+    setIsAddingMembers(true);
+    try {
+      const res = await fetch(`/api/chats/${chatId}/members`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ member_ids: Array.from(selectedUsersToAdd) }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || "Failed to add members");
+      }
+
+      const data = await res.json();
+      setMembers(data.members || []);
+      setShowAddMemberDialog(false);
+      setSelectedUsersToAdd(new Set());
+      setAddMemberSearchQuery("");
+      onMembersUpdated?.();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to add members");
+    } finally {
+      setIsAddingMembers(false);
+    }
+  };
+
+  const removeMember = async (userId: string) => {
+    const token = getCookie("session_token");
+    if (!token) return;
+
+    try {
+      const res = await fetch(`/api/chats/${chatId}/members/${userId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || "Failed to remove member");
+      }
+
+      setMembers((prev) => prev.filter((m) => m.userId !== userId));
+      setConfirmRemoveMember(null);
+      onMembersUpdated?.();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to remove member");
+    }
+  };
+
+  const updateMemberRole = async (userId: string, newRole: "admin" | "member") => {
+    const token = getCookie("session_token");
+    if (!token) return;
+
+    try {
+      const res = await fetch(`/api/chats/${chatId}/members/${userId}`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ role: newRole }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || "Failed to update role");
+      }
+
+      setMembers((prev) =>
+        prev.map((m) => (m.userId === userId ? { ...m, role: newRole } : m))
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update role");
+    }
+  };
+
+  const leaveGroup = async () => {
+    const token = getCookie("session_token");
+    if (!token || !chatDetails) return;
+
+    // Get current user ID from members
+    const currentUser = members.find((m) => m.role === chatDetails.currentUserRole);
+    if (!currentUser) return;
+
+    try {
+      const res = await fetch(`/api/chats/${chatId}/members/${currentUser.userId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || "Failed to leave group");
+      }
+
+      onClose();
+      // Trigger reload of chat list
+      window.location.reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to leave group");
+    }
+  };
+
+  const getRoleBadge = (role: string) => {
+    if (role === "owner") {
+      return (
+        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-700 rounded">
+          <Crown className="w-3 h-3" />
+          Owner
+        </span>
+      );
+    }
+    if (role === "admin") {
+      return (
+        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-700 rounded">
+          <Shield className="w-3 h-3" />
+          Admin
+        </span>
+      );
+    }
+    return null;
+  };
+
+  return (
+    <div className="w-80 border-l border-gray-200 bg-white flex flex-col h-full">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+        <div className="flex items-center gap-2">
+          <Info className="w-5 h-5 text-gray-500" />
+          <h3 className="font-semibold text-gray-900">Chat Info</h3>
+        </div>
+        <button
+          onClick={onClose}
+          className="p-1.5 rounded-full hover:bg-gray-100 text-gray-500 transition-colors"
+          title="Close"
+        >
+          <X className="w-5 h-5" />
+        </button>
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 overflow-y-auto">
+        {isLoading ? (
+          <div className="flex items-center justify-center h-32 text-gray-500">
+            <Loader2 className="w-5 h-5 animate-spin" />
+          </div>
+        ) : error ? (
+          <div className="flex items-center justify-center h-32 text-red-500 text-sm px-4 text-center">
+            {error}
+          </div>
+        ) : chatDetails && (
+          <>
+            {/* Chat avatar and name */}
+            <div className="p-4 border-b border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="w-16 h-16 rounded-full overflow-hidden bg-gray-200 flex-shrink-0">
+                  {chatDetails.avatarUrl ? (
+                    <img
+                      src={chatDetails.avatarUrl}
+                      alt={chatDetails.name || "Chat"}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-blue-600 text-white text-xl font-semibold">
+                      {isGroupChat ? (
+                        <Users className="w-8 h-8" />
+                      ) : (
+                        chatDetails.name?.charAt(0).toUpperCase() || "?"
+                      )}
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <h4 className="text-lg font-semibold text-gray-900">
+                    {chatDetails.name || "Chat"}
+                  </h4>
+                  {isGroupChat && (
+                    <p className="text-sm text-gray-500">
+                      {chatDetails.memberCount} member{chatDetails.memberCount !== 1 ? "s" : ""}
+                    </p>
+                  )}
+                  {isGroupChat && (
+                    <div className="flex items-center gap-1 mt-1">
+                      {chatDetails.isPublic ? (
+                        <span className="inline-flex items-center gap-0.5 text-xs text-gray-500">
+                          <Globe className="w-3 h-3" />
+                          Public group
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-0.5 text-xs text-gray-500">
+                          <Lock className="w-3 h-3" />
+                          Private group
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Group Settings (for groups only) */}
+            {isGroupChat && canChangeSettings && (
+              <div className="border-b border-gray-100">
+                <button
+                  onClick={() => setShowSettings(!showSettings)}
+                  className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    <Settings className="w-5 h-5 text-gray-500" />
+                    <span className="font-medium text-gray-700">Group Settings</span>
+                  </div>
+                  {showSettings ? (
+                    <ChevronDown className="w-5 h-5 text-gray-400" />
+                  ) : (
+                    <ChevronRight className="w-5 h-5 text-gray-400" />
+                  )}
+                </button>
+
+                {showSettings && (
+                  <div className="px-4 pb-4 space-y-4">
+                    {/* Who can send messages */}
+                    <div>
+                      <label className="text-sm font-medium text-gray-700">
+                        Who can send messages
+                      </label>
+                      <select
+                        value={chatDetails.settings.whoCanSendMessages || "all"}
+                        onChange={(e) =>
+                          updateChatSettings({
+                            whoCanSendMessages: e.target.value as "all" | "admins_only",
+                          })
+                        }
+                        disabled={isUpdating}
+                        className="mt-1 block w-full px-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="all">All members</option>
+                        <option value="admins_only">Admins only</option>
+                      </select>
+                    </div>
+
+                    {/* Who can add members */}
+                    <div>
+                      <label className="text-sm font-medium text-gray-700">
+                        Who can add members
+                      </label>
+                      <select
+                        value={chatDetails.settings.whoCanAddMembers || "all"}
+                        onChange={(e) =>
+                          updateChatSettings({
+                            whoCanAddMembers: e.target.value as "all" | "admins_only",
+                          })
+                        }
+                        disabled={isUpdating}
+                        className="mt-1 block w-full px-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="all">All members</option>
+                        <option value="admins_only">Admins only</option>
+                      </select>
+                    </div>
+
+                    {/* History visible to new members */}
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-700">
+                        History visible to new members
+                      </span>
+                      <button
+                        onClick={() =>
+                          updateChatSettings({
+                            historyVisibleToNewMembers:
+                              !chatDetails.settings.historyVisibleToNewMembers,
+                          })
+                        }
+                        disabled={isUpdating}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                          chatDetails.settings.historyVisibleToNewMembers !== false
+                            ? "bg-blue-600"
+                            : "bg-gray-200"
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            chatDetails.settings.historyVisibleToNewMembers !== false
+                              ? "translate-x-6"
+                              : "translate-x-1"
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    {/* Public/Private toggle (owner only) */}
+                    {isOwner && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-700">
+                          Public group
+                        </span>
+                        <button
+                          onClick={() =>
+                            updateChatSettings({ isPublic: !chatDetails.isPublic })
+                          }
+                          disabled={isUpdating}
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                            chatDetails.isPublic ? "bg-blue-600" : "bg-gray-200"
+                          }`}
+                        >
+                          <span
+                            className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                              chatDetails.isPublic ? "translate-x-6" : "translate-x-1"
+                            }`}
+                          />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Member List */}
+            <div className="flex-1">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                <div className="flex items-center gap-2">
+                  <Users className="w-5 h-5 text-gray-500" />
+                  <span className="font-medium text-gray-700">Members</span>
+                  <span className="text-sm text-gray-400">({members.length})</span>
+                </div>
+                {isGroupChat && canManageMembers && (
+                  <button
+                    onClick={() => setShowAddMemberDialog(true)}
+                    className="p-1.5 rounded-full hover:bg-gray-100 text-blue-600 transition-colors"
+                    title="Add members"
+                  >
+                    <UserPlus className="w-5 h-5" />
+                  </button>
+                )}
+              </div>
+
+              {/* Member search */}
+              {members.length > 5 && (
+                <div className="px-4 py-2 border-b border-gray-100">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Search members..."
+                      value={memberSearchQuery}
+                      onChange={(e) => setMemberSearchQuery(e.target.value)}
+                      className="w-full pl-9 pr-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Member list */}
+              <div className="divide-y divide-gray-100">
+                {sortedMembers.map((member) => (
+                  <div
+                    key={member.userId}
+                    className="flex items-center gap-3 px-4 py-2 hover:bg-gray-50"
+                  >
+                    {/* Avatar */}
+                    <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-200 flex-shrink-0">
+                      {member.avatarUrl ? (
+                        <img
+                          src={member.avatarUrl}
+                          alt={member.displayName || "User"}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-blue-600 text-white text-sm font-medium">
+                          {member.displayName?.charAt(0).toUpperCase() || "?"}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-gray-900 truncate">
+                          {member.displayName || member.email}
+                        </span>
+                        {getRoleBadge(member.role)}
+                      </div>
+                      <span className="text-xs text-gray-500 truncate block">
+                        {member.email}
+                      </span>
+                    </div>
+
+                    {/* Actions (for group chats) */}
+                    {isGroupChat && member.role !== "owner" && (
+                      <Popover.Root>
+                        <Popover.Trigger asChild>
+                          <button className="p-1.5 rounded-full hover:bg-gray-100 text-gray-400">
+                            <MoreHorizontal className="w-4 h-4" />
+                          </button>
+                        </Popover.Trigger>
+                        <Popover.Portal>
+                          <Popover.Content
+                            className="bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[160px] z-50"
+                            sideOffset={5}
+                          >
+                            {isOwner && member.role === "member" && (
+                              <button
+                                onClick={() => updateMemberRole(member.userId, "admin")}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-gray-100"
+                              >
+                                <Shield className="w-4 h-4 text-blue-600" />
+                                Make admin
+                              </button>
+                            )}
+                            {isOwner && member.role === "admin" && (
+                              <button
+                                onClick={() => updateMemberRole(member.userId, "member")}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-gray-100"
+                              >
+                                <Shield className="w-4 h-4 text-gray-400" />
+                                Remove admin
+                              </button>
+                            )}
+                            {canManageMembers && (member.role === "member" || isOwner) && (
+                              <button
+                                onClick={() => setConfirmRemoveMember(member.userId)}
+                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left text-red-600 hover:bg-red-50"
+                              >
+                                <UserMinus className="w-4 h-4" />
+                                Remove from group
+                              </button>
+                            )}
+                            <Popover.Arrow className="fill-white" />
+                          </Popover.Content>
+                        </Popover.Portal>
+                      </Popover.Root>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Leave group button (for non-owners in group chats) */}
+            {isGroupChat && !isOwner && (
+              <div className="p-4 border-t border-gray-200">
+                <button
+                  onClick={leaveGroup}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2 text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                >
+                  <LogOut className="w-4 h-4" />
+                  Leave group
+                </button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Add Member Dialog */}
+      <Dialog.Root open={showAddMemberDialog} onOpenChange={setShowAddMemberDialog}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 bg-black/50 z-50" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg shadow-xl z-50 w-full max-w-md p-0 max-h-[80vh] flex flex-col">
+            <Dialog.Title className="text-lg font-semibold px-4 py-3 border-b border-gray-200">
+              Add Members
+            </Dialog.Title>
+
+            {/* Search */}
+            <div className="px-4 py-3 border-b border-gray-200">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search users..."
+                  value={addMemberSearchQuery}
+                  onChange={(e) => setAddMemberSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+
+            {/* Selected count */}
+            {selectedUsersToAdd.size > 0 && (
+              <div className="px-4 py-2 bg-blue-50 text-blue-700 text-sm">
+                {selectedUsersToAdd.size} user{selectedUsersToAdd.size !== 1 ? "s" : ""} selected
+              </div>
+            )}
+
+            {/* User list */}
+            <div className="flex-1 overflow-y-auto">
+              {availableUsersToAdd.length === 0 ? (
+                <div className="flex items-center justify-center h-32 text-gray-500 text-sm">
+                  No users available to add
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-100">
+                  {availableUsersToAdd.map((user) => (
+                    <label
+                      key={user.id}
+                      className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedUsersToAdd.has(user.id)}
+                        onChange={(e) => {
+                          const newSet = new Set(selectedUsersToAdd);
+                          if (e.target.checked) {
+                            newSet.add(user.id);
+                          } else {
+                            newSet.delete(user.id);
+                          }
+                          setSelectedUsersToAdd(newSet);
+                        }}
+                        className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                      />
+                      <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-200 flex-shrink-0">
+                        {user.avatarUrl ? (
+                          <img
+                            src={user.avatarUrl}
+                            alt={user.displayName || "User"}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center bg-blue-600 text-white text-sm font-medium">
+                            {user.displayName?.charAt(0).toUpperCase() || "?"}
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">
+                          {user.displayName || user.email}
+                        </div>
+                        <div className="text-xs text-gray-500">{user.email}</div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-gray-200">
+              <button
+                onClick={() => {
+                  setShowAddMemberDialog(false);
+                  setSelectedUsersToAdd(new Set());
+                  setAddMemberSearchQuery("");
+                }}
+                className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={addMembers}
+                disabled={selectedUsersToAdd.size === 0 || isAddingMembers}
+                className="px-4 py-2 text-sm bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+              >
+                {isAddingMembers && <Loader2 className="w-4 h-4 animate-spin" />}
+                Add {selectedUsersToAdd.size > 0 ? `(${selectedUsersToAdd.size})` : ""}
+              </button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+
+      {/* Confirm Remove Member Dialog */}
+      <Dialog.Root open={!!confirmRemoveMember} onOpenChange={(open) => !open && setConfirmRemoveMember(null)}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 bg-black/50 z-50" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-lg shadow-xl z-50 w-full max-w-sm p-6">
+            <Dialog.Title className="text-lg font-semibold text-gray-900">
+              Remove Member
+            </Dialog.Title>
+            <Dialog.Description className="mt-2 text-sm text-gray-500">
+              Are you sure you want to remove this member from the group?
+            </Dialog.Description>
+            <div className="flex items-center justify-end gap-2 mt-4">
+              <button
+                onClick={() => setConfirmRemoveMember(null)}
+                className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-md transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => confirmRemoveMember && removeMember(confirmRemoveMember)}
+                className="px-4 py-2 text-sm bg-red-600 text-white font-medium rounded-md hover:bg-red-700 transition-colors"
+              >
+                Remove
+              </button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
     </div>
   );
 }

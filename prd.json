@@ -610,8 +610,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 37,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented ChatInfoPanel component with: GET/PATCH /chats/:id for details and settings, POST/DELETE/PATCH /chats/:id/members for member management. Panel shows searchable member list with role badges (Crown for owner, Shield for admin), settings panel with dropdowns for message/add permissions and toggles for history visibility and public/private. Owner can promote/demote admins and remove any member. Non-owners can leave group."
     },
     {
       "id": "US-038",

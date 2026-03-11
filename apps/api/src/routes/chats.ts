@@ -118,6 +118,25 @@ interface UpdateChatMemberBody {
   label?: string | null;
 }
 
+interface UpdateChatBody {
+  name?: string;
+  avatarUrl?: string | null;
+  isPublic?: boolean;
+  settings?: {
+    whoCanSendMessages?: "all" | "admins_only";
+    whoCanAddMembers?: "all" | "admins_only";
+    historyVisibleToNewMembers?: boolean;
+  };
+}
+
+interface AddMembersBody {
+  member_ids: string[];
+}
+
+interface UpdateMemberRoleBody {
+  role: "admin" | "member";
+}
+
 export async function chatsRoutes(fastify: FastifyInstance) {
   /**
    * GET /chats - Get user's chat list with last message preview and unread count
@@ -1013,6 +1032,719 @@ export async function chatsRoutes(fastify: FastifyInstance) {
 
       return reply.status(200).send({
         pins: pinnedMessages,
+      });
+    }
+  );
+
+  /**
+   * GET /chats/:id - Get chat details including settings
+   * Returns: Chat with settings and current user's role
+   */
+  fastify.get<{ Params: { id: string } }>(
+    "/chats/:id",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id } = request.params;
+
+      // Validate UUID format
+      if (!UUID_REGEX.test(id)) {
+        return reply.status(400).send({
+          error: "Invalid chat ID format",
+        });
+      }
+
+      const currentUserId = request.user.id;
+
+      // Verify user is a member of this chat and get their role
+      const [membership] = await db
+        .select()
+        .from(chatMembers)
+        .where(
+          and(
+            eq(chatMembers.chatId, id),
+            eq(chatMembers.userId, currentUserId)
+          )
+        )
+        .limit(1);
+
+      if (!membership) {
+        return reply.status(403).send({
+          error: "Access denied - not a member of this chat",
+        });
+      }
+
+      // Get the chat
+      const [chat] = await db
+        .select()
+        .from(chats)
+        .where(eq(chats.id, id))
+        .limit(1);
+
+      if (!chat) {
+        return reply.status(404).send({
+          error: "Chat not found",
+        });
+      }
+
+      // Get member count
+      const [memberCountResult] = await db
+        .select({
+          count: sql<number>`count(*)::int`.as("count"),
+        })
+        .from(chatMembers)
+        .where(eq(chatMembers.chatId, id));
+
+      return reply.status(200).send({
+        id: chat.id,
+        type: chat.type,
+        name: chat.name,
+        avatarUrl: chat.avatarUrl,
+        isPublic: chat.isPublic,
+        maxMembers: chat.maxMembers,
+        memberCount: memberCountResult?.count ?? 0,
+        settings: chat.settings ?? {
+          whoCanSendMessages: "all",
+          whoCanAddMembers: "all",
+          historyVisibleToNewMembers: true,
+        },
+        currentUserRole: membership.role,
+        createdAt: chat.createdAt,
+        updatedAt: chat.updatedAt,
+      });
+    }
+  );
+
+  /**
+   * PATCH /chats/:id - Update chat settings (owner/admin only)
+   * Body: { name?, avatarUrl?, isPublic?, settings? }
+   * Returns: Updated chat
+   */
+  fastify.patch<{ Params: { id: string }; Body: UpdateChatBody }>(
+    "/chats/:id",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id } = request.params;
+      const { name, avatarUrl, isPublic, settings } = request.body;
+
+      // Validate UUID format
+      if (!UUID_REGEX.test(id)) {
+        return reply.status(400).send({
+          error: "Invalid chat ID format",
+        });
+      }
+
+      const currentUserId = request.user.id;
+
+      // Get the chat to verify it's a group
+      const [chat] = await db
+        .select()
+        .from(chats)
+        .where(eq(chats.id, id))
+        .limit(1);
+
+      if (!chat) {
+        return reply.status(404).send({
+          error: "Chat not found",
+        });
+      }
+
+      if (chat.type === "dm") {
+        return reply.status(400).send({
+          error: "Cannot update DM chat settings",
+        });
+      }
+
+      // Get user's membership and role
+      const [membership] = await db
+        .select()
+        .from(chatMembers)
+        .where(
+          and(
+            eq(chatMembers.chatId, id),
+            eq(chatMembers.userId, currentUserId)
+          )
+        )
+        .limit(1);
+
+      if (!membership) {
+        return reply.status(403).send({
+          error: "Access denied - not a member of this chat",
+        });
+      }
+
+      // Only owner can update isPublic
+      if (isPublic !== undefined && membership.role !== "owner") {
+        return reply.status(403).send({
+          error: "Only group owner can change public/private setting",
+        });
+      }
+
+      // Owner and admin can update name, avatar, and settings
+      if (membership.role !== "owner" && membership.role !== "admin") {
+        return reply.status(403).send({
+          error: "Only group owner or admin can update group settings",
+        });
+      }
+
+      // Build update object
+      const updates: Record<string, unknown> = {
+        updatedAt: new Date(),
+      };
+
+      if (name !== undefined) {
+        if (typeof name !== "string" || name.trim().length === 0) {
+          return reply.status(400).send({
+            error: "name must be a non-empty string",
+          });
+        }
+        updates.name = name.trim();
+      }
+
+      if (avatarUrl !== undefined) {
+        updates.avatarUrl = avatarUrl;
+      }
+
+      if (isPublic !== undefined) {
+        updates.isPublic = isPublic;
+      }
+
+      if (settings !== undefined) {
+        // Merge with existing settings
+        const existingSettings = (chat.settings ?? {}) as Record<string, unknown>;
+        const newSettings = { ...existingSettings };
+
+        if (settings.whoCanSendMessages !== undefined) {
+          if (!["all", "admins_only"].includes(settings.whoCanSendMessages)) {
+            return reply.status(400).send({
+              error: "whoCanSendMessages must be 'all' or 'admins_only'",
+            });
+          }
+          newSettings.whoCanSendMessages = settings.whoCanSendMessages;
+        }
+
+        if (settings.whoCanAddMembers !== undefined) {
+          if (!["all", "admins_only"].includes(settings.whoCanAddMembers)) {
+            return reply.status(400).send({
+              error: "whoCanAddMembers must be 'all' or 'admins_only'",
+            });
+          }
+          newSettings.whoCanAddMembers = settings.whoCanAddMembers;
+        }
+
+        if (settings.historyVisibleToNewMembers !== undefined) {
+          newSettings.historyVisibleToNewMembers = settings.historyVisibleToNewMembers;
+        }
+
+        updates.settings = newSettings;
+      }
+
+      // Update the chat
+      const [updatedChat] = await db
+        .update(chats)
+        .set(updates)
+        .where(eq(chats.id, id))
+        .returning();
+
+      // Create system message for name change
+      if (name !== undefined) {
+        await createSystemMessage(id, currentUserId, {
+          action: "group_renamed",
+          renamedBy: request.user.displayName,
+          newName: name.trim(),
+        });
+      }
+
+      return reply.status(200).send({
+        id: updatedChat.id,
+        type: updatedChat.type,
+        name: updatedChat.name,
+        avatarUrl: updatedChat.avatarUrl,
+        isPublic: updatedChat.isPublic,
+        maxMembers: updatedChat.maxMembers,
+        settings: updatedChat.settings ?? {
+          whoCanSendMessages: "all",
+          whoCanAddMembers: "all",
+          historyVisibleToNewMembers: true,
+        },
+        createdAt: updatedChat.createdAt,
+        updatedAt: updatedChat.updatedAt,
+      });
+    }
+  );
+
+  /**
+   * POST /chats/:id/members - Add members to a group chat
+   * Body: { member_ids: string[] }
+   * Returns: { added: number, members: Array }
+   */
+  fastify.post<{ Params: { id: string }; Body: AddMembersBody }>(
+    "/chats/:id/members",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id } = request.params;
+      const { member_ids } = request.body;
+
+      // Validate UUID format
+      if (!UUID_REGEX.test(id)) {
+        return reply.status(400).send({
+          error: "Invalid chat ID format",
+        });
+      }
+
+      // Validate member_ids is an array
+      if (!member_ids || !Array.isArray(member_ids)) {
+        return reply.status(400).send({
+          error: "member_ids must be an array",
+        });
+      }
+
+      if (member_ids.length === 0) {
+        return reply.status(400).send({
+          error: "member_ids cannot be empty",
+        });
+      }
+
+      // Validate each member_id format
+      for (const memberId of member_ids) {
+        if (!UUID_REGEX.test(memberId)) {
+          return reply.status(400).send({
+            error: `Invalid member_id format: ${memberId}`,
+          });
+        }
+      }
+
+      const currentUserId = request.user.id;
+
+      // Get the chat to verify it's a group
+      const [chat] = await db
+        .select()
+        .from(chats)
+        .where(eq(chats.id, id))
+        .limit(1);
+
+      if (!chat) {
+        return reply.status(404).send({
+          error: "Chat not found",
+        });
+      }
+
+      if (chat.type === "dm") {
+        return reply.status(400).send({
+          error: "Cannot add members to a DM",
+        });
+      }
+
+      // Get user's membership and role
+      const [membership] = await db
+        .select()
+        .from(chatMembers)
+        .where(
+          and(
+            eq(chatMembers.chatId, id),
+            eq(chatMembers.userId, currentUserId)
+          )
+        )
+        .limit(1);
+
+      if (!membership) {
+        return reply.status(403).send({
+          error: "Access denied - not a member of this chat",
+        });
+      }
+
+      // Check who can add members based on settings
+      const chatSettings = (chat.settings ?? {}) as Record<string, unknown>;
+      const whoCanAddMembers = chatSettings.whoCanAddMembers ?? "all";
+
+      if (whoCanAddMembers === "admins_only") {
+        if (membership.role !== "owner" && membership.role !== "admin") {
+          return reply.status(403).send({
+            error: "Only group owner or admin can add members",
+          });
+        }
+      }
+
+      // Remove duplicates
+      const uniqueMemberIds = [...new Set(member_ids)];
+
+      // Check if users already are members
+      const existingMembers = await db
+        .select({ userId: chatMembers.userId })
+        .from(chatMembers)
+        .where(
+          and(
+            eq(chatMembers.chatId, id),
+            inArray(chatMembers.userId, uniqueMemberIds)
+          )
+        );
+
+      const existingMemberIds = new Set(existingMembers.map((m) => m.userId));
+      const newMemberIds = uniqueMemberIds.filter((mid) => !existingMemberIds.has(mid));
+
+      if (newMemberIds.length === 0) {
+        return reply.status(200).send({
+          added: 0,
+          message: "All users are already members",
+        });
+      }
+
+      // Validate all new members exist and are in the same org
+      const foundUsers = await db
+        .select({ id: users.id, orgId: users.orgId, displayName: users.displayName })
+        .from(users)
+        .where(inArray(users.id, newMemberIds));
+
+      const foundUserIds = new Set(foundUsers.map((u) => u.id));
+      const missingUserIds = newMemberIds.filter((mid) => !foundUserIds.has(mid));
+
+      if (missingUserIds.length > 0) {
+        return reply.status(404).send({
+          error: `Users not found: ${missingUserIds.join(", ")}`,
+        });
+      }
+
+      // Check all users are in the same org
+      const wrongOrgUsers = foundUsers.filter((u) => u.orgId !== chat.orgId);
+      if (wrongOrgUsers.length > 0) {
+        return reply.status(400).send({
+          error: `Users not in same organization: ${wrongOrgUsers.map((u) => u.id).join(", ")}`,
+        });
+      }
+
+      // Add the members
+      const memberValues = newMemberIds.map((userId) => ({
+        chatId: id,
+        userId,
+        role: "member" as const,
+      }));
+
+      await db.insert(chatMembers).values(memberValues);
+
+      // Create system message for members added
+      const memberNames = foundUsers.map((u) => u.displayName).filter(Boolean);
+      await createSystemMessage(id, currentUserId, {
+        action: "members_added",
+        addedBy: request.user.displayName,
+        members: memberNames,
+      });
+
+      // Get updated member list
+      const members = await db
+        .select({
+          userId: chatMembers.userId,
+          role: chatMembers.role,
+          joinedAt: chatMembers.joinedAt,
+          displayName: users.displayName,
+          avatarUrl: users.avatarUrl,
+          email: users.email,
+        })
+        .from(chatMembers)
+        .innerJoin(users, eq(chatMembers.userId, users.id))
+        .where(eq(chatMembers.chatId, id));
+
+      return reply.status(201).send({
+        added: newMemberIds.length,
+        members,
+      });
+    }
+  );
+
+  /**
+   * DELETE /chats/:id/members/:userId - Remove a member from a group chat
+   * Returns: { success: true }
+   */
+  fastify.delete<{ Params: { id: string; userId: string } }>(
+    "/chats/:id/members/:userId",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id, userId } = request.params;
+
+      // Validate UUID formats
+      if (!UUID_REGEX.test(id)) {
+        return reply.status(400).send({
+          error: "Invalid chat ID format",
+        });
+      }
+
+      if (!UUID_REGEX.test(userId)) {
+        return reply.status(400).send({
+          error: "Invalid user ID format",
+        });
+      }
+
+      const currentUserId = request.user.id;
+
+      // Get the chat to verify it's a group
+      const [chat] = await db
+        .select()
+        .from(chats)
+        .where(eq(chats.id, id))
+        .limit(1);
+
+      if (!chat) {
+        return reply.status(404).send({
+          error: "Chat not found",
+        });
+      }
+
+      if (chat.type === "dm") {
+        return reply.status(400).send({
+          error: "Cannot remove members from a DM",
+        });
+      }
+
+      // Get current user's membership
+      const [currentMembership] = await db
+        .select()
+        .from(chatMembers)
+        .where(
+          and(
+            eq(chatMembers.chatId, id),
+            eq(chatMembers.userId, currentUserId)
+          )
+        )
+        .limit(1);
+
+      if (!currentMembership) {
+        return reply.status(403).send({
+          error: "Access denied - not a member of this chat",
+        });
+      }
+
+      // Get target user's membership
+      const [targetMembership] = await db
+        .select()
+        .from(chatMembers)
+        .where(
+          and(
+            eq(chatMembers.chatId, id),
+            eq(chatMembers.userId, userId)
+          )
+        )
+        .limit(1);
+
+      if (!targetMembership) {
+        return reply.status(404).send({
+          error: "User is not a member of this chat",
+        });
+      }
+
+      // Users can remove themselves (leave the group)
+      if (userId === currentUserId) {
+        if (currentMembership.role === "owner") {
+          return reply.status(400).send({
+            error: "Owner cannot leave the group. Transfer ownership first.",
+          });
+        }
+
+        await db
+          .delete(chatMembers)
+          .where(
+            and(
+              eq(chatMembers.chatId, id),
+              eq(chatMembers.userId, userId)
+            )
+          );
+
+        // Get user info for system message
+        const [removedUser] = await db
+          .select({ displayName: users.displayName })
+          .from(users)
+          .where(eq(users.id, userId))
+          .limit(1);
+
+        await createSystemMessage(id, currentUserId, {
+          action: "member_left",
+          member: removedUser?.displayName ?? "Unknown",
+        });
+
+        return reply.status(200).send({ success: true });
+      }
+
+      // Owner can remove anyone (except themselves)
+      // Admin can remove members only (not other admins or owner)
+      if (currentMembership.role === "owner") {
+        // Owner can remove anyone
+      } else if (currentMembership.role === "admin") {
+        if (targetMembership.role === "owner" || targetMembership.role === "admin") {
+          return reply.status(403).send({
+            error: "Admins cannot remove other admins or the owner",
+          });
+        }
+      } else {
+        return reply.status(403).send({
+          error: "Only owner or admin can remove members",
+        });
+      }
+
+      // Remove the member
+      await db
+        .delete(chatMembers)
+        .where(
+          and(
+            eq(chatMembers.chatId, id),
+            eq(chatMembers.userId, userId)
+          )
+        );
+
+      // Get user info for system message
+      const [removedUser] = await db
+        .select({ displayName: users.displayName })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+
+      await createSystemMessage(id, currentUserId, {
+        action: "member_removed",
+        removedBy: request.user.displayName,
+        member: removedUser?.displayName ?? "Unknown",
+      });
+
+      return reply.status(200).send({ success: true });
+    }
+  );
+
+  /**
+   * PATCH /chats/:id/members/:userId - Update a member's role
+   * Body: { role: "admin" | "member" }
+   * Returns: Updated member info
+   */
+  fastify.patch<{ Params: { id: string; userId: string }; Body: UpdateMemberRoleBody }>(
+    "/chats/:id/members/:userId",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id, userId } = request.params;
+      const { role } = request.body;
+
+      // Validate UUID formats
+      if (!UUID_REGEX.test(id)) {
+        return reply.status(400).send({
+          error: "Invalid chat ID format",
+        });
+      }
+
+      if (!UUID_REGEX.test(userId)) {
+        return reply.status(400).send({
+          error: "Invalid user ID format",
+        });
+      }
+
+      // Validate role
+      if (!role || !["admin", "member"].includes(role)) {
+        return reply.status(400).send({
+          error: "role must be 'admin' or 'member'",
+        });
+      }
+
+      const currentUserId = request.user.id;
+
+      // Get the chat to verify it's a group
+      const [chat] = await db
+        .select()
+        .from(chats)
+        .where(eq(chats.id, id))
+        .limit(1);
+
+      if (!chat) {
+        return reply.status(404).send({
+          error: "Chat not found",
+        });
+      }
+
+      if (chat.type === "dm") {
+        return reply.status(400).send({
+          error: "Cannot change roles in a DM",
+        });
+      }
+
+      // Get current user's membership - only owner can change roles
+      const [currentMembership] = await db
+        .select()
+        .from(chatMembers)
+        .where(
+          and(
+            eq(chatMembers.chatId, id),
+            eq(chatMembers.userId, currentUserId)
+          )
+        )
+        .limit(1);
+
+      if (!currentMembership) {
+        return reply.status(403).send({
+          error: "Access denied - not a member of this chat",
+        });
+      }
+
+      if (currentMembership.role !== "owner") {
+        return reply.status(403).send({
+          error: "Only the group owner can change member roles",
+        });
+      }
+
+      // Get target user's membership
+      const [targetMembership] = await db
+        .select()
+        .from(chatMembers)
+        .where(
+          and(
+            eq(chatMembers.chatId, id),
+            eq(chatMembers.userId, userId)
+          )
+        )
+        .limit(1);
+
+      if (!targetMembership) {
+        return reply.status(404).send({
+          error: "User is not a member of this chat",
+        });
+      }
+
+      // Cannot change owner's role
+      if (targetMembership.role === "owner") {
+        return reply.status(400).send({
+          error: "Cannot change the owner's role. Transfer ownership instead.",
+        });
+      }
+
+      // Cannot change your own role
+      if (userId === currentUserId) {
+        return reply.status(400).send({
+          error: "Cannot change your own role",
+        });
+      }
+
+      // Update the role
+      const [updated] = await db
+        .update(chatMembers)
+        .set({ role })
+        .where(
+          and(
+            eq(chatMembers.chatId, id),
+            eq(chatMembers.userId, userId)
+          )
+        )
+        .returning();
+
+      // Get user info for system message
+      const [targetUser] = await db
+        .select({ displayName: users.displayName, avatarUrl: users.avatarUrl, email: users.email })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+
+      await createSystemMessage(id, currentUserId, {
+        action: role === "admin" ? "admin_added" : "admin_removed",
+        changedBy: request.user.displayName,
+        member: targetUser?.displayName ?? "Unknown",
+      });
+
+      return reply.status(200).send({
+        userId: updated.userId,
+        role: updated.role,
+        joinedAt: updated.joinedAt,
+        displayName: targetUser?.displayName,
+        avatarUrl: targetUser?.avatarUrl,
+        email: targetUser?.email,
       });
     }
   );
