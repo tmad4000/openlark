@@ -226,14 +226,9 @@ export const eventsRoutes = async (fastify: FastifyInstance) => {
           userId,
           type: "event_invite" as const,
           title: "Event Invitation",
-          body: `You've been invited to: ${title}`,
-          data: {
-            eventId: newEvent.id,
-            eventTitle: title,
-            startTime: start_time,
-            endTime: end_time,
-            invitedBy: request.user.displayName || request.user.email,
-          },
+          body: `You've been invited to "${title}" by ${request.user.displayName || request.user.email}`,
+          entityType: "event" as const,
+          entityId: newEvent.id,
         }));
 
       if (notificationValues.length > 0) {
@@ -771,14 +766,9 @@ export const eventsRoutes = async (fastify: FastifyInstance) => {
             userId,
             type: "event_invite" as const,
             title: "Event Invitation",
-            body: `You've been invited to: ${updatedEvent.title}`,
-            data: {
-              eventId: updatedEvent.id,
-              eventTitle: updatedEvent.title,
-              startTime: updatedEvent.startTime.toISOString(),
-              endTime: updatedEvent.endTime.toISOString(),
-              invitedBy: request.user.displayName || request.user.email,
-            },
+            body: `You've been invited to "${updatedEvent.title}" by ${request.user.displayName || request.user.email}`,
+            entityType: "event" as const,
+            entityId: updatedEvent.id,
           }));
 
           await db.insert(notifications).values(notificationValues);
@@ -808,12 +798,9 @@ export const eventsRoutes = async (fastify: FastifyInstance) => {
           userId: a.userId,
           type: "event_updated" as const,
           title: "Event Updated",
-          body: `Event "${updatedEvent.title}" has been updated`,
-          data: {
-            eventId: updatedEvent.id,
-            eventTitle: updatedEvent.title,
-            updatedBy: request.user.displayName || request.user.email,
-          },
+          body: `"${updatedEvent.title}" has been updated by ${request.user.displayName || request.user.email}`,
+          entityType: "event" as const,
+          entityId: updatedEvent.id,
         }));
 
       if (updateNotifications.length > 0) {
@@ -919,12 +906,9 @@ export const eventsRoutes = async (fastify: FastifyInstance) => {
           userId: a.userId,
           type: "event_cancelled" as const,
           title: "Event Cancelled",
-          body: `Event "${existingEvent.title}" has been cancelled`,
-          data: {
-            eventId: existingEvent.id,
-            eventTitle: existingEvent.title,
-            cancelledBy: request.user.displayName || request.user.email,
-          },
+          body: `"${existingEvent.title}" has been cancelled by ${request.user.displayName || request.user.email}`,
+          entityType: "event" as const,
+          entityId: existingEvent.id,
         }));
 
       if (cancelNotifications.length > 0) {
@@ -937,4 +921,338 @@ export const eventsRoutes = async (fastify: FastifyInstance) => {
       });
     }
   );
+
+  /**
+   * POST /events/:id/rsvp - Update RSVP status for an event
+   * Body: { response: "yes" | "no" | "maybe" }
+   */
+  fastify.post<{
+    Params: { id: string };
+    Body: { response: "yes" | "no" | "maybe" };
+  }>(
+    "/events/:id/rsvp",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id: eventId } = request.params;
+      const { response } = request.body;
+
+      if (!UUID_REGEX.test(eventId)) {
+        return reply.status(400).send({
+          error: "Invalid event ID format",
+        });
+      }
+
+      if (!response || !["yes", "no", "maybe"].includes(response)) {
+        return reply.status(400).send({
+          error: "response must be 'yes', 'no', or 'maybe'",
+        });
+      }
+
+      const currentUserId = request.user.id;
+      const orgId = request.user.orgId;
+
+      if (!orgId) {
+        return reply.status(400).send({
+          error: "User must belong to an organization",
+        });
+      }
+
+      // Check if event exists and user is an attendee
+      const [event] = await db
+        .select()
+        .from(calendarEvents)
+        .where(
+          and(
+            eq(calendarEvents.id, eventId),
+            eq(calendarEvents.orgId, orgId),
+            isNull(calendarEvents.deletedAt)
+          )
+        )
+        .limit(1);
+
+      if (!event) {
+        return reply.status(404).send({
+          error: "Event not found",
+        });
+      }
+
+      // Check if user is an attendee
+      const [attendee] = await db
+        .select()
+        .from(eventAttendees)
+        .where(
+          and(
+            eq(eventAttendees.eventId, eventId),
+            eq(eventAttendees.userId, currentUserId)
+          )
+        )
+        .limit(1);
+
+      if (!attendee) {
+        return reply.status(403).send({
+          error: "You are not an attendee of this event",
+        });
+      }
+
+      // Update RSVP
+      const [updatedAttendee] = await db
+        .update(eventAttendees)
+        .set({
+          rsvp: response,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(eventAttendees.eventId, eventId),
+            eq(eventAttendees.userId, currentUserId)
+          )
+        )
+        .returning();
+
+      // Notify event creator of RSVP change (if not self)
+      if (event.creatorId !== currentUserId) {
+        await db.insert(notifications).values({
+          userId: event.creatorId,
+          type: "event_updated",
+          title: "RSVP Update",
+          body: `${request.user.displayName || request.user.email} responded "${response}" to "${event.title}"`,
+          entityType: "event" as const,
+          entityId: event.id,
+        });
+      }
+
+      return reply.status(200).send({
+        success: true,
+        rsvp: updatedAttendee.rsvp,
+      });
+    }
+  );
+
+  /**
+   * GET /availability - Get free/busy slots for multiple users
+   * Query: user_ids (comma-separated), start (ISO date), end (ISO date)
+   * Returns: Free/busy slots per user
+   */
+  fastify.get<{
+    Querystring: { user_ids: string; start: string; end: string };
+  }>(
+    "/availability",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { user_ids, start, end } = request.query;
+
+      if (!user_ids || !start || !end) {
+        return reply.status(400).send({
+          error: "user_ids, start, and end query parameters are required",
+        });
+      }
+
+      const startDate = new Date(start);
+      const endDate = new Date(end);
+
+      if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+        return reply.status(400).send({
+          error: "Invalid date format for start or end",
+        });
+      }
+
+      const orgId = request.user.orgId;
+
+      if (!orgId) {
+        return reply.status(400).send({
+          error: "User must belong to an organization",
+        });
+      }
+
+      const userIdList = user_ids.split(",").map((id) => id.trim());
+
+      // Validate all user IDs
+      for (const id of userIdList) {
+        if (!UUID_REGEX.test(id)) {
+          return reply.status(400).send({
+            error: `Invalid user ID format: ${id}`,
+          });
+        }
+      }
+
+      // Verify all users exist and are in the same org
+      const usersInOrg = await db
+        .select({ id: users.id, displayName: users.displayName })
+        .from(users)
+        .where(and(inArray(users.id, userIdList), eq(users.orgId, orgId)));
+
+      if (usersInOrg.length !== userIdList.length) {
+        return reply.status(400).send({
+          error: "One or more users not found in this organization",
+        });
+      }
+
+      // Get all events where these users are attendees with yes or pending RSVP
+      // and events overlap with the requested time range
+      const busySlots: Record<
+        string,
+        Array<{
+          start: string;
+          end: string;
+          eventTitle: string;
+          eventId: string;
+        }>
+      > = {};
+
+      // Initialize empty arrays for each user
+      for (const userId of userIdList) {
+        busySlots[userId] = [];
+      }
+
+      // Query events for all users at once
+      const attendeeEvents = await db
+        .select({
+          userId: eventAttendees.userId,
+          eventId: calendarEvents.id,
+          title: calendarEvents.title,
+          startTime: calendarEvents.startTime,
+          endTime: calendarEvents.endTime,
+          rsvp: eventAttendees.rsvp,
+        })
+        .from(eventAttendees)
+        .innerJoin(calendarEvents, eq(eventAttendees.eventId, calendarEvents.id))
+        .where(
+          and(
+            inArray(eventAttendees.userId, userIdList),
+            or(
+              eq(eventAttendees.rsvp, "yes"),
+              eq(eventAttendees.rsvp, "pending")
+            ),
+            isNull(calendarEvents.deletedAt),
+            // Event overlaps with range
+            lte(calendarEvents.startTime, endDate),
+            gte(calendarEvents.endTime, startDate)
+          )
+        )
+        .orderBy(calendarEvents.startTime);
+
+      // Group by user
+      for (const event of attendeeEvents) {
+        if (busySlots[event.userId]) {
+          busySlots[event.userId].push({
+            start: event.startTime.toISOString(),
+            end: event.endTime.toISOString(),
+            eventTitle: event.title,
+            eventId: event.eventId,
+          });
+        }
+      }
+
+      // Build response with user info
+      const availability = userIdList.map((userId) => {
+        const user = usersInOrg.find((u) => u.id === userId);
+        return {
+          userId,
+          displayName: user?.displayName || null,
+          busySlots: busySlots[userId] || [],
+          // Calculate free slots between busy slots (within working hours 9-18)
+          freeSlots: calculateFreeSlots(
+            busySlots[userId] || [],
+            startDate,
+            endDate
+          ),
+        };
+      });
+
+      return reply.status(200).send({
+        availability,
+        requestedRange: {
+          start: startDate.toISOString(),
+          end: endDate.toISOString(),
+        },
+      });
+    }
+  );
 };
+
+/**
+ * Calculate free slots between busy slots, respecting working hours (9:00-18:00)
+ */
+function calculateFreeSlots(
+  busySlots: Array<{ start: string; end: string }>,
+  rangeStart: Date,
+  rangeEnd: Date
+): Array<{ start: string; end: string }> {
+  const freeSlots: Array<{ start: string; end: string }> = [];
+  const WORK_START_HOUR = 9;
+  const WORK_END_HOUR = 18;
+
+  // Generate working hour blocks for each day in range
+  const currentDate = new Date(rangeStart);
+  currentDate.setHours(0, 0, 0, 0);
+
+  while (currentDate <= rangeEnd) {
+    const dayStart = new Date(currentDate);
+    dayStart.setHours(WORK_START_HOUR, 0, 0, 0);
+
+    const dayEnd = new Date(currentDate);
+    dayEnd.setHours(WORK_END_HOUR, 0, 0, 0);
+
+    // Skip weekends
+    const dayOfWeek = currentDate.getDay();
+    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+      // Clamp to requested range
+      const effectiveStart = dayStart < rangeStart ? rangeStart : dayStart;
+      const effectiveEnd = dayEnd > rangeEnd ? rangeEnd : dayEnd;
+
+      if (effectiveStart < effectiveEnd) {
+        // Find busy slots that overlap with this working day
+        const dayBusySlots = busySlots.filter((slot) => {
+          const slotStart = new Date(slot.start);
+          const slotEnd = new Date(slot.end);
+          return slotStart < effectiveEnd && slotEnd > effectiveStart;
+        });
+
+        // Sort busy slots by start time
+        dayBusySlots.sort(
+          (a, b) => new Date(a.start).getTime() - new Date(b.start).getTime()
+        );
+
+        // Calculate free time between busy slots
+        let cursor = effectiveStart;
+
+        for (const slot of dayBusySlots) {
+          const slotStart = new Date(slot.start);
+          const slotEnd = new Date(slot.end);
+
+          // Clamp slot to working hours
+          const effectiveSlotStart =
+            slotStart < effectiveStart ? effectiveStart : slotStart;
+          const effectiveSlotEnd =
+            slotEnd > effectiveEnd ? effectiveEnd : slotEnd;
+
+          // If there's a gap before this slot, it's free time
+          if (cursor < effectiveSlotStart) {
+            freeSlots.push({
+              start: cursor.toISOString(),
+              end: effectiveSlotStart.toISOString(),
+            });
+          }
+
+          // Move cursor past this busy slot
+          if (effectiveSlotEnd > cursor) {
+            cursor = effectiveSlotEnd;
+          }
+        }
+
+        // If there's time left at the end of the day
+        if (cursor < effectiveEnd) {
+          freeSlots.push({
+            start: cursor.toISOString(),
+            end: effectiveEnd.toISOString(),
+          });
+        }
+      }
+    }
+
+    // Move to next day
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+
+  return freeSlots;
+}

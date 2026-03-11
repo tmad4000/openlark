@@ -780,8 +780,8 @@
         "Typecheck passes"
       ],
       "priority": 47,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented POST /events/:id/rsvp with validation and notification to event creator. Implemented GET /availability with free/busy calculation respecting working hours (9-18, Mon-Fri), computing availability from events where user RSVP'd yes or pending."
     },
     {
       "id": "US-048",
