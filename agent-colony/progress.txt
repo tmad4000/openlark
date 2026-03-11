@@ -2848,3 +2848,31 @@ From progress log that held true this iteration:
    This enables storing Yjs state (Uint8Array) directly in PostgreSQL bytea columns.
 
 ---
+
+## 2026-03-10 - Iteration 28 - SIMPLIFY
+
+### Reuse findings
+- **Duplicate DocsService instantiation** (`docs.routes.ts:16` and `hocuspocus.ts:7`): Two separate instances of `DocsService` were created. **Fixed** — `docs.routes.ts` now imports the instance from `hocuspocus.ts`.
+- **Duplicate verifyToken logic** (`hocuspocus.ts:22-29` vs `auth.service.ts:55-57`): Similar JWT verification code exists in both files. **Skipped** — different error semantics (null vs throw). Extracting would couple auth and docs modules for 7 lines of code.
+
+### Quality findings
+- **Console.log in Hocuspocus server** (`hocuspocus.ts:83-91, 104, 115`): Used `console.log` for connection events and errors. **Fixed** — replaced with structured JSON logging to stdout/stderr, suppressed in test environment.
+- **Missing authorization on permission routes** (`docs.routes.ts:247-292`): `PATCH /permissions/:permissionId` and `DELETE /permissions/:permissionId` allow ANY authenticated user to modify ANY permission. TODO comments acknowledge the issue. **Deferred** — created task `code-ydq` (P1 bug) to fix this security issue.
+
+### Efficiency findings
+- **N+1 potential in getUserDocuments**: Two queries (permissions then documents) is the correct pattern for this use case. **Skipped** — readable and correct.
+
+### Deferred to tasks
+- `code-ydq`: Security: Add authorization to docs permission routes (P1 bug)
+
+### Skipped
+- **Duplicate verifyToken logic**: Different error semantics (null vs throw), only 7 lines, extracting creates coupling
+- **Query structure in getUserDocuments**: Readable and correct, optimization would reduce readability for marginal gain
+
+### Reinforced patterns
+- ✅ Module structure (routes, service, schemas) — docs module follows exactly
+- ✅ Auth middleware reuse (`preHandler: authenticate`) — all docs endpoints use it
+- ✅ formatZodError utility from `utils/validation.ts` — reused in docs routes
+- ✅ Single service instance exported from module — now applied to DocsService
+
+---
