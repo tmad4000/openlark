@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { api, type CalendarEvent, type Calendar } from "@/lib/api";
+import { useState, useEffect, useRef } from "react";
+import { api, type CalendarEvent, type Calendar, type UserSearchResult } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,6 +34,14 @@ export function CreateEventDialog({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Attendee selection state
+  const [attendeeQuery, setAttendeeQuery] = useState("");
+  const [attendeeResults, setAttendeeResults] = useState<UserSearchResult[]>([]);
+  const [selectedAttendees, setSelectedAttendees] = useState<UserSearchResult[]>([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
   // Load calendars when dialog opens
   useEffect(() => {
     if (open) {
@@ -50,8 +58,53 @@ export function CreateEventDialog({
       setEndTime("");
       setLocation("");
       setError(null);
+      setAttendeeQuery("");
+      setAttendeeResults([]);
+      setSelectedAttendees([]);
+      setShowDropdown(false);
     }
   }, [open]);
+
+  // Search for users when attendee query changes
+  useEffect(() => {
+    const searchUsers = async () => {
+      if (attendeeQuery.trim().length < 1) {
+        setAttendeeResults([]);
+        setShowDropdown(false);
+        return;
+      }
+
+      setSearchLoading(true);
+      try {
+        const response = await api.searchUsers(attendeeQuery.trim());
+        // Filter out already selected attendees
+        const selectedIds = new Set(selectedAttendees.map((a) => a.id));
+        const filtered = response.users.filter((u) => !selectedIds.has(u.id));
+        setAttendeeResults(filtered);
+        setShowDropdown(filtered.length > 0);
+      } catch (err) {
+        console.error("Failed to search users:", err);
+        setAttendeeResults([]);
+      } finally {
+        setSearchLoading(false);
+      }
+    };
+
+    const debounce = setTimeout(searchUsers, 300);
+    return () => clearTimeout(debounce);
+  }, [attendeeQuery, selectedAttendees]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowDropdown(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   async function loadCalendars() {
     try {
@@ -64,6 +117,17 @@ export function CreateEventDialog({
     } catch (err) {
       console.error("Failed to load calendars:", err);
     }
+  }
+
+  function addAttendee(user: UserSearchResult) {
+    setSelectedAttendees((prev) => [...prev, user]);
+    setAttendeeQuery("");
+    setAttendeeResults([]);
+    setShowDropdown(false);
+  }
+
+  function removeAttendee(userId: string) {
+    setSelectedAttendees((prev) => prev.filter((a) => a.id !== userId));
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -86,6 +150,10 @@ export function CreateEventDialog({
         startTime: new Date(startTime).toISOString(),
         endTime: new Date(endTime).toISOString(),
         location: location.trim() || undefined,
+        attendeeIds:
+          selectedAttendees.length > 0
+            ? selectedAttendees.map((a) => a.id)
+            : undefined,
       });
 
       onEventCreated?.(response.event);
@@ -158,6 +226,69 @@ export function CreateEventDialog({
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Optional description"
             />
+          </div>
+
+          {/* Attendees */}
+          <div className="space-y-2">
+            <Label htmlFor="attendees">Attendees</Label>
+            <div className="relative" ref={dropdownRef}>
+              <Input
+                id="attendees"
+                value={attendeeQuery}
+                onChange={(e) => setAttendeeQuery(e.target.value)}
+                placeholder="Search for people to invite..."
+                autoComplete="off"
+              />
+
+              {/* Search results dropdown */}
+              {showDropdown && (
+                <div className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-48 overflow-auto">
+                  {searchLoading ? (
+                    <div className="px-3 py-2 text-sm text-gray-500">
+                      Searching...
+                    </div>
+                  ) : (
+                    attendeeResults.map((user) => (
+                      <button
+                        key={user.id}
+                        type="button"
+                        onClick={() => addAttendee(user)}
+                        className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 focus:bg-gray-100 dark:focus:bg-gray-700 focus:outline-none"
+                      >
+                        <div className="font-medium">
+                          {user.displayName || user.email}
+                        </div>
+                        <div className="text-xs text-gray-500">{user.email}</div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Selected attendees tags */}
+            {selectedAttendees.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-2">
+                {selectedAttendees.map((attendee) => (
+                  <span
+                    key={attendee.id}
+                    data-testid={`attendee-tag-${attendee.id}`}
+                    className="inline-flex items-center gap-1 px-2 py-1 text-sm bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded-full"
+                  >
+                    {attendee.displayName || attendee.email}
+                    <button
+                      type="button"
+                      data-testid={`remove-attendee-${attendee.id}`}
+                      onClick={() => removeAttendee(attendee.id)}
+                      className="hover:text-blue-600 dark:hover:text-blue-300"
+                      aria-label={`Remove ${attendee.displayName || attendee.email}`}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Start Time */}

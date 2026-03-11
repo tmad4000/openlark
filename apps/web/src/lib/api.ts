@@ -114,6 +114,16 @@ class ApiClient {
     return this.request<{ user: User; organization: Organization }>("/auth/me");
   }
 
+  // Search users in the same organization
+  async searchUsers(query?: string) {
+    const params = new URLSearchParams();
+    if (query) params.set("q", query);
+    const queryString = params.toString();
+    return this.request<{ users: UserSearchResult[] }>(
+      `/auth/users${queryString ? `?${queryString}` : ""}`
+    );
+  }
+
   // Chat endpoints
   async getChats() {
     return this.request<{ chats: Chat[] }>("/messenger/chats");
@@ -265,6 +275,13 @@ export interface User {
   avatarUrl: string | null;
   status: string;
   orgId: string;
+}
+
+export interface UserSearchResult {
+  id: string;
+  email: string;
+  displayName: string;
+  avatarUrl: string | null;
 }
 
 export interface Organization {

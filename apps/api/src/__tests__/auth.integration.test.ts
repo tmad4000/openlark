@@ -424,4 +424,101 @@ describe.skipIf(SKIP_DB_TESTS)("Auth API - Integration", () => {
       expect(revokeBody.code).toBe("SESSION_NOT_FOUND");
     });
   });
+
+  describe("User search (GET /api/v1/auth/users)", () => {
+    it("returns users in the same organization", async () => {
+      // Register first user (creates org)
+      const regRes = await app.inject({
+        method: "POST",
+        url: "/api/v1/auth/register",
+        payload: {
+          email: "admin@search.test",
+          password: "SecurePass123!",
+          displayName: "Admin User",
+          orgName: "Search Test Org",
+        },
+      });
+      expect(regRes.statusCode).toBe(201);
+      const regBody = JSON.parse(regRes.body);
+      const token = regBody.data.token;
+
+      // Search without query - should return all users in org
+      const searchRes = await app.inject({
+        method: "GET",
+        url: "/api/v1/auth/users",
+        headers: {
+          authorization: `Bearer ${token}`,
+        },
+      });
+
+      expect(searchRes.statusCode).toBe(200);
+      const searchBody = JSON.parse(searchRes.body);
+      expect(searchBody.data.users).toHaveLength(1);
+      expect(searchBody.data.users[0].displayName).toBe("Admin User");
+      // Should NOT include password or TOTP
+      expect(searchBody.data.users[0].passwordHash).toBeUndefined();
+      expect(searchBody.data.users[0].totpSecret).toBeUndefined();
+    });
+
+    it("filters users by display name query", async () => {
+      // Register first user
+      const regRes = await app.inject({
+        method: "POST",
+        url: "/api/v1/auth/register",
+        payload: {
+          email: "alice@search.test",
+          password: "SecurePass123!",
+          displayName: "Alice Anderson",
+          orgName: "Filter Test Org",
+        },
+      });
+      expect(regRes.statusCode).toBe(201);
+      const regBody = JSON.parse(regRes.body);
+      const token = regBody.data.token;
+
+      // Search for "alice"
+      const searchRes = await app.inject({
+        method: "GET",
+        url: "/api/v1/auth/users?q=alice",
+        headers: {
+          authorization: `Bearer ${token}`,
+        },
+      });
+
+      expect(searchRes.statusCode).toBe(200);
+      const searchBody = JSON.parse(searchRes.body);
+      expect(searchBody.data.users).toHaveLength(1);
+      expect(searchBody.data.users[0].displayName).toBe("Alice Anderson");
+    });
+
+    it("returns empty array when no users match query", async () => {
+      // Register first user
+      const regRes = await app.inject({
+        method: "POST",
+        url: "/api/v1/auth/register",
+        payload: {
+          email: "bob@search.test",
+          password: "SecurePass123!",
+          displayName: "Bob Brown",
+          orgName: "Empty Test Org",
+        },
+      });
+      expect(regRes.statusCode).toBe(201);
+      const regBody = JSON.parse(regRes.body);
+      const token = regBody.data.token;
+
+      // Search for non-existent name
+      const searchRes = await app.inject({
+        method: "GET",
+        url: "/api/v1/auth/users?q=zzzznouser",
+        headers: {
+          authorization: `Bearer ${token}`,
+        },
+      });
+
+      expect(searchRes.statusCode).toBe(200);
+      const searchBody = JSON.parse(searchRes.body);
+      expect(searchBody.data.users).toHaveLength(0);
+    });
+  });
 });

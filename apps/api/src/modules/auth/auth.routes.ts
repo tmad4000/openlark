@@ -150,4 +150,23 @@ export async function authRoutes(app: FastifyInstance) {
       return reply.send({ data: { success: true } });
     }
   );
+
+  // GET /auth/users - Search users in the same organization
+  // Used for attendee selection in calendar events, chat member selection, etc.
+  app.get<{ Querystring: { q?: string; limit?: string } }>(
+    "/users",
+    { preHandler: authenticate },
+    async (req, reply) => {
+      const query = req.query.q;
+      const limit = req.query.limit ? parseInt(req.query.limit, 10) : 20;
+
+      const users = await authService.searchOrgUsers(
+        req.user!.orgId,
+        query,
+        Math.min(limit, 50) // Cap at 50
+      );
+
+      return reply.send({ data: { users } });
+    }
+  );
 }

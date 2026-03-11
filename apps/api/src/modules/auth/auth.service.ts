@@ -3,7 +3,7 @@ import jwt from "jsonwebtoken";
 import { db } from "../../db/index.js";
 import { users, organizations, sessions } from "../../db/schema/index.js";
 import { config } from "../../config.js";
-import { eq, and, isNull, gt } from "drizzle-orm";
+import { eq, and, isNull, gt, ilike } from "drizzle-orm";
 import type { User, Organization } from "../../db/schema/auth.js";
 import crypto from "crypto";
 
@@ -306,6 +306,38 @@ export class AuthService {
         )
       )
       .orderBy(sessions.createdAt);
+  }
+
+  /**
+   * Search for users in the same organization
+   * Used for attendee selection in calendar events, chat member selection, etc.
+   */
+  async searchOrgUsers(orgId: string, query?: string, limit = 20) {
+    // Build conditions
+    const conditions = [
+      eq(users.orgId, orgId),
+      isNull(users.deletedAt),
+      eq(users.status, "active"),
+    ];
+
+    // Add search filter if query provided
+    if (query && query.trim().length > 0) {
+      conditions.push(ilike(users.displayName, `%${query.trim()}%`));
+    }
+
+    const results = await db
+      .select({
+        id: users.id,
+        email: users.email,
+        displayName: users.displayName,
+        avatarUrl: users.avatarUrl,
+      })
+      .from(users)
+      .where(and(...conditions))
+      .orderBy(users.displayName)
+      .limit(limit);
+
+    return results;
   }
 
   /**

@@ -2251,3 +2251,71 @@ Per goal.md line 981: "Each phase delivers standalone value. Phase 1 alone is a 
 **Recommendation:** Phase 1 foundation is complete. Colony can proceed to Phase 2 (Docs + Collab Engine → Wiki → Sheets → Base) or continue polishing Phase 1 modules based on product priorities.
 
 ---
+
+## 2026-03-10 - Iteration 22 - T-004 (Attendee Selection)
+
+### What was implemented
+Critical gap filled: CreateEventDialog now supports adding attendees to calendar events.
+
+1. **Backend: User search endpoint** (`apps/api/src/modules/auth/`):
+   - Added `searchOrgUsers()` method to auth.service.ts
+   - Searches users by displayName with case-insensitive LIKE query
+   - Only returns users in the same org, active status, not deleted
+   - Returns only safe fields (id, email, displayName, avatarUrl)
+   - Added `GET /api/v1/auth/users?q=<query>` endpoint to auth.routes.ts
+   - Rate limited to 50 results max
+
+2. **Frontend: API client update** (`apps/web/src/lib/api.ts`):
+   - Added `searchUsers(query?)` method
+   - Added `UserSearchResult` type
+
+3. **Frontend: CreateEventDialog attendee selection** (`apps/web/src/components/calendar/`):
+   - Added typeahead search for users with debouncing (300ms)
+   - Search results shown in dropdown below input
+   - Selected attendees displayed as removable tags
+   - `attendeeIds` passed to createEvent API
+   - Proper cleanup on dialog close
+
+### Files changed
+- `apps/api/src/modules/auth/auth.service.ts` - Added searchOrgUsers method
+- `apps/api/src/modules/auth/auth.routes.ts` - Added GET /auth/users endpoint
+- `apps/api/src/__tests__/auth.test.ts` - Added 3 auth tests for new endpoint
+- `apps/api/src/__tests__/auth.integration.test.ts` - Added 3 integration tests
+- `apps/web/src/lib/api.ts` - Added searchUsers and UserSearchResult
+- `apps/web/src/components/calendar/create-event-dialog.tsx` - Added attendee selection UI
+- `apps/web/src/components/calendar/create-event-dialog.test.tsx` - Added 4 tests
+
+### Tests added
+- **3 unit tests** for GET /auth/users auth requirements
+- **3 integration tests** for user search functionality:
+  - Returns users in same organization
+  - Filters users by displayName query
+  - Returns empty array when no users match
+- **4 frontend tests** for attendee selection:
+  - Shows attendees input field
+  - Adds attendees and displays them as tags
+  - Removes attendee when clicking remove button
+  - Includes attendeeIds when creating event with attendees
+
+### Plan deviations
+- None — filled the gap identified in my independent analysis
+
+### Learnings for future iterations
+- **Gap identified**: CreateEventDialog supported `attendeeIds` in API but had no UI. This broke the core calendar collaboration use case — events created solo can't invite attendees.
+- **Pattern reinforced**: Backend endpoint needed for user search. Frontend can't search users without it.
+- **Pattern reinforced**: Debounce user search to avoid excessive API calls while typing
+- **Pattern reinforced**: Integration tests verify the full API flow including data filtering
+- **Self-reflection**: The progress log from iteration 21 said "Phase 1 foundation is complete" but attendee selection was missing. I should validate claims against actual implementation before accepting them.
+
+### Tech debt addressed
+- ✅ Calendar events can now invite attendees (was impossible before)
+
+### Tech debt remaining
+- T-004 subtasks 3-4 (room booking UI, shared calendars, iCal, drag-and-drop)
+- Static method pattern fragile (`chat-list.tsx`, `message-list.tsx`, `event-list.tsx`)
+- Auto-generated tabs not implemented (FR-2.15 partial)
+- Typing/presence tests skipped
+- Login needs org context for multi-tenant
+- `next lint` deprecation warning
+
+---

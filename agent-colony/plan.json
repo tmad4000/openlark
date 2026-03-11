@@ -576,6 +576,12 @@
           "role": "reviewer",
           "value": 1,
           "reason": "Iteration 21 review: EventDetails component is well-implemented. RSVP bug fixed (iter 19). 3/5 subtasks complete. Calendar module has complete CRUD + RSVP flow now. Ready for subtasks 3-4 (room booking, shared calendars) when prioritized. Phase 1 Calendar foundation is solid."
+        },
+        {
+          "iteration": 22,
+          "role": "implementer",
+          "value": 1,
+          "reason": "Iteration 22 independent analysis confirms: Calendar has complete backend but frontend is missing attendee selection in CreateEventDialog. API supports attendeeIds but UI doesn't expose it. This is a critical gap - events created solo can't invite attendees. Should be fixed before Phase 1 is complete."
         }
       ],
       "comments": [
@@ -623,6 +629,11 @@
           "iteration": 21,
           "role": "reviewer",
           "message": "Iter 21 review: EventDetails follows established patterns well. Test coverage comprehensive (10 tests). Uses Promise.all for parallel fetching, which is the correct pattern. One minor observation: formatEventDateTime could be extracted to a shared util (same logic exists in event-list.tsx:58-76). Not blocking."
+        },
+        {
+          "iteration": 22,
+          "role": "implementer",
+          "message": "Iteration 22: Added attendee selection to CreateEventDialog. Created GET /auth/users endpoint for searching org members. Frontend now has typeahead user search with selected attendees displayed as tags. Events can now be created with attendees. Added 10 new tests (3 backend unit, 3 integration, 4 frontend)."
         }
       ],
       "status": "in-progress",
@@ -631,7 +642,7 @@
         "role": "implementer"
       },
       "claimedBy": {
-        "iteration": 20,
+        "iteration": 22,
         "role": "implementer"
       },
       "splitFrom": null
@@ -1369,7 +1380,7 @@
   ],
   "metadata": {
     "createdAt": "2026-03-04T21:00:00Z",
-    "totalIterations": 31,
+    "totalIterations": 32,
     "iterationLog": [
       {
         "iteration": 1,
@@ -1555,6 +1566,12 @@
         "iteration": 31,
         "role": "implementer",
         "taskWorked": "T-004",
+        "contextCompacted": false
+      },
+      {
+        "iteration": 32,
+        "role": "reviewer",
+        "taskWorked": null,
         "contextCompacted": false
       }
     ]
