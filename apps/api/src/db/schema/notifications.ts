@@ -17,6 +17,9 @@ export const notificationTypeEnum = pgEnum("notification_type", [
   "task_assigned",
   "approval_pending",
   "buzz",
+  "event_invite",
+  "event_updated",
+  "event_cancelled",
 ]);
 
 // Entity type enum - what the notification is about
@@ -26,6 +29,7 @@ export const notificationEntityTypeEnum = pgEnum("notification_entity_type", [
   "task",
   "approval",
   "document",
+  "event",
 ]);
 
 // Notifications table

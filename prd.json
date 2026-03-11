@@ -765,8 +765,8 @@
         "Typecheck passes"
       ],
       "priority": 46,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created events.ts routes with: POST /events (creates event with attendees, validates room/calendar/attendees, auto-subscribes creator with yes RSVP), GET /events (date range query, returns events from own + attending + subscribed calendars), GET /events/:id (full event details with attendees and room), PATCH /events/:id (updates event, manages attendees, notifies), DELETE /events/:id (soft delete with notification). Added event_invite/event_updated/event_cancelled notification types."
     },
     {
       "id": "US-047",
