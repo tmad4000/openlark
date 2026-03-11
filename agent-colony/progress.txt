@@ -2379,3 +2379,150 @@ Added room booking UI to complete T-004 subtask 3:
 - `next lint` deprecation warning
 
 ---
+
+## 2026-03-10 - Iteration 24 - REVIEW
+
+### Code quality observations
+
+**What looks good:**
+- Room booking UI (T-004 subtask 3) is well-implemented with proper patterns:
+  - CreateEventDialog loads rooms on dialog open, displays in dropdown with capacity info
+  - EventDetails fetches room info when event has roomId, displays non-critically (errors don't break component)
+  - 8 new tests covering room selection and display (5 CreateEventDialog, 3 EventDetails)
+- Build, lint, and all 358 tests pass:
+  - `@openlark/shared`: 8 tests
+  - `@openlark/api`: 225 tests (5 skipped for Redis timing)
+  - `@openlark/web`: 125 tests
+- Commit history remains clean with conventional commits referencing task IDs
+- Established patterns consistently followed:
+  - Component state reset on dialog close via useEffect
+  - Promise.all for parallel data fetching (event + attendees in EventDetails)
+  - Loading/error/empty states in all components
+  - Radix UI primitives (Dialog) used correctly
+
+**Areas needing attention:**
+
+1. **Duplicate date formatting logic** (`event-list.tsx:58`, `event-details.tsx:92`):
+   - `formatEventTime` in EventList and `formatEventDateTime` in EventDetails have similar logic
+   - Both format dates with locale options but different detail levels
+   - Could extract to shared `formatters.ts` utility when adding more calendar features
+   - Not blocking — duplication is contained to two files in same module
+
+2. **No single-room endpoint** (`event-details.tsx:52-58`):
+   - When displaying room info, EventDetails fetches ALL rooms via `getMeetingRooms()` then filters
+   - Works but creates N+1 potential if listing multiple events with rooms
+   - Consider adding `GET /calendar/rooms/:id` endpoint for Phase 2
+   - Not blocking — single-event view doesn't need optimization
+
+3. **Static method pattern in 3+ components**:
+   - `ChatList.addChat` (chat-list.tsx:51)
+   - `MessageList.addMessage` (message-list.tsx:138)
+   - `EventList.addEvent` (event-list.tsx:55)
+   - Pattern has been flagged since iteration 12 (now 12 iterations)
+   - Works reliably for single-instance pages but won't scale
+   - Consider React Context + event emitter or React Query pattern for Phase 2
+
+4. **React act() warnings in tests**:
+   - `create-event-dialog.test.tsx` produces `act(...)` warnings
+   - State updates in tests should be wrapped in `act()`
+   - Non-blocking — tests pass, warning is about test best practices
+
+5. **DialogContent accessibility warnings**:
+   - Missing `Description` or `aria-describedby` for DialogContent
+   - Should add `DialogDescription` component for accessibility
+   - Non-blocking — dialogs work, warning is for a11y compliance
+
+### Commit history review
+
+Recent 5 commits maintain quality:
+```
+eb7b307 docs: update progress log for iteration 23 (room booking UI T-004)
+7fa6da9 feat(calendar): add room booking UI to CreateEventDialog and EventDetails (T-004)
+a68a4a7 feat(calendar): add attendee selection to CreateEventDialog (T-004)
+0b8a8a4 docs: update progress log for iteration 21 (review)
+9b874fe docs: update progress log for iteration 20 (EventDetails T-004)
+```
+
+Pattern holds: Implementation commits reference task IDs, are atomic and well-scoped. Feature commit (7fa6da9) includes UI changes + tests in single commit.
+
+### Plan assessment
+
+**T-001 (Infrastructure):** Done ✓
+**T-023 (Frontend Shell):** Done ✓
+
+**T-002 (Auth):** Stable at 2/6 subtasks. No changes since last review. Auth foundation solid for Phase 1. Remaining subtasks (RLS, magic link, 2FA, departments, API keys) correctly deferred. Known limitation: login needs org context for multi-tenant (auth.service.ts:122).
+
+**T-003 (Messenger):** Solid at 4/6 subtasks. Core functionality complete. Static method pattern flagged 12 iterations ago, still present in 3 components. Remaining: subtask 3 (threads, rich text, forwarding), subtask 4 (typing/presence UI). These are Phase 2 scope.
+
+**T-004 (Calendar):** Strong at 4/5 subtasks. Room booking UI added this iteration. Only subtask 4 (shared calendars, iCal import/export, drag-and-drop) remains. Core calendar functionality is complete: events CRUD, RSVP, attendees, room booking.
+
+**Phase 1 completion assessment:**
+
+Per goal.md: "Each phase delivers standalone value. Phase 1 alone is a usable team communication tool."
+
+| Module | Status | Core Functionality |
+|--------|--------|-------------------|
+| Auth | ✅ | Register, login, sessions, org management |
+| Messenger | ✅ | Real-time chat, reactions, pins, favorites, tabs |
+| Calendar | ✅ | Events, RSVP, attendees, room booking |
+| Frontend | ✅ | Three-panel layout, navigation, theme, PWA |
+
+**Phase 1 is functionally complete.** Users can:
+1. Create accounts and organizations
+2. Send real-time messages with reactions/pins/favorites
+3. Schedule events with attendees and room booking
+4. RSVP to events
+5. Use keyboard shortcuts (Cmd+K) for navigation
+
+**Recommended next steps:**
+- Start Phase 2 (T-005: Docs + Collab Engine) OR
+- Polish Phase 1 remaining subtasks (threads, typing/presence, shared calendars)
+
+### Nudges left
+
+1. **T-004**: Duplicate date formatting could be extracted to shared util
+2. **T-004**: Consider adding `GET /calendar/rooms/:id` endpoint for efficiency
+3. **T-003**: Static method pattern flagged 12× — consider refactoring before Phase 2
+
+### Tech debt items
+
+| Priority | Item | Location | Notes |
+|----------|------|----------|-------|
+| Low | Static method pattern in 3+ components | chat-list, message-list, event-list | Works but fragile |
+| Low | Duplicate date formatting | event-list.tsx, event-details.tsx | Extract when needed |
+| Low | No single-room endpoint | calendar routes | Add for efficiency |
+| Low | act() warnings in tests | create-event-dialog.test.tsx | Best practice, not blocking |
+| Low | DialogContent accessibility | dialog components | Add DialogDescription |
+| Low | Auto-generated tabs not implemented | messenger.service.ts | FR-2.15 partial |
+| Low | Typing/presence tests skipped | websocket.integration.test.ts | Timing sensitivity |
+| Low | Login needs org context | auth.service.ts:122 | Multi-tenant limitation |
+| Low | `next lint` deprecation | apps/web | Cosmetic |
+
+### Reinforced patterns
+
+From progress log that held true this iteration:
+- ✅ Module structure (routes, service, schemas) — Calendar followed exactly
+- ✅ Component patterns (loading/error/empty states) — Room booking UI follows
+- ✅ Promise.all for parallel fetching — EventDetails uses correctly
+- ✅ Non-critical API calls fail gracefully — Room loading doesn't break component
+- ✅ Test patterns — 8 new tests cover new functionality
+- ✅ Conventional commits — Task IDs referenced, atomic commits
+
+### Phase 1 summary
+
+The colony has successfully completed Phase 1 foundation over 24 iterations:
+
+**Completed tasks:**
+- T-001: Infrastructure (monorepo, tooling, Docker)
+- T-023: Frontend shell (layout, navigation, auth screens, PWA)
+
+**In-progress (Phase 1 complete, Phase 2 work remaining):**
+- T-002: Auth (2/6 subtasks — core auth done, advanced features deferred)
+- T-003: Messenger (4/6 subtasks — core messaging done, threads/typing UI deferred)
+- T-004: Calendar (4/5 subtasks — core calendar done, shared calendars/iCal deferred)
+
+**Test coverage:** 358 tests passing (225 API, 125 web, 8 shared)
+**Code quality:** Build passes, lint passes, TypeScript strict mode enabled
+**Patterns:** Consistent module structure, auth middleware reuse, test isolation
+
+---

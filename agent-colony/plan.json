@@ -171,6 +171,12 @@
           "role": "reviewer",
           "value": 1,
           "reason": "Iteration 21 review: Auth foundation stable. 2/6 subtasks complete. Remaining subtasks (RLS, magic link, 2FA, departments, API keys) correctly deferred as lower priority. Known limitation: login needs org context for multi-tenant (auth.service.ts:122)."
+        },
+        {
+          "iteration": 24,
+          "role": "reviewer",
+          "value": 1,
+          "reason": "Iter 24 review: Auth foundation stable. 2/6 subtasks complete. No changes since last review. Remaining subtasks (RLS, magic link, 2FA, departments, API keys) correctly deferred. Known limitation: login needs org context for multi-tenant."
         }
       ],
       "comments": [
@@ -376,6 +382,12 @@
           "role": "reviewer",
           "value": 1,
           "reason": "Iteration 21 review: 4/6 subtasks complete. Messenger core solid. Static method pattern flagged 9 iterations ago (iter 12), still present in 3 components. Phase 1 complete - threads/rich text/typing UI are Phase 2."
+        },
+        {
+          "iteration": 24,
+          "role": "reviewer",
+          "value": 1,
+          "reason": "Iter 24 review: 4/6 subtasks complete. Messenger core remains solid. Static method pattern (ChatList.addChat, MessageList.addMessage, EventList.addEvent) now in 3+ components, flagged since iter 12. Works for Phase 1 but should be addressed for Phase 2. No new concerns."
         }
       ],
       "comments": [
@@ -588,6 +600,12 @@
           "role": "implementer",
           "value": 1,
           "reason": "Iteration 23 independent analysis: Room booking UI is the clear next step. Backend getMeetingRooms and roomId on events already implemented. Only missing frontend room selection in CreateEventDialog. This completes T-004 subtask 3."
+        },
+        {
+          "iteration": 24,
+          "role": "reviewer",
+          "value": 1,
+          "reason": "Iter 24 review: 4/5 subtasks complete. Room booking UI added with proper tests (8 new tests). Code quality good - follows established patterns. Subtask 4 (shared calendars, iCal, drag-and-drop) is the only remaining work. Phase 1 Calendar is solid."
         }
       ],
       "comments": [
@@ -645,6 +663,16 @@
           "iteration": 23,
           "role": "implementer",
           "message": "Iteration 23: Added room booking UI to CreateEventDialog and EventDetails. Users can now select a meeting room when creating events, and view room info (name, capacity, location) in event details. Added 8 new tests. T-004 subtask 3 complete."
+        },
+        {
+          "iteration": 24,
+          "role": "reviewer",
+          "message": "Iter 24 review: Duplicate date formatting logic exists in event-list.tsx:58 (formatEventTime) and event-details.tsx:92 (formatEventDateTime). Both format dates similarly but with different detail levels. Consider extracting to shared util like formatters.ts when adding more calendar features."
+        },
+        {
+          "iteration": 24,
+          "role": "reviewer",
+          "message": "Iter 24 review: No GET /calendar/rooms/:id endpoint exists. EventDetails fetches all rooms via getMeetingRooms() then filters by roomId. This works but creates N+1 potential if multiple events with rooms are displayed. Consider adding single-room endpoint for Phase 2 calendar improvements."
         }
       ],
       "status": "in-progress",
@@ -1391,7 +1419,7 @@
   ],
   "metadata": {
     "createdAt": "2026-03-04T21:00:00Z",
-    "totalIterations": 33,
+    "totalIterations": 34,
     "iterationLog": [
       {
         "iteration": 1,
@@ -1587,6 +1615,12 @@
       },
       {
         "iteration": 33,
+        "role": "implementer",
+        "taskWorked": "T-004",
+        "contextCompacted": false
+      },
+      {
+        "iteration": 34,
         "role": "implementer",
         "taskWorked": "T-004",
         "contextCompacted": false
