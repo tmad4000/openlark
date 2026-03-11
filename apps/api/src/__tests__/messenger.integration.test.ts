@@ -27,6 +27,11 @@ import {
   favorites,
   chatTabs,
   announcements,
+  documents,
+  documentPermissions,
+  documentVersions,
+  documentComments,
+  yjsUpdates,
 } from "../db/schema/index.js";
 
 const SKIP_DB_TESTS = process.env.SKIP_DB_TESTS === "true";
@@ -102,7 +107,13 @@ describe.skipIf(SKIP_DB_TESTS)("Messenger API - Integration", () => {
 
   beforeEach(async () => {
     // Clean up test data before each test (order matters due to foreign keys)
-    // Messenger tables first (they reference auth tables)
+    // Docs tables first (they reference auth tables)
+    await db.delete(yjsUpdates);
+    await db.delete(documentComments);
+    await db.delete(documentVersions);
+    await db.delete(documentPermissions);
+    await db.delete(documents);
+    // Messenger tables (they reference auth tables)
     await db.delete(announcements);
     await db.delete(chatTabs);
     await db.delete(favorites);
@@ -112,7 +123,7 @@ describe.skipIf(SKIP_DB_TESTS)("Messenger API - Integration", () => {
     await db.delete(messages);
     await db.delete(chatMembers);
     await db.delete(chats);
-    // Then auth tables
+    // Auth tables
     await db.delete(sessions);
     await db.delete(users);
     await db.delete(organizations);

@@ -283,6 +283,18 @@ export class DocsService {
   }
 
   /**
+   * Get a permission by ID
+   */
+  async getPermissionById(permissionId: string): Promise<DocumentPermission | null> {
+    const [permission] = await db
+      .select()
+      .from(documentPermissions)
+      .where(eq(documentPermissions.id, permissionId));
+
+    return permission ?? null;
+  }
+
+  /**
    * Update a permission
    */
   async updatePermission(

@@ -27,6 +27,11 @@ import {
   messageReadReceipts,
   pins,
   favorites,
+  documents,
+  documentPermissions,
+  documentVersions,
+  documentComments,
+  yjsUpdates,
 } from "../db/schema/index.js";
 import { resetWebSocketState } from "../modules/messenger/index.js";
 import WebSocket from "ws";
@@ -178,6 +183,13 @@ describe.skipIf(SKIP_DB_TESTS)("WebSocket - Integration", () => {
     await resetWebSocketState();
 
     // Clean up test data before each test (order matters due to foreign keys)
+    // Docs tables first (they reference auth tables)
+    await db.delete(yjsUpdates);
+    await db.delete(documentComments);
+    await db.delete(documentVersions);
+    await db.delete(documentPermissions);
+    await db.delete(documents);
+    // Messenger tables (they reference auth tables)
     await db.delete(favorites);
     await db.delete(pins);
     await db.delete(messageReadReceipts);
@@ -185,6 +197,7 @@ describe.skipIf(SKIP_DB_TESTS)("WebSocket - Integration", () => {
     await db.delete(messages);
     await db.delete(chatMembers);
     await db.delete(chats);
+    // Auth tables
     await db.delete(sessions);
     await db.delete(users);
     await db.delete(organizations);

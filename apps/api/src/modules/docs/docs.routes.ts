@@ -250,20 +250,38 @@ export async function docsRoutes(app: FastifyInstance) {
         return reply.status(400).send(formatZodError(parseResult.error));
       }
 
-      // Note: In a real implementation, we'd need to check if the user
-      // has manager permission on the document this permission belongs to
-      const permission = await docsService.updatePermission(
-        req.params.permissionId,
-        parseResult.data
+      // Fetch permission to get documentId for authorization check
+      const existingPermission = await docsService.getPermissionById(
+        req.params.permissionId
       );
 
-      if (!permission) {
+      if (!existingPermission) {
         return reply.status(404).send({
           statusCode: 404,
           error: "Not Found",
           message: "Permission not found",
         });
       }
+
+      // Check if user has manager role on the document
+      const hasManagerPermission = await docsService.checkPermission(
+        existingPermission.documentId,
+        req.user!.id,
+        "manager"
+      );
+
+      if (!hasManagerPermission) {
+        return reply.status(403).send({
+          statusCode: 403,
+          error: "Forbidden",
+          message: "You need manager permission to modify document permissions",
+        });
+      }
+
+      const permission = await docsService.updatePermission(
+        req.params.permissionId,
+        parseResult.data
+      );
 
       return { data: { permission } };
     }
@@ -273,17 +291,35 @@ export async function docsRoutes(app: FastifyInstance) {
   app.delete<{ Params: { permissionId: string } }>(
     "/permissions/:permissionId",
     async (req, reply) => {
-      // Note: In a real implementation, we'd need to check if the user
-      // has manager permission on the document this permission belongs to
-      const deleted = await docsService.removePermission(req.params.permissionId);
+      // Fetch permission to get documentId for authorization check
+      const existingPermission = await docsService.getPermissionById(
+        req.params.permissionId
+      );
 
-      if (!deleted) {
+      if (!existingPermission) {
         return reply.status(404).send({
           statusCode: 404,
           error: "Not Found",
           message: "Permission not found",
         });
       }
+
+      // Check if user has manager role on the document
+      const hasManagerPermission = await docsService.checkPermission(
+        existingPermission.documentId,
+        req.user!.id,
+        "manager"
+      );
+
+      if (!hasManagerPermission) {
+        return reply.status(403).send({
+          statusCode: 403,
+          error: "Forbidden",
+          message: "You need manager permission to delete document permissions",
+        });
+      }
+
+      await docsService.removePermission(req.params.permissionId);
 
       return reply.status(204).send();
     }
