@@ -547,6 +547,12 @@
           "role": "implementer",
           "value": 1,
           "reason": "Iteration 19: Critical RSVP bug must be fixed. apps/web/src/lib/api.ts:233 sends { rsvp } but backend expects { response }. This breaks the calendar RSVP flow entirely."
+        },
+        {
+          "iteration": 20,
+          "role": "implementer",
+          "value": 1,
+          "reason": "Iteration 20: Event details view is the critical missing piece. Users can create events but can't see details, RSVP, or view attendees. This breaks the core calendar use case. Will implement EventDetails component with RSVP UI."
         }
       ],
       "comments": [
@@ -584,6 +590,11 @@
           "iteration": 19,
           "role": "implementer",
           "message": "Iteration 19: Fixed critical RSVP bug. Changed api.ts:228-233 from JSON.stringify({ rsvp }) to JSON.stringify({ response }) to match backend rsvpSchema. Added 2 tests to prevent regression."
+        },
+        {
+          "iteration": 20,
+          "role": "implementer",
+          "message": "Iteration 20: Added EventDetails component with RSVP functionality. Users can now view event details (title, description, time, location), see attendee list with RSVP status, and submit their own RSVP (Yes/No/Maybe). Added getEvent API method and 10 tests. Calendar module now has complete CRUD + RSVP flow."
         }
       ],
       "status": "in-progress",
@@ -592,7 +603,7 @@
         "role": "implementer"
       },
       "claimedBy": {
-        "iteration": 19,
+        "iteration": 20,
         "role": "implementer"
       },
       "splitFrom": null
@@ -1330,7 +1341,7 @@
   ],
   "metadata": {
     "createdAt": "2026-03-04T21:00:00Z",
-    "totalIterations": 29,
+    "totalIterations": 30,
     "iterationLog": [
       {
         "iteration": 1,
@@ -1504,6 +1515,12 @@
         "iteration": 29,
         "role": "reviewer",
         "taskWorked": null,
+        "contextCompacted": false
+      },
+      {
+        "iteration": 30,
+        "role": "implementer",
+        "taskWorked": "T-004",
         "contextCompacted": false
       }
     ]

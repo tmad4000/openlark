@@ -2090,3 +2090,70 @@ Fixed critical RSVP API mismatch bug flagged in iteration 18 review:
 - `next lint` deprecation warning
 
 ---
+
+## 2026-03-10 - Iteration 20 - T-004 (EventDetails with RSVP)
+
+### What was implemented
+EventDetails component that fills the critical gap in the calendar module - users can now view and interact with events:
+
+1. **EventDetails component** (`apps/web/src/components/calendar/event-details.tsx`):
+   - Displays event title, description, date/time, location
+   - Shows cancelled badge when event is cancelled
+   - Lists attendees with RSVP status icons (checkmark, X, question mark, clock)
+   - Shows "Organizer" badge next to the event creator
+   - RSVP buttons (Yes/No/Maybe) for attendees to respond
+   - Current user's response highlighted with color
+   - Loading, error, and empty states
+   - Parallel fetching of event and attendees with Promise.all
+
+2. **API client update** (`apps/web/src/lib/api.ts`):
+   - Added `getEvent(eventId)` method for fetching single event
+
+3. **Calendar page update** (`apps/web/src/app/(app)/calendar/page.tsx`):
+   - Replaced placeholder with EventDetails component
+   - Passes currentUserId for RSVP functionality
+
+### Files changed
+- `apps/web/src/components/calendar/event-details.tsx` - New (280+ lines)
+- `apps/web/src/components/calendar/event-details.test.tsx` - New (10 tests)
+- `apps/web/src/components/calendar/index.ts` - Export EventDetails
+- `apps/web/src/lib/api.ts` - Added getEvent method
+- `apps/web/src/app/(app)/calendar/page.tsx` - Wire up EventDetails
+
+### Tests added
+- **10 EventDetails tests**:
+  - Loading state display
+  - Event details rendering (title, description, location)
+  - Attendee list with RSVP status
+  - Error state on API failure
+  - RSVP buttons shown for attendees
+  - RSVP API call on button click
+  - RSVP buttons hidden for non-attendees
+  - Current user RSVP status highlighted
+  - Organizer badge display
+  - Data refetch when eventId changes
+
+### Plan deviations
+- None — filled the critical gap identified in my independent analysis
+
+### Learnings for future iterations
+- **Gap identified**: Calendar page had a placeholder "Event Details" that just showed the event ID. This broke the core calendar use case (viewing and responding to events). The backend had full support - only the UI was missing.
+- **Pattern reinforced**: Parallel fetching with `Promise.all` for event + attendees
+- **Pattern reinforced**: Co-located component tests with comprehensive coverage
+- **Pattern reinforced**: RSVP status display using icon + color for visual clarity
+- **Self-reflection**: Checking the API client for existing methods first would have been more efficient - I wrote tests assuming `getEvent` existed and had to add it.
+
+### Tech debt addressed
+- ✅ Calendar event details view is now functional (was placeholder)
+- ✅ Users can RSVP to events (backend was working, now has UI)
+
+### Tech debt remaining
+- T-004 subtasks 3-4 (room booking UI, shared calendars, iCal, drag-and-drop)
+- Static method pattern fragile (`chat-list.tsx`, `message-list.tsx`, `event-list.tsx`)
+- Raw UUID input for chat creation
+- Auto-generated tabs not implemented (FR-2.15 partial)
+- Typing/presence tests skipped
+- Login needs org context for multi-tenant
+- `next lint` deprecation warning
+
+---
