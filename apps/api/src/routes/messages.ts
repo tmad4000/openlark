@@ -1,13 +1,14 @@
 import { FastifyInstance } from "fastify";
 import { db } from "../db";
-import { messages, chatMembers, chats, users, messageReadReceipts, messageReactions, favorites } from "../db/schema";
-import { eq, and, desc, lt, gt, inArray, sql } from "drizzle-orm";
+import { messages, chatMembers, chats, users, messageReadReceipts, messageReactions, favorites, buzzNotifications } from "../db/schema";
+import { eq, and, desc, lt, gt, gte, inArray, sql } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
 import { publish, getChatChannel, getUserPresenceChannel } from "../lib/redis";
 import {
   createDmReceivedNotification,
   createMentionNotification,
   createThreadReplyNotification,
+  createBuzzNotification,
 } from "../lib/notifications";
 
 // UUID validation regex
@@ -666,6 +667,21 @@ export async function messagesRoutes(fastify: FastifyInstance) {
           displayName: request.user.displayName,
         },
       });
+
+      // Mark any buzz notifications for these messages as read
+      if (messagesToMark.length > 0) {
+        const messageIds = messagesToMark.map((m) => m.id);
+        await db
+          .update(buzzNotifications)
+          .set({ status: "read", readAt: new Date() })
+          .where(
+            and(
+              inArray(buzzNotifications.messageId, messageIds),
+              eq(buzzNotifications.recipientId, currentUserId),
+              sql`${buzzNotifications.status} != 'read'`
+            )
+          );
+      }
 
       return reply.status(200).send({
         success: true,
@@ -2040,6 +2056,195 @@ export async function messagesRoutes(fastify: FastifyInstance) {
       return reply.status(201).send({
         success: true,
         forwarded: forwardedResults,
+      });
+    }
+  );
+
+  /**
+   * POST /messages/:id/buzz - Send an urgent buzz notification for a message
+   * Body: { recipient_id: string, type?: "in_app" | "sms" | "phone" }
+   * Only the message sender can buzz their own messages
+   * Rate limits: max 3 buzzes per message, 10 per hour per user
+   * Returns: { success: true, buzz: BuzzNotification }
+   */
+  fastify.post<{
+    Params: { id: string };
+    Body: { recipient_id: string; type?: "in_app" | "sms" | "phone" };
+  }>(
+    "/messages/:id/buzz",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id: messageId } = request.params;
+      const { recipient_id, type = "in_app" } = request.body;
+      const currentUserId = request.user.id;
+
+      // Validate messageId format
+      if (!UUID_REGEX.test(messageId)) {
+        return reply.status(400).send({
+          error: "Invalid message ID format",
+        });
+      }
+
+      // Validate recipient_id is provided
+      if (!recipient_id) {
+        return reply.status(400).send({
+          error: "recipient_id is required",
+        });
+      }
+
+      // Validate recipient_id format
+      if (!UUID_REGEX.test(recipient_id)) {
+        return reply.status(400).send({
+          error: "Invalid recipient_id format",
+        });
+      }
+
+      // Validate type
+      const validTypes = ["in_app", "sms", "phone"];
+      if (!validTypes.includes(type)) {
+        return reply.status(400).send({
+          error: `type must be one of: ${validTypes.join(", ")}`,
+        });
+      }
+
+      // For now, only in_app is supported (SMS/phone require Twilio integration)
+      if (type !== "in_app") {
+        return reply.status(400).send({
+          error: "Only in_app buzz type is currently supported",
+        });
+      }
+
+      // Get the message
+      const [message] = await db
+        .select()
+        .from(messages)
+        .where(eq(messages.id, messageId))
+        .limit(1);
+
+      if (!message) {
+        return reply.status(404).send({
+          error: "Message not found",
+        });
+      }
+
+      // Only the message sender can buzz their own messages
+      if (message.senderId !== currentUserId) {
+        return reply.status(403).send({
+          error: "You can only buzz your own messages",
+        });
+      }
+
+      // Cannot buzz recalled messages
+      if (message.recalledAt) {
+        return reply.status(400).send({
+          error: "Cannot buzz a recalled message",
+        });
+      }
+
+      // Validate recipient is a member of the chat
+      const [recipientMember] = await db
+        .select({ userId: chatMembers.userId })
+        .from(chatMembers)
+        .where(
+          and(
+            eq(chatMembers.chatId, message.chatId),
+            eq(chatMembers.userId, recipient_id)
+          )
+        )
+        .limit(1);
+
+      if (!recipientMember) {
+        return reply.status(400).send({
+          error: "Recipient is not a member of this chat",
+        });
+      }
+
+      // Cannot buzz yourself
+      if (recipient_id === currentUserId) {
+        return reply.status(400).send({
+          error: "Cannot buzz yourself",
+        });
+      }
+
+      // Rate limit check: max 3 buzzes per message
+      const buzzesForMessage = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(buzzNotifications)
+        .where(eq(buzzNotifications.messageId, messageId));
+
+      if (buzzesForMessage[0]?.count >= 3) {
+        return reply.status(429).send({
+          error: "Maximum of 3 buzzes per message reached",
+        });
+      }
+
+      // Rate limit check: max 10 buzzes per hour per user
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+      const buzzesLastHour = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(buzzNotifications)
+        .where(
+          and(
+            eq(buzzNotifications.senderId, currentUserId),
+            gte(buzzNotifications.createdAt, oneHourAgo)
+          )
+        );
+
+      if (buzzesLastHour[0]?.count >= 10) {
+        return reply.status(429).send({
+          error: "Maximum of 10 buzzes per hour reached",
+        });
+      }
+
+      // Create the buzz notification record
+      const [buzz] = await db
+        .insert(buzzNotifications)
+        .values({
+          messageId,
+          senderId: currentUserId,
+          recipientId: recipient_id,
+          type,
+          status: "pending",
+        })
+        .returning();
+
+      // Get chat info for the notification
+      const [chat] = await db
+        .select({ name: chats.name, type: chats.type })
+        .from(chats)
+        .where(eq(chats.id, message.chatId))
+        .limit(1);
+
+      // Get message preview text
+      const messageContent = message.content as Record<string, unknown>;
+      const messagePreview =
+        typeof messageContent.text === "string"
+          ? messageContent.text
+          : typeof messageContent.html === "string"
+            ? messageContent.html.replace(/<[^>]*>/g, "").substring(0, 100)
+            : "Urgent message";
+
+      // Create high-priority notification and send buzz event
+      await createBuzzNotification({
+        recipientId: recipient_id,
+        senderName: request.user.displayName,
+        chatId: message.chatId,
+        chatName: chat?.name || "Chat",
+        messageId,
+        messagePreview,
+        buzzId: buzz.id,
+      });
+
+      // Mark as delivered (for in_app type, delivery is instant)
+      const [deliveredBuzz] = await db
+        .update(buzzNotifications)
+        .set({ status: "delivered", deliveredAt: new Date() })
+        .where(eq(buzzNotifications.id, buzz.id))
+        .returning();
+
+      return reply.status(201).send({
+        success: true,
+        buzz: deliveredBuzz,
       });
     }
   );

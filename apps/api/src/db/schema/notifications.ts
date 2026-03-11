@@ -16,6 +16,7 @@ export const notificationTypeEnum = pgEnum("notification_type", [
   "thread_reply",
   "task_assigned",
   "approval_pending",
+  "buzz",
 ]);
 
 // Entity type enum - what the notification is about

@@ -46,3 +46,4 @@
 [2026-03-11 01:15] US-038 — Code block messages — PASS
 [2026-03-10 20:45] US-039 — Group announcements — PASS
 [2026-03-11 02:30] US-040 — Notification system - in-app notifications — PASS
+[2026-03-10 22:15] US-041 — Buzz urgent notification API — PASS

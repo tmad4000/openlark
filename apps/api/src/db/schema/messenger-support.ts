@@ -15,6 +15,16 @@ import { chats, messages } from "./chats";
 // Chat tab type enum
 export const chatTabTypeEnum = pgEnum("chat_tab_type", ["auto", "custom"]);
 
+// Buzz notification type enum
+export const buzzTypeEnum = pgEnum("buzz_type", ["in_app", "sms", "phone"]);
+
+// Buzz notification status enum
+export const buzzStatusEnum = pgEnum("buzz_status", [
+  "pending",
+  "delivered",
+  "read",
+]);
+
 // Message reactions table
 export const messageReactions = pgTable(
   "message_reactions",
@@ -132,6 +142,38 @@ export const announcements = pgTable(
   (table) => [index("announcements_chat_id_idx").on(table.chatId)]
 );
 
+// Buzz notifications table
+export const buzzNotifications = pgTable(
+  "buzz_notifications",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    messageId: uuid("message_id")
+      .notNull()
+      .references(() => messages.id, { onDelete: "cascade" }),
+    senderId: uuid("sender_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    recipientId: uuid("recipient_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    type: buzzTypeEnum("type").notNull().default("in_app"),
+    status: buzzStatusEnum("status").notNull().default("pending"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+    readAt: timestamp("read_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("buzz_notifications_message_id_idx").on(table.messageId),
+    index("buzz_notifications_recipient_id_idx").on(table.recipientId),
+    index("buzz_notifications_sender_id_created_at_idx").on(
+      table.senderId,
+      table.createdAt
+    ),
+  ]
+);
+
 // Type exports
 export type MessageReaction = typeof messageReactions.$inferSelect;
 export type NewMessageReaction = typeof messageReactions.$inferInsert;
@@ -145,3 +187,5 @@ export type ChatTab = typeof chatTabs.$inferSelect;
 export type NewChatTab = typeof chatTabs.$inferInsert;
 export type Announcement = typeof announcements.$inferSelect;
 export type NewAnnouncement = typeof announcements.$inferInsert;
+export type BuzzNotification = typeof buzzNotifications.$inferSelect;
+export type NewBuzzNotification = typeof buzzNotifications.$inferInsert;

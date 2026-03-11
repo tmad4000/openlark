@@ -7,7 +7,8 @@ type NotificationType =
   | "mentioned"
   | "thread_reply"
   | "task_assigned"
-  | "approval_pending";
+  | "approval_pending"
+  | "buzz";
 
 type EntityType = "message" | "chat" | "task" | "approval" | "document";
 
@@ -189,4 +190,51 @@ export async function createApprovalPendingNotification(params: {
     entityType: "approval",
     entityId: approvalId,
   });
+}
+
+/**
+ * Create a buzz (urgent) notification
+ */
+export async function createBuzzNotification(params: {
+  recipientId: string;
+  senderName: string;
+  chatId: string;
+  chatName: string;
+  messageId: string;
+  messagePreview: string;
+  buzzId: string;
+}): Promise<typeof notifications.$inferSelect> {
+  const { recipientId, senderName, chatId, chatName, messageId, messagePreview, buzzId } =
+    params;
+
+  // Truncate message preview if too long
+  const truncatedPreview =
+    messagePreview.length > 100
+      ? messagePreview.substring(0, 97) + "..."
+      : messagePreview;
+
+  const notification = await createNotification({
+    userId: recipientId,
+    type: "buzz",
+    title: `🔔 URGENT: ${senderName} buzzed you in ${chatName}`,
+    body: truncatedPreview,
+    entityType: "message",
+    entityId: messageId,
+  });
+
+  // Also publish a specific buzz event for the full-screen overlay
+  await publish(getUserPresenceChannel(recipientId), {
+    type: "buzz",
+    payload: {
+      buzzId,
+      messageId,
+      chatId,
+      chatName,
+      senderName,
+      messagePreview: truncatedPreview,
+      createdAt: new Date().toISOString(),
+    },
+  });
+
+  return notification;
 }
