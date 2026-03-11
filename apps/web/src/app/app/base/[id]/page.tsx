@@ -31,8 +31,10 @@ import {
   ExternalLink,
   Settings,
   CheckCircle,
+  Zap,
 } from "lucide-react";
 import { ViewToolbar } from "@/components/base/ViewToolbar";
+import { AutomationsPanel } from "@/components/base/AutomationsPanel";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -1569,6 +1571,7 @@ export default function BasePage() {
   const [isAddViewOpen, setIsAddViewOpen] = useState(false);
   const [newViewName, setNewViewName] = useState("");
   const [newViewType, setNewViewType] = useState<"grid" | "kanban" | "form">("grid");
+  const [showAutomations, setShowAutomations] = useState(false);
 
   const getToken = () => getCookie("session_token");
 
@@ -2007,9 +2010,10 @@ export default function BasePage() {
                 onClick={() => {
                   setActiveViewId(view.id);
                   setSelectedRecord(null);
+                  setShowAutomations(false);
                 }}
                 className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium border-b-2 -mb-px ${
-                  activeViewId === view.id
+                  activeViewId === view.id && !showAutomations
                     ? "border-blue-600 text-blue-600"
                     : "border-transparent text-gray-600 hover:text-gray-900"
                 }`}
@@ -2019,7 +2023,7 @@ export default function BasePage() {
               </button>
             );
           })}
-          {activeTable.views.length === 0 && (
+          {activeTable.views.length === 0 && !showAutomations && (
             <span className="px-3 py-1.5 text-sm text-gray-500 flex items-center gap-1.5">
               <Grid3X3 className="w-4 h-4" />
               Grid View
@@ -2031,11 +2035,27 @@ export default function BasePage() {
           >
             <Plus className="w-4 h-4" />
           </button>
+          {/* Automations tab - right-aligned */}
+          <div className="flex-1" />
+          <button
+            onClick={() => {
+              setShowAutomations(true);
+              setSelectedRecord(null);
+            }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium border-b-2 -mb-px ${
+              showAutomations
+                ? "border-yellow-500 text-yellow-600"
+                : "border-transparent text-gray-600 hover:text-gray-900"
+            }`}
+          >
+            <Zap className="w-4 h-4" />
+            Automations
+          </button>
         </div>
       )}
 
-      {/* View toolbar with filter/sort/group */}
-      {activeTable && activeView && (
+      {/* View toolbar with filter/sort/group - hidden when showing automations */}
+      {activeTable && activeView && !showAutomations && (
         <ViewToolbar
           fields={activeTable.fields}
           filters={activeView.config?.filters || []}
@@ -2050,8 +2070,21 @@ export default function BasePage() {
 
       {/* Main content area with optional detail panel */}
       <div className="flex-1 flex overflow-hidden">
-        {/* View content */}
-        {activeTable && (
+        {/* Automations panel */}
+        {showAutomations && base && (
+          <AutomationsPanel
+            baseId={baseId}
+            tables={base.tables.map((t) => ({
+              id: t.id,
+              name: t.name,
+              fields: activeTable?.id === t.id ? activeTable.fields : [],
+            }))}
+            token={getToken() || ""}
+          />
+        )}
+
+        {/* View content - hidden when showing automations */}
+        {activeTable && !showAutomations && (
           <>
             {activeView?.type === "kanban" ? (
               <KanbanView
@@ -2092,8 +2125,8 @@ export default function BasePage() {
           </>
         )}
 
-        {/* Record detail panel (not shown for form view) */}
-        {selectedRecord && activeTable && activeView?.type !== "form" && (
+        {/* Record detail panel (not shown for form view or automations) */}
+        {selectedRecord && activeTable && activeView?.type !== "form" && !showAutomations && (
           <RecordDetailPanel
             record={selectedRecord}
             fields={activeTable.fields}

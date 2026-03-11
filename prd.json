@@ -1161,8 +1161,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 69,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created AutomationsPanel component (apps/web/src/components/base/AutomationsPanel.tsx) with full automation builder UI. Features: (1) Automations tab in Base view tabs with Zap icon, (2) Left panel showing list of automations with enabled/disabled toggle using @radix-ui/react-switch, (3) Create/edit automation dialog with trigger type selector (record_created, record_updated, record_matches_condition, scheduled, button_clicked, webhook_received), table selector, field selector for record_updated, condition builder for record_matches_condition, cron input for scheduled, (4) Action builder supporting update_record, create_record, send_message, http_request with appropriate config forms, (5) Test run button calling POST /automations/:id/test, (6) Run history table showing status badges (pending/running/success/failed), started/completed timestamps, and error details. Integrated into Base page by adding Automations tab to view tabs, showing AutomationsPanel when active. Typecheck passes."
     },
     {
       "id": "US-070",
