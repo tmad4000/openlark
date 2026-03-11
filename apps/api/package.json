@@ -21,6 +21,8 @@
     "@fastify/rate-limit": "^10.3.0",
     "@fastify/sensible": "^6.0.3",
     "@fastify/websocket": "^11.2.0",
+    "@hocuspocus/extension-database": "^3.4.4",
+    "@hocuspocus/server": "^3.4.4",
     "@openlark/shared": "workspace:*",
     "bcryptjs": "^2.4.3",
     "drizzle-orm": "^0.38.4",
@@ -28,6 +30,7 @@
     "ioredis": "^5.4.2",
     "jsonwebtoken": "^9.0.2",
     "postgres": "^3.4.5",
+    "yjs": "^13.6.29",
     "zod": "^3.24.1"
   },
   "devDependencies": {

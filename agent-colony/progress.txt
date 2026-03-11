@@ -2526,3 +2526,100 @@ The colony has successfully completed Phase 1 foundation over 24 iterations:
 **Patterns:** Consistent module structure, auth middleware reuse, test isolation
 
 ---
+
+## Iteration 25: T-005 Docs Module Foundation (Hocuspocus + Yjs)
+
+**Task:** T-005 subtask 1 — Set up Hocuspocus server with Yjs persistence to PostgreSQL
+**Outcome:** Completed
+
+### Changes Made
+
+1. **Database Schema** (`apps/api/src/db/schema/docs.ts`)
+   - Created custom `bytea` type for Uint8Array/Buffer conversion (Yjs binary state)
+   - Tables: `documents`, `documentPermissions`, `documentVersions`, `documentComments`, `yjsUpdates`
+   - Enums: `document_type` (doc, sheet, slide, mindnote, board), `document_permission_role` (viewer, editor, manager, owner), `principal_type` (user, department, org)
+   - Permission model supports user, department, and org-level access
+
+2. **Docs Module Structure** (`apps/api/src/modules/docs/`)
+   - `docs.schemas.ts` — Zod validation schemas for all endpoints
+   - `docs.service.ts` — DocsService class with CRUD, permissions, versions, comments, Yjs persistence
+   - `hocuspocus.ts` — Hocuspocus server with Database extension for PostgreSQL persistence
+   - `docs.routes.ts` — Full REST API for documents, permissions, versions, comments
+   - `index.ts` — Barrel exports
+
+3. **Hocuspocus Integration**
+   - JWT authentication in `onAuthenticate` hook
+   - Permission checking (viewer for read, editor for write)
+   - Database extension with `fetch` and `store` callbacks
+   - Yjs state stored as bytea in PostgreSQL
+
+4. **API Endpoints** (all under `/api/v1/docs/`)
+   - Documents: CRUD (`/documents`, `/documents/:id`)
+   - Permissions: List/Add/Update/Remove (`/documents/:id/permissions`, `/permissions/:id`)
+   - Versions: List/Create/Restore (`/documents/:id/versions`, `/versions/:id/restore`)
+   - Comments: List/Create/Update/Resolve/Delete (`/documents/:id/comments`, `/comments/:id`)
+
+5. **Tests** (`apps/api/src/__tests__/docs.test.ts`)
+   - 45 tests covering schema validation and auth requirements
+   - Tests for all document types, permission roles, and query parameters
+
+### Patterns Applied
+
+- Used `app.addHook("preHandler", authenticate)` for global auth (matching calendar.routes.ts)
+- Used `app.get<{ Params: { documentId: string } }>()` for typed route params
+- Followed module structure: routes, service, schemas, index
+- Custom Drizzle type for PostgreSQL bytea ↔ Uint8Array conversion
+
+### Technical Notes
+
+**Hocuspocus WebSocket Integration:**
+```typescript
+// apps/api/src/modules/docs/hocuspocus.ts
+export function createHocuspocusServer(): Hocuspocus {
+  const server = new Hocuspocus({
+    name: "openlark-collab",
+    async onAuthenticate({ token, documentName }) {
+      const payload = verifyToken(token);
+      const hasPermission = await docsService.checkPermission(documentName, payload.sub, "viewer");
+      const canEdit = await docsService.checkPermission(documentName, payload.sub, "editor");
+      return { user: { id: payload.sub, canEdit } };
+    },
+    extensions: [
+      new Database({
+        fetch: async ({ documentName }) => docsService.loadYjsState(documentName),
+        store: async ({ documentName, state, context }) => docsService.storeYjsState(documentName, state, context?.user?.id),
+      }),
+    ],
+  });
+  return server;
+}
+```
+
+**Bytea Type Conversion:**
+```typescript
+// apps/api/src/db/schema/docs.ts
+const bytea = customType<{ data: Uint8Array; driverData: Buffer }>({
+  dataType() { return "bytea"; },
+  toDriver(value: Uint8Array): Buffer { return Buffer.from(value); },
+  fromDriver(value: Buffer): Uint8Array { return new Uint8Array(value); },
+});
+```
+
+### Test Results
+
+```
+Tests: 275 passed, 5 skipped (280 total)
+- docs.test.ts: 45 tests (schema validation + auth requirements)
+- All existing tests continue passing
+```
+
+### What's Next
+
+T-005 subtask 1 complete. Remaining subtasks:
+- Subtask 2: Rich text / block editor with TipTap
+- Subtask 3: Real-time cursor positions / presence
+- Subtask 4: Comments, suggestions, version history UI
+- Subtask 5: Sheets (spreadsheet editing)
+- Subtask 6: Slides (presentation editing)
+
+---

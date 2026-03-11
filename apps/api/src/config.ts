@@ -30,6 +30,9 @@ const envSchema = z.object({
   // Meilisearch
   MEILI_URL: z.string().default("http://localhost:7700"),
   MEILI_KEY: z.string().default("openlark-dev-key"),
+
+  // Hocuspocus (collaboration server)
+  HOCUSPOCUS_PORT: z.coerce.number().default(1234),
 });
 
 export type Env = z.infer<typeof envSchema>;
