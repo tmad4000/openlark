@@ -1041,8 +1041,8 @@
         "Typecheck passes"
       ],
       "priority": 62,
-      "passes": false,
-      "notes": "Records use JSONB data column keyed by field_id. This allows flexible schema per table."
+      "passes": true,
+      "notes": "Created 5 tables in apps/api/src/db/schema/base.ts: bases (id, org_id, name, icon, owner_id, timestamps), base_tables (id, base_id, name, position, created_at), base_fields (id, table_id, name, type varchar(50), config jsonb, position), base_records (id, table_id, data jsonb keyed by field_id, created_by, timestamps), base_views (id, table_id, type enum, name, config jsonb, position). Added base_view_type enum (grid/kanban/calendar/gantt/gallery/form). All foreign keys cascade delete. Proper indexes on org_id, owner_id, base_id, table_id, position columns. Migration 0017_clear_orphan.sql applied successfully. Typecheck passes."
     },
     {
       "id": "US-063",

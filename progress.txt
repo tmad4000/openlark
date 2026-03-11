@@ -62,3 +62,4 @@
 [2026-03-10 20:34] US-059 — Documents list page — PASS
 [2026-03-10 20:42] US-060 — Wiki space schema and API — PASS
 [2026-03-10 21:15] US-061 — Wiki UI - space list and page tree navigation — PASS
+[2026-03-10 20:51] US-062 — Base schema - tables, fields, records, views — PASS

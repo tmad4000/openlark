@@ -12,3 +12,4 @@ export * from "./topics";
 export * from "./calendar";
 export * from "./documents";
 export * from "./wiki";
+export * from "./base";
