@@ -3,6 +3,7 @@ import { db } from "../db";
 import {
   documents,
   documentPermissions,
+  documentVersions,
   users,
   departmentMembers,
   departments,
@@ -1445,6 +1446,417 @@ export async function documentsRoutes(fastify: FastifyInstance) {
       return reply.status(200).send({
         link,
         message: `Anyone in your organization can now ${role === "viewer" ? "view" : "edit"} this document`,
+      });
+    }
+  );
+
+  /**
+   * POST /documents/:id/versions - Create a named snapshot of current document state
+   * Body: { name: string }
+   * Returns: Created version
+   */
+  fastify.post<{ Params: { id: string }; Body: { name: string } }>(
+    "/documents/:id/versions",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id } = request.params;
+      const { name } = request.body;
+
+      // Validate UUID format
+      if (!UUID_REGEX.test(id)) {
+        return reply.status(400).send({
+          error: "Invalid document ID format",
+        });
+      }
+
+      // Validate name
+      if (!name || typeof name !== "string" || name.trim().length === 0) {
+        return reply.status(400).send({
+          error: "name is required and must be a non-empty string",
+        });
+      }
+
+      if (name.length > 255) {
+        return reply.status(400).send({
+          error: "name must be at most 255 characters",
+        });
+      }
+
+      // User must belong to an organization
+      if (!request.user.orgId) {
+        return reply.status(400).send({
+          error: "User must belong to an organization",
+        });
+      }
+
+      const currentUserId = request.user.id;
+      const orgId = request.user.orgId;
+
+      // Get the document
+      const [doc] = await db
+        .select()
+        .from(documents)
+        .where(
+          and(
+            eq(documents.id, id),
+            eq(documents.orgId, orgId),
+            isNull(documents.deletedAt)
+          )
+        )
+        .limit(1);
+
+      if (!doc) {
+        return reply.status(404).send({
+          error: "Document not found",
+        });
+      }
+
+      // Check if user has edit permission
+      const userRole = await getUserDocumentRole(id, currentUserId, orgId);
+      if (!userRole || userRole === "viewer") {
+        return reply.status(403).send({
+          error: "Access denied - need editor permission or higher to create versions",
+        });
+      }
+
+      // Get current Yjs state from document
+      const snapshotBlob = doc.yjsState;
+
+      if (!snapshotBlob) {
+        return reply.status(400).send({
+          error: "Document has no content to snapshot",
+        });
+      }
+
+      // Create the version
+      const [newVersion] = await db
+        .insert(documentVersions)
+        .values({
+          documentId: id,
+          name: name.trim(),
+          snapshotBlob,
+          createdBy: currentUserId,
+        })
+        .returning();
+
+      // Get creator info
+      const [creator] = await db
+        .select({
+          id: users.id,
+          displayName: users.displayName,
+          avatarUrl: users.avatarUrl,
+        })
+        .from(users)
+        .where(eq(users.id, currentUserId))
+        .limit(1);
+
+      return reply.status(201).send({
+        id: newVersion.id,
+        documentId: newVersion.documentId,
+        name: newVersion.name,
+        createdAt: newVersion.createdAt,
+        creator: creator
+          ? {
+              id: creator.id,
+              displayName: creator.displayName,
+              avatarUrl: creator.avatarUrl,
+            }
+          : null,
+      });
+    }
+  );
+
+  /**
+   * GET /documents/:id/versions - List all versions of a document
+   * Returns: Array of versions with creator info
+   */
+  fastify.get<{ Params: { id: string } }>(
+    "/documents/:id/versions",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id } = request.params;
+
+      // Validate UUID format
+      if (!UUID_REGEX.test(id)) {
+        return reply.status(400).send({
+          error: "Invalid document ID format",
+        });
+      }
+
+      // User must belong to an organization
+      if (!request.user.orgId) {
+        return reply.status(400).send({
+          error: "User must belong to an organization",
+        });
+      }
+
+      const currentUserId = request.user.id;
+      const orgId = request.user.orgId;
+
+      // Get the document
+      const [doc] = await db
+        .select()
+        .from(documents)
+        .where(
+          and(
+            eq(documents.id, id),
+            eq(documents.orgId, orgId),
+            isNull(documents.deletedAt)
+          )
+        )
+        .limit(1);
+
+      if (!doc) {
+        return reply.status(404).send({
+          error: "Document not found",
+        });
+      }
+
+      // Check if user has access
+      const userRole = await getUserDocumentRole(id, currentUserId, orgId);
+      if (!userRole) {
+        return reply.status(403).send({
+          error: "Access denied - no permission to view this document",
+        });
+      }
+
+      // Get all versions with creator info
+      const versions = await db
+        .select({
+          id: documentVersions.id,
+          documentId: documentVersions.documentId,
+          name: documentVersions.name,
+          createdAt: documentVersions.createdAt,
+          creatorId: documentVersions.createdBy,
+          creatorDisplayName: users.displayName,
+          creatorAvatarUrl: users.avatarUrl,
+        })
+        .from(documentVersions)
+        .innerJoin(users, eq(documentVersions.createdBy, users.id))
+        .where(eq(documentVersions.documentId, id))
+        .orderBy(desc(documentVersions.createdAt));
+
+      return reply.status(200).send({
+        versions: versions.map((v) => ({
+          id: v.id,
+          documentId: v.documentId,
+          name: v.name,
+          createdAt: v.createdAt,
+          creator: {
+            id: v.creatorId,
+            displayName: v.creatorDisplayName,
+            avatarUrl: v.creatorAvatarUrl,
+          },
+        })),
+      });
+    }
+  );
+
+  /**
+   * GET /documents/:id/versions/:versionId - Get a specific version's content
+   * Returns: Version with snapshot blob for preview
+   */
+  fastify.get<{ Params: { id: string; versionId: string } }>(
+    "/documents/:id/versions/:versionId",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id, versionId } = request.params;
+
+      // Validate UUID formats
+      if (!UUID_REGEX.test(id)) {
+        return reply.status(400).send({
+          error: "Invalid document ID format",
+        });
+      }
+
+      if (!UUID_REGEX.test(versionId)) {
+        return reply.status(400).send({
+          error: "Invalid version ID format",
+        });
+      }
+
+      // User must belong to an organization
+      if (!request.user.orgId) {
+        return reply.status(400).send({
+          error: "User must belong to an organization",
+        });
+      }
+
+      const currentUserId = request.user.id;
+      const orgId = request.user.orgId;
+
+      // Get the document
+      const [doc] = await db
+        .select()
+        .from(documents)
+        .where(
+          and(
+            eq(documents.id, id),
+            eq(documents.orgId, orgId),
+            isNull(documents.deletedAt)
+          )
+        )
+        .limit(1);
+
+      if (!doc) {
+        return reply.status(404).send({
+          error: "Document not found",
+        });
+      }
+
+      // Check if user has access
+      const userRole = await getUserDocumentRole(id, currentUserId, orgId);
+      if (!userRole) {
+        return reply.status(403).send({
+          error: "Access denied - no permission to view this document",
+        });
+      }
+
+      // Get the version
+      const [version] = await db
+        .select()
+        .from(documentVersions)
+        .where(
+          and(
+            eq(documentVersions.id, versionId),
+            eq(documentVersions.documentId, id)
+          )
+        )
+        .limit(1);
+
+      if (!version) {
+        return reply.status(404).send({
+          error: "Version not found",
+        });
+      }
+
+      // Get creator info
+      const [creator] = await db
+        .select({
+          id: users.id,
+          displayName: users.displayName,
+          avatarUrl: users.avatarUrl,
+        })
+        .from(users)
+        .where(eq(users.id, version.createdBy))
+        .limit(1);
+
+      // Return version with snapshot as base64 encoded string for frontend
+      return reply.status(200).send({
+        id: version.id,
+        documentId: version.documentId,
+        name: version.name,
+        createdAt: version.createdAt,
+        creator: creator
+          ? {
+              id: creator.id,
+              displayName: creator.displayName,
+              avatarUrl: creator.avatarUrl,
+            }
+          : null,
+        snapshot: version.snapshotBlob
+          ? version.snapshotBlob.toString("base64")
+          : null,
+      });
+    }
+  );
+
+  /**
+   * POST /documents/:id/versions/:versionId/restore - Restore document to a specific version
+   * Returns: { success: true }
+   */
+  fastify.post<{ Params: { id: string; versionId: string } }>(
+    "/documents/:id/versions/:versionId/restore",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id, versionId } = request.params;
+
+      // Validate UUID formats
+      if (!UUID_REGEX.test(id)) {
+        return reply.status(400).send({
+          error: "Invalid document ID format",
+        });
+      }
+
+      if (!UUID_REGEX.test(versionId)) {
+        return reply.status(400).send({
+          error: "Invalid version ID format",
+        });
+      }
+
+      // User must belong to an organization
+      if (!request.user.orgId) {
+        return reply.status(400).send({
+          error: "User must belong to an organization",
+        });
+      }
+
+      const currentUserId = request.user.id;
+      const orgId = request.user.orgId;
+
+      // Get the document
+      const [doc] = await db
+        .select()
+        .from(documents)
+        .where(
+          and(
+            eq(documents.id, id),
+            eq(documents.orgId, orgId),
+            isNull(documents.deletedAt)
+          )
+        )
+        .limit(1);
+
+      if (!doc) {
+        return reply.status(404).send({
+          error: "Document not found",
+        });
+      }
+
+      // Check if user has edit permission
+      const userRole = await getUserDocumentRole(id, currentUserId, orgId);
+      if (!userRole || userRole === "viewer") {
+        return reply.status(403).send({
+          error: "Access denied - need editor permission or higher to restore versions",
+        });
+      }
+
+      // Get the version
+      const [version] = await db
+        .select()
+        .from(documentVersions)
+        .where(
+          and(
+            eq(documentVersions.id, versionId),
+            eq(documentVersions.documentId, id)
+          )
+        )
+        .limit(1);
+
+      if (!version) {
+        return reply.status(404).send({
+          error: "Version not found",
+        });
+      }
+
+      if (!version.snapshotBlob) {
+        return reply.status(400).send({
+          error: "Version has no snapshot data",
+        });
+      }
+
+      // Update the document's Yjs state with the version's snapshot
+      await db
+        .update(documents)
+        .set({
+          yjsState: version.snapshotBlob,
+          updatedAt: new Date(),
+        })
+        .where(eq(documents.id, id));
+
+      return reply.status(200).send({
+        success: true,
+        message: `Document restored to version "${version.name}"`,
       });
     }
   );

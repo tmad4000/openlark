@@ -12,6 +12,7 @@ import {
   Star,
   Trash2,
   MessageSquare,
+  History,
   X,
 } from "lucide-react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
@@ -21,6 +22,8 @@ import type { Collaborator, DocumentEditorHandle } from "@/components/DocumentEd
 import CommentsPanel from "@/components/CommentsPanel";
 import AddCommentDialog from "@/components/AddCommentDialog";
 import ShareDialog from "@/components/ShareDialog";
+import VersionHistoryPanel from "@/components/VersionHistoryPanel";
+import VersionPreviewEditor from "@/components/VersionPreviewEditor";
 
 // Dynamically import the editor to avoid SSR issues with Yjs
 const DocumentEditor = dynamic(
@@ -96,6 +99,15 @@ export default function DocumentEditorPage() {
   } | null>(null);
   const [selectedCommentId, setSelectedCommentId] = useState<string | null>(null);
   const [commentsPanelKey, setCommentsPanelKey] = useState(0);
+
+  // Version history state
+  const [showVersionPanel, setShowVersionPanel] = useState(false);
+  const [versionPreview, setVersionPreview] = useState<{
+    versionId: string;
+    snapshot: string;
+    name: string;
+  } | null>(null);
+  const [isRestoringVersion, setIsRestoringVersion] = useState(false);
 
   const editorRef = useRef<DocumentEditorHandle>(null);
 
@@ -303,6 +315,49 @@ export default function DocumentEditorPage() {
     }
   }, [selectedCommentId]);
 
+  // Handle version preview
+  const handlePreviewVersion = useCallback(
+    (versionId: string, snapshot: string, name: string) => {
+      setVersionPreview({ versionId, snapshot, name });
+    },
+    []
+  );
+
+  // Handle version restore from panel
+  const handleRestoreVersion = useCallback(() => {
+    // Force reload the page to get fresh content after restore
+    window.location.reload();
+  }, []);
+
+  // Handle restore from preview
+  const handleRestoreFromPreview = useCallback(async () => {
+    if (!versionPreview || !token) return;
+
+    try {
+      setIsRestoringVersion(true);
+
+      const res = await fetch(
+        `/api/documents/${documentId}/versions/${versionPreview.versionId}/restore`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to restore version");
+      }
+
+      // Force reload to get fresh content
+      window.location.reload();
+    } catch (err) {
+      console.error("Failed to restore version:", err);
+      alert(err instanceof Error ? err.message : "Failed to restore version");
+      setIsRestoringVersion(false);
+    }
+  }, [documentId, token, versionPreview]);
+
   if (isLoading) {
     return (
       <div className="h-full flex items-center justify-center bg-white">
@@ -453,9 +508,32 @@ export default function DocumentEditorPage() {
             </Tooltip.Provider>
           )}
 
+          {/* Version History button */}
+          <button
+            onClick={() => {
+              setShowVersionPanel(!showVersionPanel);
+              if (!showVersionPanel) {
+                setShowCommentsPanel(false);
+              }
+            }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+              showVersionPanel
+                ? "bg-purple-100 text-purple-700"
+                : "text-gray-700 hover:bg-gray-100"
+            }`}
+          >
+            <History className="w-4 h-4" />
+            <span>History</span>
+          </button>
+
           {/* Comments button */}
           <button
-            onClick={() => setShowCommentsPanel(!showCommentsPanel)}
+            onClick={() => {
+              setShowCommentsPanel(!showCommentsPanel);
+              if (!showCommentsPanel) {
+                setShowVersionPanel(false);
+              }
+            }}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
               showCommentsPanel
                 ? "bg-yellow-100 text-yellow-700"
@@ -535,6 +613,19 @@ export default function DocumentEditorPage() {
           />
         </div>
 
+        {/* Version History Panel */}
+        {showVersionPanel && (
+          <div className="w-80 border-l border-gray-200 flex flex-col">
+            <VersionHistoryPanel
+              documentId={documentId}
+              token={token}
+              onPreviewVersion={handlePreviewVersion}
+              onRestoreVersion={handleRestoreVersion}
+              onClose={() => setShowVersionPanel(false)}
+            />
+          </div>
+        )}
+
         {/* Comments Panel */}
         {showCommentsPanel && (
           <div className="w-80 border-l border-gray-200 flex flex-col">
@@ -581,6 +672,18 @@ export default function DocumentEditorPage() {
         token={token}
         currentUserRole={document.currentUserRole}
       />
+
+      {/* Version Preview Overlay */}
+      {versionPreview && (
+        <VersionPreviewEditor
+          versionId={versionPreview.versionId}
+          versionName={versionPreview.name}
+          snapshot={versionPreview.snapshot}
+          onClose={() => setVersionPreview(null)}
+          onRestore={handleRestoreFromPreview}
+          isRestoring={isRestoringVersion}
+        />
+      )}
     </div>
   );
 }

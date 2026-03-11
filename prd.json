@@ -970,8 +970,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 58,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented document version management with full API and UI support. API: POST /documents/:id/versions creates named snapshot from current Yjs state, GET /documents/:id/versions lists all versions with creator info, GET /documents/:id/versions/:versionId returns version with base64-encoded snapshot, POST /documents/:id/versions/:versionId/restore replaces document's Yjs state with version snapshot. UI: History button in document header opens VersionHistoryPanel showing version list with create/preview/restore actions. Create version dialog prompts for version name. VersionPreviewEditor displays read-only preview of version content by parsing Yjs state and converting to TipTap JSON format. Restore button with confirmation replaces current content and reloads page. Uses existing documentVersions schema table. Typecheck passes."
     },
     {
       "id": "US-059",
