@@ -1111,8 +1111,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 66,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created ViewToolbar component (apps/web/src/components/base/ViewToolbar.tsx) with shared filter/sort/group controls. Filter bar supports multiple conditions with AND/OR logic, field-type-aware operators (contains, eq, gt, lt, etc.). Sort panel supports multiple sort levels with field and direction selection. Group by picker allows grouping by single_select or user fields. Updated fetchRecords to apply view config filters and sorts via query parameters. Integrated ViewToolbar into Base page between view tabs and main content, consistent across Grid and Kanban views. Removed duplicate group-by dropdown from Kanban view."
     },
     {
       "id": "US-067",

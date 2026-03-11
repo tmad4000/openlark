@@ -66,3 +66,4 @@
 [2026-03-10 20:55] US-063 — Base CRUD API - tables, fields, records — PASS
 [2026-03-10 20:59] US-064 — Base UI - Grid view — PASS
 [2026-03-10 21:30] US-065 — Base - Kanban view — PASS
+[2026-03-10 21:14] US-066 — Base - View filtering, sorting, and grouping — PASS

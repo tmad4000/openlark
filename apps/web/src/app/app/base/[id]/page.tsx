@@ -23,7 +23,11 @@ import {
   Paperclip,
   List,
   GripVertical,
+  Filter,
+  ArrowUpDown,
+  Layers,
 } from "lucide-react";
+import { ViewToolbar } from "@/components/base/ViewToolbar";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -838,7 +842,6 @@ function KanbanView({
   onUpdateViewConfig: (config: Partial<ViewConfig>) => void;
 }) {
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [showGroupByPicker, setShowGroupByPicker] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -929,12 +932,13 @@ function KanbanView({
 
   const activeRecord = activeId ? records.find((r) => r.id === activeId) : null;
 
-  // Show field picker if no group field is selected
-  const selectableFields = table.fields.filter(
+  // Check if there are any groupable fields
+  const hasGroupableFields = table.fields.some(
     (f) => f.type === "single_select" || f.type === "user"
   );
 
-  if (!groupField && selectableFields.length === 0) {
+  // Show empty state if no grouping field is available
+  if (!groupField && !hasGroupableFields) {
     return (
       <div className="flex-1 flex items-center justify-center p-8">
         <div className="text-center">
@@ -952,40 +956,6 @@ function KanbanView({
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      {/* Kanban toolbar */}
-      <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-200 bg-white">
-        <span className="text-sm text-gray-500">Group by:</span>
-        <DropdownMenu.Root open={showGroupByPicker} onOpenChange={setShowGroupByPicker}>
-          <DropdownMenu.Trigger asChild>
-            <button className="flex items-center gap-1 px-2 py-1 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded">
-              {groupField?.name || "Select field"}
-              <ChevronDown className="w-3 h-3" />
-            </button>
-          </DropdownMenu.Trigger>
-          <DropdownMenu.Portal>
-            <DropdownMenu.Content
-              className="bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[180px] z-50"
-              sideOffset={4}
-            >
-              {selectableFields.map((field) => (
-                <DropdownMenu.Item
-                  key={field.id}
-                  className="px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer focus:outline-none flex items-center gap-2"
-                  onSelect={() => {
-                    onUpdateViewConfig({ groupByFieldId: field.id });
-                    setShowGroupByPicker(false);
-                  }}
-                >
-                  <List className="w-4 h-4 text-gray-500" />
-                  {field.name}
-                  {field.id === groupField?.id && <Check className="w-4 h-4 text-blue-600 ml-auto" />}
-                </DropdownMenu.Item>
-              ))}
-            </DropdownMenu.Content>
-          </DropdownMenu.Portal>
-        </DropdownMenu.Root>
-      </div>
-
       {/* Kanban board */}
       <div className="flex-1 overflow-x-auto p-4">
         <DndContext
@@ -1191,7 +1161,7 @@ export default function BasePage() {
     }
   }, [activeTableId, activeViewId]);
 
-  // Fetch records
+  // Fetch records with filters and sorts from view config
   const fetchRecords = useCallback(async () => {
     if (!activeTableId) return;
 
@@ -1199,7 +1169,26 @@ export default function BasePage() {
     if (!token) return;
 
     try {
-      const res = await fetch(`/api/tables/${activeTableId}/records?limit=100`, {
+      // Build query params
+      const params = new URLSearchParams();
+      params.set("limit", "100");
+
+      // Apply filters from view config
+      if (activeView?.config?.filters && activeView.config.filters.length > 0) {
+        // Convert filter array to the API format: { fieldId: { op, value } }
+        const filterObj: Record<string, { op: string; value: unknown }> = {};
+        for (const filter of activeView.config.filters) {
+          filterObj[filter.fieldId] = { op: filter.op, value: filter.value };
+        }
+        params.set("filters", JSON.stringify(filterObj));
+      }
+
+      // Apply sorts from view config
+      if (activeView?.config?.sorts && activeView.config.sorts.length > 0) {
+        params.set("sort", JSON.stringify(activeView.config.sorts));
+      }
+
+      const res = await fetch(`/api/tables/${activeTableId}/records?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -1209,7 +1198,7 @@ export default function BasePage() {
     } catch (error) {
       console.error("Failed to fetch records:", error);
     }
-  }, [activeTableId]);
+  }, [activeTableId, activeView?.config?.filters, activeView?.config?.sorts]);
 
   useEffect(() => {
     fetchBase();
@@ -1579,6 +1568,20 @@ export default function BasePage() {
             <Plus className="w-4 h-4" />
           </button>
         </div>
+      )}
+
+      {/* View toolbar with filter/sort/group */}
+      {activeTable && activeView && (
+        <ViewToolbar
+          fields={activeTable.fields}
+          filters={activeView.config?.filters || []}
+          sorts={activeView.config?.sorts || []}
+          groupByFieldId={activeView.config?.groupByFieldId}
+          onFiltersChange={(filters) => updateViewConfig({ filters })}
+          onSortsChange={(sorts) => updateViewConfig({ sorts })}
+          onGroupByChange={(groupByFieldId) => updateViewConfig({ groupByFieldId })}
+          showGroupBy={activeView.type === "kanban" || activeView.type === "grid"}
+        />
       )}
 
       {/* Main content area with optional detail panel */}
