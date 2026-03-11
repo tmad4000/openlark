@@ -122,7 +122,8 @@ export function TopicGroupView({
   const [newTopicMessage, setNewTopicMessage] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<"all" | "open" | "closed">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "open" | "closed" | "subscribed">("all");
+  const [userRole, setUserRole] = useState<string>("member");
 
   // Load topics
   const loadTopics = useCallback(async () => {
@@ -130,9 +131,18 @@ export function TopicGroupView({
     if (!token) return;
 
     try {
-      const url = statusFilter === "all"
-        ? `/api/chats/${chat.id}/topics`
-        : `/api/chats/${chat.id}/topics?status=${statusFilter}`;
+      let url = `/api/chats/${chat.id}/topics`;
+      const params = new URLSearchParams();
+
+      if (statusFilter === "subscribed") {
+        params.set("subscribed", "true");
+      } else if (statusFilter !== "all") {
+        params.set("status", statusFilter);
+      }
+
+      if (params.toString()) {
+        url += `?${params.toString()}`;
+      }
 
       const res = await fetch(url, {
         headers: {
@@ -144,6 +154,7 @@ export function TopicGroupView({
 
       const data = await res.json();
       setTopics(data.topics);
+      setUserRole(data.userRole || "member");
       setIsLoading(false);
     } catch (e) {
       setError("Failed to load topics");
@@ -154,6 +165,32 @@ export function TopicGroupView({
   useEffect(() => {
     loadTopics();
   }, [loadTopics]);
+
+  // Toggle subscription for a topic
+  const handleSubscriptionToggle = useCallback(async (topicId: string, subscribe: boolean) => {
+    const token = getCookie("session_token");
+    if (!token) return;
+
+    try {
+      const res = await fetch(`/api/topics/${topicId}/subscribe`, {
+        method: subscribe ? "POST" : "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (res.ok) {
+        // Update the topic in state
+        setTopics((prev) =>
+          prev.map((t) =>
+            t.id === topicId ? { ...t, isSubscribed: subscribe } : t
+          )
+        );
+      }
+    } catch (e) {
+      // Silent fail
+    }
+  }, []);
 
   // Create topic
   const handleCreateTopic = async () => {
@@ -217,6 +254,7 @@ export function TopicGroupView({
         topic={selectedTopic}
         chatId={chat.id}
         currentUserId={currentUserId}
+        userRole={userRole}
         onBack={() => {
           setSelectedTopic(null);
           loadTopics(); // Refresh topics when going back
@@ -260,7 +298,7 @@ export function TopicGroupView({
 
         {/* Status filter tabs */}
         <div className="flex gap-2 mt-4">
-          {(["all", "open", "closed"] as const).map((filter) => (
+          {(["all", "subscribed", "open", "closed"] as const).map((filter) => (
             <button
               key={filter}
               onClick={() => setStatusFilter(filter)}
@@ -297,6 +335,7 @@ export function TopicGroupView({
                 key={topic.id}
                 topic={topic}
                 onClick={() => setSelectedTopic(topic)}
+                onSubscriptionToggle={handleSubscriptionToggle}
               />
             ))}
           </div>
@@ -373,11 +412,31 @@ export function TopicGroupView({
   );
 }
 
-function TopicRow({ topic, onClick }: { topic: Topic; onClick: () => void }) {
+function TopicRow({
+  topic,
+  onClick,
+  onSubscriptionToggle,
+}: {
+  topic: Topic;
+  onClick: () => void;
+  onSubscriptionToggle: (topicId: string, subscribe: boolean) => Promise<void>;
+}) {
+  const [isToggling, setIsToggling] = useState(false);
+
+  const handleSubscribeClick = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsToggling(true);
+    try {
+      await onSubscriptionToggle(topic.id, !topic.isSubscribed);
+    } finally {
+      setIsToggling(false);
+    }
+  };
+
   return (
-    <button
+    <div
       onClick={onClick}
-      className="w-full flex items-center gap-3 p-4 hover:bg-gray-50 transition-colors text-left"
+      className="w-full flex items-center gap-3 p-4 hover:bg-gray-50 transition-colors text-left cursor-pointer"
     >
       <div className="flex-shrink-0">
         {topic.status === "open" ? (
@@ -394,11 +453,6 @@ function TopicRow({ topic, onClick }: { topic: Topic; onClick: () => void }) {
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <h3 className="font-medium text-gray-900 truncate">{topic.title}</h3>
-          {topic.isSubscribed && (
-            <span className="flex-shrink-0 text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">
-              Subscribed
-            </span>
-          )}
           {topic.status === "closed" && (
             <span className="flex-shrink-0 text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full">
               Closed
@@ -418,15 +472,35 @@ function TopicRow({ topic, onClick }: { topic: Topic; onClick: () => void }) {
         </div>
       </div>
 
-      <div className="flex-shrink-0 flex items-center gap-2 text-gray-400">
-        <span className="text-sm">
+      <div className="flex-shrink-0 flex items-center gap-3">
+        <button
+          onClick={handleSubscribeClick}
+          disabled={isToggling}
+          className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+            topic.isSubscribed
+              ? "bg-blue-100 text-blue-700 hover:bg-blue-200"
+              : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+          } disabled:opacity-50`}
+        >
+          {isToggling ? (
+            <Loader2 className="w-3 h-3 animate-spin" />
+          ) : topic.isSubscribed ? (
+            <span className="flex items-center gap-1">
+              <Check className="w-3 h-3" />
+              Subscribed
+            </span>
+          ) : (
+            "Subscribe"
+          )}
+        </button>
+        <span className="text-sm text-gray-400">
           {topic.lastActivity
             ? formatTimestamp(topic.lastActivity)
             : formatTimestamp(topic.createdAt)}
         </span>
-        <ChevronRight className="w-5 h-5" />
+        <ChevronRight className="w-5 h-5 text-gray-400" />
       </div>
-    </button>
+    </div>
   );
 }
 
@@ -434,6 +508,7 @@ interface TopicViewProps {
   topic: Topic;
   chatId: string;
   currentUserId: string;
+  userRole: string;
   onBack: () => void;
   onTopicUpdated: (topic: Topic) => void;
 }
@@ -442,6 +517,7 @@ function TopicView({
   topic,
   chatId,
   currentUserId,
+  userRole,
   onBack,
   onTopicUpdated,
 }: TopicViewProps) {
@@ -454,8 +530,8 @@ function TopicView({
   const [isUpdating, setIsUpdating] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Check if current user can manage topic (creator or owner)
-  const canManageTopic = topic.creatorId === currentUserId;
+  // Check if current user can manage topic (creator or group owner)
+  const canManageTopic = topic.creatorId === currentUserId || userRole === "owner";
 
   // Load messages
   useEffect(() => {

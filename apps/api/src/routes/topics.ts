@@ -186,18 +186,18 @@ export async function topicsRoutes(fastify: FastifyInstance) {
 
   /**
    * GET /chats/:id/topics - Get all topics in a topic_group chat
-   * Query: status (open|closed), cursor, limit
+   * Query: status (open|closed), subscribed (true), cursor, limit
    * Returns: Paginated list of topics (open first, then closed)
    */
   fastify.get<{
     Params: { id: string };
-    Querystring: { status?: "open" | "closed"; cursor?: string; limit?: string };
+    Querystring: { status?: "open" | "closed"; subscribed?: string; cursor?: string; limit?: string };
   }>(
     "/chats/:id/topics",
     { preHandler: authMiddleware },
     async (request, reply) => {
       const { id: chatId } = request.params;
-      const { status, cursor, limit: limitStr } = request.query;
+      const { status, subscribed, cursor, limit: limitStr } = request.query;
 
       // Validate chatId format
       if (!UUID_REGEX.test(chatId)) {
@@ -212,6 +212,9 @@ export async function topicsRoutes(fastify: FastifyInstance) {
           error: "status must be 'open' or 'closed'",
         });
       }
+
+      // Parse subscribed filter
+      const filterSubscribed = subscribed === "true";
 
       // Parse and validate limit
       const limit = Math.min(Math.max(parseInt(limitStr || "50", 10) || 50, 1), 100);
@@ -271,30 +274,67 @@ export async function topicsRoutes(fastify: FastifyInstance) {
 
       // Get topics with creator info
       // Order: open topics first (newest), then closed topics (newest)
-      const topicRows = await db
-        .select({
-          id: topics.id,
-          chatId: topics.chatId,
-          title: topics.title,
-          creatorId: topics.creatorId,
-          status: topics.status,
-          createdAt: topics.createdAt,
-          creator: {
-            id: users.id,
-            displayName: users.displayName,
-            avatarUrl: users.avatarUrl,
-          },
-        })
-        .from(topics)
-        .innerJoin(users, eq(topics.creatorId, users.id))
-        .where(and(...conditions))
-        .orderBy(
-          // Open topics first, then closed
-          asc(sql`CASE WHEN ${topics.status} = 'open' THEN 0 ELSE 1 END`),
-          // Within each status, newest first
-          desc(topics.createdAt)
-        )
-        .limit(limit + 1);
+      let topicRows;
+
+      if (filterSubscribed) {
+        // When filtering by subscribed, join with topic_subscriptions
+        topicRows = await db
+          .select({
+            id: topics.id,
+            chatId: topics.chatId,
+            title: topics.title,
+            creatorId: topics.creatorId,
+            status: topics.status,
+            createdAt: topics.createdAt,
+            creator: {
+              id: users.id,
+              displayName: users.displayName,
+              avatarUrl: users.avatarUrl,
+            },
+          })
+          .from(topics)
+          .innerJoin(users, eq(topics.creatorId, users.id))
+          .innerJoin(
+            topicSubscriptions,
+            and(
+              eq(topicSubscriptions.topicId, topics.id),
+              eq(topicSubscriptions.userId, currentUserId)
+            )
+          )
+          .where(and(...conditions))
+          .orderBy(
+            // Open topics first, then closed
+            asc(sql`CASE WHEN ${topics.status} = 'open' THEN 0 ELSE 1 END`),
+            // Within each status, newest first
+            desc(topics.createdAt)
+          )
+          .limit(limit + 1);
+      } else {
+        topicRows = await db
+          .select({
+            id: topics.id,
+            chatId: topics.chatId,
+            title: topics.title,
+            creatorId: topics.creatorId,
+            status: topics.status,
+            createdAt: topics.createdAt,
+            creator: {
+              id: users.id,
+              displayName: users.displayName,
+              avatarUrl: users.avatarUrl,
+            },
+          })
+          .from(topics)
+          .innerJoin(users, eq(topics.creatorId, users.id))
+          .where(and(...conditions))
+          .orderBy(
+            // Open topics first, then closed
+            asc(sql`CASE WHEN ${topics.status} = 'open' THEN 0 ELSE 1 END`),
+            // Within each status, newest first
+            desc(topics.createdAt)
+          )
+          .limit(limit + 1);
+      }
 
       // Determine if there are more topics
       const hasMore = topicRows.length > limit;
@@ -383,6 +423,7 @@ export async function topicsRoutes(fastify: FastifyInstance) {
         topics: topicsResponse,
         nextCursor,
         hasMore,
+        userRole: membership.role,
       });
     }
   );

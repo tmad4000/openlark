@@ -731,8 +731,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 44,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented: (1) Subscribe button on each topic row with toggle, (2) 'Subscribed' filter tab in TopicGroupView, (3) API supports subscribed=true filter, (4) Auto-subscribe on create topic and reply already implemented in US-043, (5) Close/reopen controls for both topic creator and group owner, (6) userRole passed from API to frontend for owner permission check."
     },
     {
       "id": "US-045",
