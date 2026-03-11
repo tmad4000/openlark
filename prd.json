@@ -1024,8 +1024,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 61,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented Wiki UI with: (1) /app/wiki page showing space cards with name, description, icon, member count, visibility indicator (lock/globe), and create dialog with type selection (private/public); (2) /app/wiki/[spaceId] page with space detail view: left sidebar shows page tree with expand/collapse functionality, page selection, hover actions (create child, delete); (3) Center panel loads DocumentEditor (same as Docs) connected to Hocuspocus via yjsDocId; (4) Breadcrumb navigation in gray bar showing Wiki > Space > Parent Pages > Current Page with clickable navigation; (5) Create page button at top of sidebar (root) and plus icon on each page row (child), both open dialog with title input; (6) Drag-and-drop pages in tree with position indicators (before/inside/after), calls PATCH /wiki/pages/:id API to update parentPageId and position. Added 'wiki' to modulesWithOwnSidebar in app layout. Typecheck passes."
     },
     {
       "id": "US-062",
