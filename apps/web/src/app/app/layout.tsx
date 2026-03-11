@@ -250,7 +250,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const activeModule = getActiveModule();
 
   // Modules that have their own sidebar layout
-  const modulesWithOwnSidebar = ["messenger"];
+  const modulesWithOwnSidebar = ["messenger", "calendar"];
   const hasOwnSidebar = modulesWithOwnSidebar.includes(activeModule);
 
   return (

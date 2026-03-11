@@ -798,8 +798,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 48,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created /app/calendar page with monthly grid view. Features: (1) Monthly calendar grid with 7-day columns and dynamic row count, (2) Events displayed as colored blocks on dates with time prefix, (3) Click date to select it (event creation ready for US-049), (4) Click event shows popover with title, time, location, attendees, description, organizer, (5) Navigation: Today button, prev/next month chevrons, month/year title, (6) Mini calendar in left sidebar for quick date navigation with month controls. Added 'calendar' to modulesWithOwnSidebar in app layout. Uses Radix Popover for event details. Typecheck passes."
     },
     {
       "id": "US-049",
