@@ -748,8 +748,8 @@
         "Typecheck passes"
       ],
       "priority": 45,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created calendar.ts schema with all five tables: calendars (with calendar_type enum), calendar_subscriptions, meeting_rooms, calendar_events (with deletedAt for soft delete, settings jsonb), event_attendees (with rsvp_status enum). Migration 0012_ambiguous_quicksilver.sql created and applied successfully."
     },
     {
       "id": "US-046",
