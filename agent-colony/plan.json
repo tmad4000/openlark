@@ -541,6 +541,12 @@
           "role": "reviewer",
           "value": 1,
           "reason": "Iter 18 review: Calendar module well-implemented. 3/5 subtasks complete. Backend has full CRUD for events, calendars, rooms, RSVP. Frontend has EventList and CreateEventDialog. One bug found: frontend rsvpEvent sends {rsvp:} but backend expects {response:} (apps/web/src/lib/api.ts:233). Static method pattern (EventList.addEvent) reuses fragile pattern from Messenger. Tests pass (320 total)."
+        },
+        {
+          "iteration": 19,
+          "role": "implementer",
+          "value": 1,
+          "reason": "Iteration 19: Critical RSVP bug must be fixed. apps/web/src/lib/api.ts:233 sends { rsvp } but backend expects { response }. This breaks the calendar RSVP flow entirely."
         }
       ],
       "comments": [
@@ -573,6 +579,11 @@
           "iteration": 18,
           "role": "reviewer",
           "message": "Iter 18 review: Calendar page is minimal - shows EventList and CreateEventDialog but no actual calendar view (weekly/monthly grid). Per goal.md FR-6.13, drag-and-drop rescheduling requires a visual calendar component. This is captured in subtask 4 but should be high priority for usable Calendar UX."
+        },
+        {
+          "iteration": 19,
+          "role": "implementer",
+          "message": "Iteration 19: Fixed critical RSVP bug. Changed api.ts:228-233 from JSON.stringify({ rsvp }) to JSON.stringify({ response }) to match backend rsvpSchema. Added 2 tests to prevent regression."
         }
       ],
       "status": "in-progress",
@@ -581,7 +592,7 @@
         "role": "implementer"
       },
       "claimedBy": {
-        "iteration": 17,
+        "iteration": 19,
         "role": "implementer"
       },
       "splitFrom": null
@@ -1319,7 +1330,7 @@
   ],
   "metadata": {
     "createdAt": "2026-03-04T21:00:00Z",
-    "totalIterations": 28,
+    "totalIterations": 29,
     "iterationLog": [
       {
         "iteration": 1,
@@ -1487,6 +1498,12 @@
         "iteration": 28,
         "role": "implementer",
         "taskWorked": "T-004",
+        "contextCompacted": false
+      },
+      {
+        "iteration": 29,
+        "role": "reviewer",
+        "taskWorked": null,
         "contextCompacted": false
       }
     ]

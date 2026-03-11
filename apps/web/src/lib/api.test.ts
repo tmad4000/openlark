@@ -98,4 +98,44 @@ describe("ApiClient", () => {
       await expect(api.me()).rejects.toThrow("Failed to fetch");
     });
   });
+
+  describe("calendar endpoints", () => {
+    it("rsvpEvent sends response field, not rsvp field", async () => {
+      api.setToken("test-token");
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ data: { attendee: {} } }),
+      });
+
+      await api.rsvpEvent("event-123", "yes");
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        expect.stringContaining("/calendar/events/event-123/rsvp"),
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({ response: "yes" }),
+        })
+      );
+    });
+
+    it("rsvpEvent sends correct response values", async () => {
+      api.setToken("test-token");
+
+      for (const value of ["yes", "no", "maybe"] as const) {
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({ data: { attendee: {} } }),
+        });
+
+        await api.rsvpEvent("event-456", value);
+
+        expect(mockFetch).toHaveBeenLastCalledWith(
+          expect.any(String),
+          expect.objectContaining({
+            body: JSON.stringify({ response: value }),
+          })
+        );
+      }
+    });
+  });
 });

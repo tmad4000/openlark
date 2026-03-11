@@ -2042,3 +2042,51 @@ Pattern: Each implementation iteration followed by progress log update, with mea
 5. **Progress log format** - Implementation sections with "What was implemented", "Files changed", "Tests added", "Plan deviations", "Learnings"
 
 ---
+
+## 2026-03-10 - Iteration 19 - T-004 (RSVP Bug Fix)
+
+### What was implemented
+Fixed critical RSVP API mismatch bug flagged in iteration 18 review:
+
+1. **Bug fix** (`apps/web/src/lib/api.ts:228-233`):
+   - Changed parameter name from `rsvp` to `response` (matches Zod schema)
+   - Changed JSON body from `{ rsvp }` to `{ response }`
+   - Backend `rsvpSchema` expects `{ response: "yes" | "no" | "maybe" }`
+
+2. **Tests** (`apps/web/src/lib/api.test.ts`):
+   - Added test verifying correct field name is sent
+   - Added test verifying all valid response values ("yes", "no", "maybe")
+   - Tests fail with old code, pass with fix
+
+### Files changed
+- `apps/web/src/lib/api.ts` - Fixed rsvpEvent method body
+- `apps/web/src/lib/api.test.ts` - Added 2 tests for RSVP endpoint
+
+### Tests added
+- **2 RSVP tests**:
+  - `rsvpEvent sends response field, not rsvp field` - verifies correct JSON structure
+  - `rsvpEvent sends correct response values` - verifies all valid response values
+
+### Plan deviations
+- None — fixed exactly the bug identified in iteration 18 review
+
+### Learnings for future iterations
+- **Pattern reinforced**: Write test first to confirm bug exists, then fix, then verify test passes
+- **Gotcha**: When adding API methods, always cross-check parameter names against backend Zod schemas
+- **Self-reflection**: This bug was caught in review (iteration 18) but should have been caught during implementation (iteration 17). Future iterations should include smoke testing of new API methods against the actual backend.
+
+### Tech debt addressed
+- ✅ RSVP API mismatch (`api.ts:233` → now sends correct field)
+
+### Tech debt remaining
+- T-004 subtasks 3-4 (room booking UI, shared calendars, iCal, drag-and-drop)
+- Event details view is placeholder (shows event ID only)
+- RSVP UI component not implemented yet (button to call the fixed API)
+- Static method pattern fragile (`chat-list.tsx`, `message-list.tsx`, `event-list.tsx`)
+- Raw UUID input for chat creation
+- Auto-generated tabs not implemented (FR-2.15 partial)
+- Typing/presence tests skipped
+- Login needs org context for multi-tenant
+- `next lint` deprecation warning
+
+---

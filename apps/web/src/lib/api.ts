@@ -225,12 +225,12 @@ class ApiClient {
     });
   }
 
-  async rsvpEvent(eventId: string, rsvp: "yes" | "no" | "maybe") {
+  async rsvpEvent(eventId: string, response: "yes" | "no" | "maybe") {
     return this.request<{ attendee: EventAttendee }>(
       `/calendar/events/${eventId}/rsvp`,
       {
         method: "POST",
-        body: JSON.stringify({ rsvp }),
+        body: JSON.stringify({ response }),
       }
     );
   }
