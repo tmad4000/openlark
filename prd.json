@@ -988,8 +988,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 59,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Enhanced /app/docs page with: (1) Document cards showing type-specific icons (FileText for doc, Table2 for sheet, Presentation for slide, Brain for mindnote, Layout for board) with colored backgrounds, title, owner avatar, and last edited time; (2) Create New dropdown button with type selector for Doc, Sheet, Slide, MindNote, Board; (3) Search bar for filtering documents by title; (4) Ownership filter tabs (All, Owned by me, Shared with me) with API support via ownership query param; (5) Sort dropdown (Last modified, Date created, Title) with API support via sort query param; (6) Grid and list view toggle. API updated: GET /documents supports ownership filter (all/owned/shared) and sort option (modified/created/title). Typecheck passes."
     },
     {
       "id": "US-060",

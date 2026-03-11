@@ -45,10 +45,20 @@ interface UpdateDocumentBody {
   };
 }
 
+// Valid ownership filters
+const VALID_OWNERSHIP = ["all", "owned", "shared"] as const;
+type OwnershipFilter = (typeof VALID_OWNERSHIP)[number];
+
+// Valid sort options
+const VALID_SORT = ["modified", "created", "title"] as const;
+type SortOption = (typeof VALID_SORT)[number];
+
 interface GetDocumentsQuery {
   limit?: number;
   offset?: number;
   type?: DocType;
+  ownership?: OwnershipFilter;
+  sort?: SortOption;
 }
 
 interface AddPermissionBody {
@@ -236,14 +246,14 @@ export async function documentsRoutes(fastify: FastifyInstance) {
 
   /**
    * GET /documents - Get user's documents (owned + shared)
-   * Query: { limit?: number, offset?: number, type?: DocType }
+   * Query: { limit?: number, offset?: number, type?: DocType, ownership?: OwnershipFilter, sort?: SortOption }
    * Returns: Paginated list of documents
    */
   fastify.get<{ Querystring: GetDocumentsQuery }>(
     "/documents",
     { preHandler: authMiddleware },
     async (request, reply) => {
-      const { limit = 50, offset = 0, type } = request.query;
+      const { limit = 50, offset = 0, type, ownership = "all", sort = "modified" } = request.query;
 
       // Validate limit and offset
       const parsedLimit = Math.min(Math.max(Number(limit) || 50, 1), 100);
@@ -269,36 +279,78 @@ export async function documentsRoutes(fastify: FastifyInstance) {
         .map((m) => m.departmentId)
         .filter((id): id is string => id !== null);
 
-      // Build the permission conditions
-      const permissionConditions = or(
-        // Documents user owns
-        eq(documents.ownerId, currentUserId),
-        // Documents with explicit user permission
-        sql`EXISTS (
-          SELECT 1 FROM document_permissions dp
-          WHERE dp.document_id = ${documents.id}
-          AND dp.principal_type = 'user'
-          AND dp.principal_id = ${currentUserId}
-        )`,
-        // Documents with department permission
-        ...(departmentIds.length > 0
-          ? [
-              sql`EXISTS (
-                SELECT 1 FROM document_permissions dp
-                WHERE dp.document_id = ${documents.id}
-                AND dp.principal_type = 'department'
-                AND dp.principal_id = ANY(${departmentIds})
-              )`,
-            ]
-          : []),
-        // Documents with org-wide permission
-        sql`EXISTS (
-          SELECT 1 FROM document_permissions dp
-          WHERE dp.document_id = ${documents.id}
-          AND dp.principal_type = 'org'
-          AND dp.principal_id = ${orgId}
-        )`
-      );
+      // Build the permission conditions based on ownership filter
+      let permissionConditions;
+
+      if (ownership === "owned") {
+        // Only documents user owns
+        permissionConditions = eq(documents.ownerId, currentUserId);
+      } else if (ownership === "shared") {
+        // Only documents shared with user (not owned by user)
+        const sharedConditions = or(
+          // Documents with explicit user permission (not owner)
+          sql`EXISTS (
+            SELECT 1 FROM document_permissions dp
+            WHERE dp.document_id = ${documents.id}
+            AND dp.principal_type = 'user'
+            AND dp.principal_id = ${currentUserId}
+          )`,
+          // Documents with department permission
+          ...(departmentIds.length > 0
+            ? [
+                sql`EXISTS (
+                  SELECT 1 FROM document_permissions dp
+                  WHERE dp.document_id = ${documents.id}
+                  AND dp.principal_type = 'department'
+                  AND dp.principal_id = ANY(${departmentIds})
+                )`,
+              ]
+            : []),
+          // Documents with org-wide permission
+          sql`EXISTS (
+            SELECT 1 FROM document_permissions dp
+            WHERE dp.document_id = ${documents.id}
+            AND dp.principal_type = 'org'
+            AND dp.principal_id = ${orgId}
+          )`
+        );
+        // Exclude documents owned by user
+        permissionConditions = and(
+          sql`${documents.ownerId} != ${currentUserId}`,
+          sharedConditions
+        );
+      } else {
+        // "all" - documents user owns or has access to
+        permissionConditions = or(
+          // Documents user owns
+          eq(documents.ownerId, currentUserId),
+          // Documents with explicit user permission
+          sql`EXISTS (
+            SELECT 1 FROM document_permissions dp
+            WHERE dp.document_id = ${documents.id}
+            AND dp.principal_type = 'user'
+            AND dp.principal_id = ${currentUserId}
+          )`,
+          // Documents with department permission
+          ...(departmentIds.length > 0
+            ? [
+                sql`EXISTS (
+                  SELECT 1 FROM document_permissions dp
+                  WHERE dp.document_id = ${documents.id}
+                  AND dp.principal_type = 'department'
+                  AND dp.principal_id = ANY(${departmentIds})
+                )`,
+              ]
+            : []),
+          // Documents with org-wide permission
+          sql`EXISTS (
+            SELECT 1 FROM document_permissions dp
+            WHERE dp.document_id = ${documents.id}
+            AND dp.principal_type = 'org'
+            AND dp.principal_id = ${orgId}
+          )`
+        );
+      }
 
       // Build where conditions
       const whereConditions = and(
@@ -315,6 +367,17 @@ export async function documentsRoutes(fastify: FastifyInstance) {
         .where(whereConditions);
 
       const total = countResult?.count ?? 0;
+
+      // Determine sort order
+      let orderByColumn;
+      if (sort === "created") {
+        orderByColumn = desc(documents.createdAt);
+      } else if (sort === "title") {
+        orderByColumn = sql`${documents.title} ASC`;
+      } else {
+        // Default: "modified"
+        orderByColumn = desc(documents.updatedAt);
+      }
 
       // Get documents with owner info
       const docs = await db
@@ -333,7 +396,7 @@ export async function documentsRoutes(fastify: FastifyInstance) {
         .from(documents)
         .innerJoin(users, eq(documents.ownerId, users.id))
         .where(whereConditions)
-        .orderBy(desc(documents.updatedAt))
+        .orderBy(orderByColumn)
         .limit(parsedLimit)
         .offset(parsedOffset);
 
