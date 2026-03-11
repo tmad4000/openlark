@@ -1896,3 +1896,77 @@ Calendar module implementing goal.md Module 6 (FR-6.1 through FR-6.7):
 - `next lint` deprecation warning
 
 ---
+
+## 2026-03-10 - Iteration 17 - T-004 (Calendar Frontend UI)
+
+### What was implemented
+Calendar frontend UI to make the calendar module usable (T-004 subtask 5):
+
+1. **Calendar API types and methods** (`apps/web/src/lib/api.ts`):
+   - Calendar, CalendarEvent, EventAttendee, MeetingRoom types
+   - API methods: getCalendars, createCalendar, getEvents, createEvent,
+     updateEvent, deleteEvent, rsvpEvent, getEventAttendees, getMeetingRooms
+
+2. **EventList component** (`apps/web/src/components/calendar/event-list.tsx`):
+   - Fetches events from API on mount
+   - Loading, empty, and error states
+   - Event items with time and location display
+   - Selection highlighting
+   - Static `addEvent` method for parent updates (following messenger pattern)
+   - 7 tests covering all states
+
+3. **CreateEventDialog component** (`apps/web/src/components/calendar/create-event-dialog.tsx`):
+   - Modal dialog built on Radix UI Dialog primitive
+   - Calendar selector (loads user's calendars)
+   - Form fields: title, description, start/end time, location
+   - Default times set to next hour
+   - Form clears on dialog close
+   - Loading and error states
+   - 8 tests covering form submission and error handling
+
+4. **CalendarPage** (`apps/web/src/app/(app)/calendar/page.tsx`):
+   - Uses AppShell with EventList in sidebar
+   - Create event dialog integration
+   - Empty state with welcome message when no event selected
+   - Event selection updates main view
+   - Follows messenger page structure exactly
+
+### Files changed
+- `apps/web/src/lib/api.ts` - Added calendar types and API methods
+- `apps/web/src/components/calendar/event-list.tsx` - New
+- `apps/web/src/components/calendar/event-list.test.tsx` - New (7 tests)
+- `apps/web/src/components/calendar/create-event-dialog.tsx` - New
+- `apps/web/src/components/calendar/create-event-dialog.test.tsx` - New (8 tests)
+- `apps/web/src/components/calendar/index.ts` - New (barrel exports)
+- `apps/web/src/app/(app)/calendar/page.tsx` - New
+
+### Tests added
+- **7 EventList tests**: loading state, empty state, renders events, shows location, error state, onSelectEvent callback, selection highlighting
+- **8 CreateEventDialog tests**: render when open, hidden when closed, shows form fields, requires title, creates event with form data, error message on failure, loading state, form clears on close
+
+### Plan deviations
+- None — followed established messenger patterns exactly
+
+### Learnings for future iterations
+- **Gap identified**: The calendar backend was "complete" (subtasks 1-2) but had no frontend, making it unusable. Added subtask 5 to cover the frontend gap.
+- **Pattern reinforced**: Following messenger page structure (AppShell, sidebar component, create dialog) made implementation straightforward
+- **Pattern reinforced**: Static method pattern (EventList.addEvent) for cross-component updates — consistent with messenger but still fragile
+- **Pattern reinforced**: Radix UI Dialog primitives with DialogContent, DialogHeader, DialogTitle, DialogFooter
+- **Pattern reinforced**: Form state reset via useEffect on dialog open state change
+- **Self-reflection**: Phase 1 per goal.md requires each module to "deliver standalone value." Backend without frontend is not standalone value. Future iterations should plan frontend UI as part of the initial module task.
+
+### Tech debt addressed
+- ✅ T-004 subtask 5 (calendar frontend UI) - calendar is now usable
+
+### Tech debt remaining
+- T-004 subtasks 3-4 (room booking UI, shared calendars, iCal, drag-and-drop)
+- Event details view is a placeholder (shows event ID only)
+- RSVP UI not implemented yet
+- Static method pattern fragile (`chat-list.tsx`, `message-list.tsx`, `event-list.tsx`)
+- Raw UUID input for chat creation
+- Auto-generated tabs not implemented (FR-2.15 partial)
+- Typing/presence tests skipped
+- Login needs org context for multi-tenant
+- `next lint` deprecation warning
+
+---
