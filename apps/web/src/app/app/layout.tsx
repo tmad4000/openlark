@@ -10,6 +10,7 @@ import {
   Database,
   BookOpen,
   Mail,
+  FileCheck,
   Settings,
   User,
   LogOut,
@@ -46,6 +47,7 @@ const NAV_ITEMS = [
   { id: "tasks", label: "Tasks", icon: CheckSquare, href: "/app/tasks" },
   { id: "base", label: "Base", icon: Database, href: "/app/base" },
   { id: "wiki", label: "Wiki", icon: BookOpen, href: "/app/wiki" },
+  { id: "approvals", label: "Approvals", icon: FileCheck, href: "/app/approvals" },
   { id: "email", label: "Email", icon: Mail, href: "/app/email" },
   { id: "admin", label: "Admin", icon: Settings, href: "/app/admin" },
 ];
