@@ -1006,8 +1006,8 @@
         "Typecheck passes"
       ],
       "priority": 60,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Wiki schema (wiki_spaces, wiki_space_members, wiki_pages) with enums, self-ref FK for page tree. Full CRUD API under /api/v1/wiki with space membership, auto-document creation for pages."
     },
     {
       "id": "US-061",

@@ -8,3 +8,4 @@ export * from "./messenger";
 export * from "./calendar";
 export * from "./docs";
 export * from "./notifications";
+export * from "./wiki";
