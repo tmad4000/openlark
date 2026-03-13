@@ -850,8 +850,8 @@
         "Typecheck passes"
       ],
       "priority": 51,
-      "passes": false,
-      "notes": "Hocuspocus handles WebSocket connections for document editing. Separate from the chat WebSocket."
+      "passes": true,
+      "notes": "Standalone Hocuspocus collaboration server at apps/collab. Uses Server class with PostgreSQL Database extension for Yjs persistence. Auth hook validates JWT session tokens and checks document permissions. Awareness (cursor positions, user info) broadcasts via built-in Hocuspocus awareness protocol. Added to docker-compose.yml on port 1234."
     },
     {
       "id": "US-052",

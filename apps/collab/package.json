@@ -1,0 +1,28 @@
+{
+  "name": "@openlark/collab",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc --project tsconfig.json",
+    "start": "node dist/index.js",
+    "clean": "rm -rf dist .turbo"
+  },
+  "dependencies": {
+    "@hocuspocus/extension-database": "^3.4.4",
+    "@hocuspocus/server": "^3.4.4",
+    "drizzle-orm": "^0.38.4",
+    "jsonwebtoken": "^9.0.2",
+    "postgres": "^3.4.5",
+    "yjs": "^13.6.29",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/node": "^22.10.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}
