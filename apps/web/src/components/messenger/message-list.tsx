@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import { api, type Message, type MessageReaction } from "@/lib/api";
 import { useAuth } from "@/hooks/use-auth";
-import { Loader2, Clock, AlertCircle, MessageSquareText, Pin, Star, Pencil, Trash2, Check, X } from "lucide-react";
+import { Loader2, Clock, AlertCircle, MessageSquareText, Pin, Star, Pencil, Trash2, Check, X, Forward } from "lucide-react";
 import {
   ReadReceiptIndicator,
   type ReadStatus,
@@ -46,9 +46,10 @@ interface MessageListProps {
   onUnfavoriteMessage?: (messageId: string) => void;
   onEditMessage?: (messageId: string, content: string) => Promise<void>;
   onRecallMessage?: (messageId: string) => Promise<void>;
+  onForwardMessage?: (message: Message) => void;
 }
 
-export function MessageList({ chatId, onMessagesLoaded, onlineUsers, memberCount, onOpenThread, pinnedMessageIds, favoritedMessageIds, onPinMessage, onUnpinMessage, onFavoriteMessage, onUnfavoriteMessage, onEditMessage, onRecallMessage }: MessageListProps) {
+export function MessageList({ chatId, onMessagesLoaded, onlineUsers, memberCount, onOpenThread, pinnedMessageIds, favoritedMessageIds, onPinMessage, onUnpinMessage, onFavoriteMessage, onUnfavoriteMessage, onEditMessage, onRecallMessage, onForwardMessage }: MessageListProps) {
   const { user } = useAuth();
   const [messages, setMessages] = useState<OptimisticMessage[]>([]);
   const [senderMap, setSenderMap] = useState<SenderMap>(new Map());
@@ -495,6 +496,7 @@ export function MessageList({ chatId, onMessagesLoaded, onlineUsers, memberCount
                 onUnfavorite={onUnfavoriteMessage}
                 onEdit={onEditMessage}
                 onRecall={onRecallMessage}
+                onForward={onForwardMessage}
               />
             );
           })}
@@ -536,6 +538,7 @@ interface MessageBubbleProps {
   onUnfavorite?: (messageId: string) => void;
   onEdit?: (messageId: string, content: string) => Promise<void>;
   onRecall?: (messageId: string) => Promise<void>;
+  onForward?: (message: Message) => void;
 }
 
 const EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -560,6 +563,7 @@ function MessageBubble({
   onUnfavorite,
   onEdit,
   onRecall,
+  onForward,
 }: MessageBubbleProps) {
   const [showPicker, setShowPicker] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -694,6 +698,13 @@ function MessageBubble({
             >
               <Star className={cn("h-4 w-4", isFavorited && "fill-current")} />
             </button>
+            <button
+              onClick={() => onForward?.(message)}
+              className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+              title="Forward message"
+            >
+              <Forward className="h-4 w-4" />
+            </button>
             {canEdit && (
               <button
                 onClick={handleStartEdit}
@@ -740,6 +751,20 @@ function MessageBubble({
                 <span className="inline-block w-2 h-2 bg-green-500 rounded-full flex-shrink-0" />
               )}
               {senderName || `User ${message.senderId.slice(0, 8)}`}
+            </div>
+          )}
+          {message.contentJson?.forwarded && (
+            <div className={cn(
+              "flex items-center gap-1 text-xs mb-1 italic",
+              isOwn ? "text-blue-200" : "text-gray-400 dark:text-gray-500"
+            )}>
+              <Forward className="h-3 w-3" />
+              <span>
+                Forwarded from {message.contentJson.forwarded.originalSenderName}
+                {message.contentJson.forwarded.originalChatName && (
+                  <> in {message.contentJson.forwarded.originalChatName}</>
+                )}
+              </span>
             </div>
           )}
           {isEditing ? (

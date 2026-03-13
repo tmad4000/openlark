@@ -273,6 +273,16 @@ class ApiClient {
     );
   }
 
+  async forwardMessage(messageId: string, chatIds: string[]) {
+    return this.request<{ messages: Message[]; count: number }>(
+      `/messenger/messages/${messageId}/forward`,
+      {
+        method: "POST",
+        body: JSON.stringify({ chatIds }),
+      }
+    );
+  }
+
   // Calendar endpoints
   async getCalendars() {
     return this.request<{ calendars: Calendar[] }>("/calendar/calendars");
@@ -541,12 +551,25 @@ export interface ChatMember {
   };
 }
 
+export interface ForwardedInfo {
+  originalMessageId: string;
+  originalSenderId: string;
+  originalSenderName: string;
+  originalChatId: string;
+  originalChatName: string;
+  originalCreatedAt: string;
+}
+
 export interface Message {
   id: string;
   chatId: string;
   senderId: string;
   type: string;
-  contentJson: { text?: string; mentions?: Array<{ id: string; label: string }> };
+  contentJson: {
+    text?: string;
+    mentions?: Array<{ id: string; label: string }>;
+    forwarded?: ForwardedInfo;
+  };
   threadId: string | null;
   replyToId: string | null;
   replyCount?: number;

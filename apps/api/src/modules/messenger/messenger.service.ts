@@ -669,6 +669,87 @@ export class MessengerService {
     return true;
   }
 
+  // ============ FORWARD OPERATIONS ============
+
+  /**
+   * Forward a message to one or more chats
+   * Creates copies of the message with forwarded attribution
+   */
+  async forwardMessage(
+    messageId: string,
+    chatIds: string[],
+    userId: string
+  ): Promise<Message[]> {
+    const original = await this.getMessageById(messageId);
+    if (!original) {
+      throw new Error("Message not found");
+    }
+
+    // Verify user can see the original message (is member of source chat)
+    const isMemberOfSource = await this.isChatMember(original.chatId, userId);
+    if (!isMemberOfSource) {
+      throw new Error("Not a member of the source chat");
+    }
+
+    // Get source chat name for attribution
+    const [sourceChat] = await db
+      .select({ name: chats.name })
+      .from(chats)
+      .where(eq(chats.id, original.chatId))
+      .limit(1);
+
+    // Get original sender name
+    const [originalSender] = await db
+      .select({ displayName: users.displayName })
+      .from(users)
+      .where(eq(users.id, original.senderId))
+      .limit(1);
+
+    const originalContent = original.contentJson as Record<string, unknown>;
+
+    const forwarded: Message[] = [];
+    for (const chatId of chatIds) {
+      // Verify user is a member of each destination chat
+      const isMember = await this.isChatMember(chatId, userId);
+      if (!isMember) {
+        continue; // Skip chats user is not a member of
+      }
+
+      const forwardedContent = {
+        ...originalContent,
+        forwarded: {
+          originalMessageId: original.id,
+          originalSenderId: original.senderId,
+          originalSenderName: originalSender?.displayName || "Unknown",
+          originalChatId: original.chatId,
+          originalChatName: sourceChat?.name || "Direct Message",
+          originalCreatedAt: original.createdAt,
+        },
+      };
+
+      const [msg] = await db
+        .insert(messages)
+        .values({
+          chatId,
+          senderId: userId,
+          type: original.type,
+          contentJson: forwardedContent,
+        })
+        .returning();
+
+      if (msg) {
+        forwarded.push(msg);
+        // Update chat's updatedAt
+        await db
+          .update(chats)
+          .set({ updatedAt: new Date() })
+          .where(eq(chats.id, chatId));
+      }
+    }
+
+    return forwarded;
+  }
+
   // ============ REACTION OPERATIONS ============
 
   /**

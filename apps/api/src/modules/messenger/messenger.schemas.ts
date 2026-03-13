@@ -143,6 +143,13 @@ export const updateAnnouncementSchema = z.object({
 
 export type UpdateAnnouncementInput = z.infer<typeof updateAnnouncementSchema>;
 
+// Forward message schema
+export const forwardMessageSchema = z.object({
+  chatIds: z.array(z.string().uuid()).min(1).max(20),
+});
+
+export type ForwardMessageInput = z.infer<typeof forwardMessageSchema>;
+
 // Mark chat as read schema (FR-2.8: batch read receipts)
 export const markChatReadSchema = z.object({
   lastMessageId: z.string().uuid(),

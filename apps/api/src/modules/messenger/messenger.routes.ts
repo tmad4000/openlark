@@ -16,6 +16,7 @@ import {
   createAnnouncementSchema,
   updateAnnouncementSchema,
   markChatReadSchema,
+  forwardMessageSchema,
 } from "./messenger.schemas.js";
 import { authenticate } from "../auth/middleware.js";
 import { formatZodError } from "../../utils/validation.js";
@@ -1047,6 +1048,56 @@ export async function messengerRoutes(app: FastifyInstance) {
       }
 
       return reply.send({ data: { success: true } });
+    }
+  );
+
+  // ============ FORWARD ENDPOINTS ============
+
+  // POST /messenger/messages/:messageId/forward - Forward a message to other chats
+  app.post<{ Params: { messageId: string } }>(
+    "/messages/:messageId/forward",
+    async (req, reply) => {
+      try {
+        const input = forwardMessageSchema.parse(req.body);
+        const forwarded = await messengerService.forwardMessage(
+          req.params.messageId,
+          input.chatIds,
+          req.user!.id
+        );
+
+        // Publish real-time events for each forwarded message
+        for (const msg of forwarded) {
+          await publishMessageEvent(msg.chatId, {
+            type: "message:new",
+            chatId: msg.chatId,
+            message: msg,
+          });
+        }
+
+        return reply.status(201).send({
+          data: { messages: forwarded, count: forwarded.length },
+        });
+      } catch (error) {
+        if (error instanceof ZodError) {
+          return reply.status(400).send(formatZodError(error));
+        }
+        if (error instanceof Error && error.message === "Message not found") {
+          return reply.status(404).send({
+            code: "MESSAGE_NOT_FOUND",
+            message: "Message not found",
+          });
+        }
+        if (
+          error instanceof Error &&
+          error.message === "Not a member of the source chat"
+        ) {
+          return reply.status(403).send({
+            code: "FORBIDDEN",
+            message: "You are not a member of the source chat",
+          });
+        }
+        throw error;
+      }
     }
   );
 }

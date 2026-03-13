@@ -13,6 +13,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { cn } from "@/lib/utils";
 import { MessageSquare, Wifi, WifiOff, Loader2, Pin, X, Star } from "lucide-react";
 import { api, type Chat, type Pin as PinType, type Favorite, type Message } from "@/lib/api";
+import { ForwardDialog } from "@/components/messenger/forward-dialog";
 
 export default function MessengerPage() {
   const { user, organization } = useAuth();
@@ -25,6 +26,8 @@ export default function MessengerPage() {
   const [favoritedMessageIds, setFavoritedMessageIds] = useState<Set<string>>(new Set());
   const [showFavorites, setShowFavorites] = useState(false);
   const [favorites, setFavorites] = useState<Favorite[]>([]);
+  const [forwardMessages, setForwardMessages] = useState<Message[]>([]);
+  const [isForwardDialogOpen, setIsForwardDialogOpen] = useState(false);
 
   // Sender map ref for thread panel
   const senderMapRef = useRef<Map<string, { displayName: string | null; avatarUrl: string | null }>>(new Map());
@@ -115,6 +118,11 @@ export default function MessengerPage() {
   const handleRecallMessage = useCallback(async (messageId: string) => {
     await api.recallMessage(messageId);
     MessageList.markRecalled(messageId);
+  }, []);
+
+  const handleForwardMessage = useCallback((message: Message) => {
+    setForwardMessages([message]);
+    setIsForwardDialogOpen(true);
   }, []);
 
   // Handle typing events
@@ -365,6 +373,7 @@ export default function MessengerPage() {
                 onUnfavoriteMessage={handleUnfavoriteMessage}
                 onEditMessage={handleEditMessage}
                 onRecallMessage={handleRecallMessage}
+                onForwardMessage={handleForwardMessage}
               />
             ) : (
               <PinnedMessagesView
@@ -452,6 +461,13 @@ export default function MessengerPage() {
         open={isCreateDialogOpen}
         onOpenChange={setIsCreateDialogOpen}
         onChatCreated={handleChatCreated}
+      />
+
+      {/* Forward message dialog */}
+      <ForwardDialog
+        open={isForwardDialogOpen}
+        onOpenChange={setIsForwardDialogOpen}
+        messages={forwardMessages}
       />
     </>
   );

@@ -557,8 +557,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 34,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Forward button in message hover menu opens ForwardDialog with searchable chat list. POST /messages/:id/forward with {chat_ids} creates forwarded copies. Forwarded messages show \"Forwarded from [sender] in [chat]\" attribution. Multi-select forward supported via dialog accepting multiple messages."
     },
     {
       "id": "US-035",
