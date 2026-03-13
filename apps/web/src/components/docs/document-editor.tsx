@@ -28,6 +28,7 @@ import { ToggleBlock } from "./extensions/toggle";
 import { FileAttachment } from "./extensions/file-attachment";
 import { CommentMark } from "./extensions/comment-mark";
 import { CommentsPanel } from "./comments-panel";
+import { SharingDialog } from "./sharing-dialog";
 
 // 12 distinct colors for collaborator cursors
 const CURSOR_COLORS = [
@@ -66,6 +67,7 @@ export function DocumentEditor({ document, readOnly = false, currentUser }: Docu
   const [connectionStatus, setConnectionStatus] = useState<"connected" | "connecting" | "disconnected">("connecting");
   const [collaborators, setCollaborators] = useState<CollaboratorPresence[]>([]);
   const [commentsPanelOpen, setCommentsPanelOpen] = useState(false);
+  const [sharingDialogOpen, setSharingDialogOpen] = useState(false);
 
   // Create Yjs document
   const ydoc = useMemo(() => new Y.Doc(), []);
@@ -388,6 +390,20 @@ export function DocumentEditor({ document, readOnly = false, currentUser }: Docu
             <span className="capitalize">{connectionStatus}</span>
           </div>
 
+          {/* Share button */}
+          <button
+            onClick={() => setSharingDialogOpen(true)}
+            className="flex items-center gap-1 px-2 py-1 rounded text-xs text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 dark:text-gray-400 transition-colors"
+            title="Share document"
+          >
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+              <polyline points="16 6 12 2 8 6" />
+              <line x1="12" y1="2" x2="12" y2="15" />
+            </svg>
+            Share
+          </button>
+
           {/* Comments toggle */}
           <button
             onClick={() => setCommentsPanelOpen(!commentsPanelOpen)}
@@ -421,6 +437,12 @@ export function DocumentEditor({ document, readOnly = false, currentUser }: Docu
           onClose={() => setCommentsPanelOpen(false)}
         />
       </div>
+
+      <SharingDialog
+        open={sharingDialogOpen}
+        onOpenChange={setSharingDialogOpen}
+        document={document}
+      />
     </div>
   );
 }

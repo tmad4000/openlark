@@ -953,8 +953,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 57,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added SharingDialog component with user search (debounced), permission role selector (Viewer/Editor/Manager), copy link with access level, collaborators list with role update and remove buttons. Added updateDocumentPermission and removeDocumentPermission API client methods. Share button added to document editor header."
     },
     {
       "id": "US-058",

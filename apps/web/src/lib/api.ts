@@ -620,6 +620,25 @@ class ApiClient {
     );
   }
 
+  async updateDocumentPermission(
+    permissionId: string,
+    data: { role: "viewer" | "editor" | "manager" }
+  ) {
+    return this.request<{ permission: DocumentPermission }>(
+      `/docs/permissions/${permissionId}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      }
+    );
+  }
+
+  async removeDocumentPermission(permissionId: string) {
+    return this.request<void>(`/docs/permissions/${permissionId}`, {
+      method: "DELETE",
+    });
+  }
+
   // Document versions
   async getDocumentVersions(documentId: string) {
     return this.request<{ versions: DocumentVersion[] }>(
