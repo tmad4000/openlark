@@ -368,9 +368,9 @@ export async function calendarRoutes(app: FastifyInstance) {
     }
   });
 
-  // GET /calendar/events/:id - Get event details
+  // GET /calendar/events/:id - Get event details with attendees and RSVP status
   app.get<{ Params: { id: string } }>("/events/:id", async (req, reply) => {
-    const event = await calendarService.getEventById(req.params.id);
+    const event = await calendarService.getEventWithAttendees(req.params.id);
 
     if (!event) {
       return reply.status(404).send({

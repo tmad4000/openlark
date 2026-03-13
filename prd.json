@@ -765,8 +765,8 @@
         "Typecheck passes"
       ],
       "priority": 46,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "GET /events/:id returns event with attendees and RSVP status. GET /events supports start/end query params plus attendee-based event discovery. Auto-notify via event_invite and event_updated notification types on create/update. All CRUD routes use soft-delete, auth, and Zod validation."
     },
     {
       "id": "US-047",

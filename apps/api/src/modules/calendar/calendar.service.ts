@@ -22,7 +22,9 @@ import {
   lt,
   inArray,
   sql,
+  or,
 } from "drizzle-orm";
+import { notificationsService } from "../notifications/notifications.service.js";
 import type {
   CreateCalendarInput,
   UpdateCalendarInput,
@@ -450,54 +452,86 @@ export class CalendarService {
     orgId: string,
     query: EventsQueryInput
   ): Promise<CalendarEvent[]> {
+    // Resolve start/end aliases
+    const startDate = query.start ?? query.startDate;
+    const endDate = query.end ?? query.endDate;
+
     // Get user's calendars (owned + subscribed)
     const userCalendars = await this.getUserCalendars(userId, orgId);
     const calendarIds = userCalendars.map((c) => c.id);
-
-    if (calendarIds.length === 0) {
-      return [];
-    }
 
     // Filter by specific calendar if provided
     const targetCalendarIds = query.calendarId
       ? calendarIds.filter((id) => id === query.calendarId)
       : calendarIds;
 
-    if (targetCalendarIds.length === 0) {
-      return [];
-    }
-
-    const conditions = [
-      inArray(calendarEvents.calendarId, targetCalendarIds),
+    // Get events from user's calendars
+    const calendarConditions = [
       isNull(calendarEvents.deletedAt),
     ];
 
-    if (query.startDate) {
-      conditions.push(gte(calendarEvents.startTime, new Date(query.startDate)));
+    if (startDate) {
+      calendarConditions.push(gte(calendarEvents.startTime, new Date(startDate)));
     }
 
-    if (query.endDate) {
-      conditions.push(lte(calendarEvents.endTime, new Date(query.endDate)));
+    if (endDate) {
+      calendarConditions.push(lte(calendarEvents.endTime, new Date(endDate)));
     }
 
     if (query.cursor) {
-      // Cursor-based pagination using event ID
       const [cursorEvent] = await db
         .select()
         .from(calendarEvents)
         .where(eq(calendarEvents.id, query.cursor));
 
       if (cursorEvent) {
-        conditions.push(lt(calendarEvents.startTime, cursorEvent.startTime));
+        calendarConditions.push(lt(calendarEvents.startTime, cursorEvent.startTime));
       }
     }
 
-    return db
-      .select()
-      .from(calendarEvents)
-      .where(and(...conditions))
+    // Events from owned/subscribed calendars
+    const calendarEventsList =
+      targetCalendarIds.length > 0
+        ? await db
+            .select()
+            .from(calendarEvents)
+            .where(
+              and(
+                inArray(calendarEvents.calendarId, targetCalendarIds),
+                ...calendarConditions
+              )
+            )
+            .orderBy(desc(calendarEvents.startTime))
+            .limit(query.limit ?? 50)
+        : [];
+
+    // Also get events where user is an attendee (covers subscribed calendars too)
+    const attendeeEvents = await db
+      .select({ event: calendarEvents })
+      .from(eventAttendees)
+      .innerJoin(calendarEvents, eq(eventAttendees.eventId, calendarEvents.id))
+      .where(
+        and(
+          eq(eventAttendees.userId, userId),
+          ...calendarConditions
+        )
+      )
       .orderBy(desc(calendarEvents.startTime))
       .limit(query.limit ?? 50);
+
+    // Merge and dedupe
+    const eventMap = new Map<string, CalendarEvent>();
+    for (const e of calendarEventsList) {
+      eventMap.set(e.id, e);
+    }
+    for (const { event } of attendeeEvents) {
+      eventMap.set(event.id, event);
+    }
+
+    // Sort by startTime descending and apply limit
+    return Array.from(eventMap.values())
+      .sort((a, b) => b.startTime.getTime() - a.startTime.getTime())
+      .slice(0, query.limit ?? 50);
   }
 
   /**
@@ -512,6 +546,25 @@ export class CalendarService {
       );
 
     return event ?? null;
+  }
+
+  /**
+   * Get a single event with attendees and RSVP status
+   */
+  async getEventWithAttendees(eventId: string): Promise<
+    | (CalendarEvent & {
+        attendees: (EventAttendee & {
+          user: { displayName: string | null; avatarUrl: string | null };
+        })[];
+      })
+    | null
+  > {
+    const event = await this.getEventById(eventId);
+    if (!event) return null;
+
+    const attendees = await this.getEventAttendeesWithUserInfo(eventId);
+
+    return { ...event, attendees };
   }
 
   /**
@@ -619,6 +672,16 @@ export class CalendarService {
     // TODO: FR-6.12 - Generate meeting link if requested
     // TODO: FR-6.15 - Schedule reminders
 
+    // Auto-notify attendees (exclude creator)
+    await this.notifyAttendees(
+      input.attendeeIds,
+      "event_invite",
+      `You've been invited to "${input.title}"`,
+      `Event: ${input.title} at ${input.startTime}`,
+      "calendar_event",
+      event.id
+    );
+
     return { event, attendees };
   }
 
@@ -681,6 +744,23 @@ export class CalendarService {
       .set(updateData)
       .where(eq(calendarEvents.id, eventId))
       .returning();
+
+    if (updated) {
+      // Auto-notify attendees about the update (exclude creator)
+      const attendees = await this.getEventAttendees(eventId);
+      const attendeeUserIds = attendees
+        .filter((a) => a.userId !== userId)
+        .map((a) => a.userId);
+
+      await this.notifyAttendees(
+        attendeeUserIds,
+        "event_updated",
+        `Event "${updated.title}" has been updated`,
+        `The event "${updated.title}" was modified by the organizer`,
+        "calendar_event",
+        eventId
+      );
+    }
 
     return updated ?? null;
   }
@@ -975,6 +1055,33 @@ export class CalendarService {
     }
 
     return slots;
+  }
+
+  // ============ NOTIFICATION HELPERS ============
+
+  /**
+   * Send notifications to a list of attendees
+   */
+  private async notifyAttendees(
+    userIds: string[],
+    type: "event_invite" | "event_updated",
+    title: string,
+    body: string,
+    entityType: string,
+    entityId: string
+  ): Promise<void> {
+    await Promise.all(
+      userIds.map((userId) =>
+        notificationsService.createNotification({
+          userId,
+          type,
+          title,
+          body,
+          entityType,
+          entityId,
+        })
+      )
+    );
   }
 
   /**

@@ -147,6 +147,9 @@ export const updateSubscriptionSchema = z.object({
 
 export const eventsQuerySchema = z.object({
   calendarId: z.string().uuid().optional(),
+  // Accept both start/end and startDate/endDate for compatibility
+  start: z.string().datetime().optional(),
+  end: z.string().datetime().optional(),
   startDate: z.string().datetime().optional(),
   endDate: z.string().datetime().optional(),
   limit: z.coerce.number().int().min(1).max(100).optional().default(50),
