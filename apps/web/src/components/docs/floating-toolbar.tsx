@@ -5,9 +5,10 @@ import type { Editor } from "@tiptap/react";
 
 interface FloatingToolbarProps {
   editor: Editor | null;
+  onAddComment?: () => void;
 }
 
-export function FloatingToolbar({ editor }: FloatingToolbarProps) {
+export function FloatingToolbar({ editor, onAddComment }: FloatingToolbarProps) {
   const toolbarRef = useRef<HTMLDivElement>(null);
   const [isVisible, setIsVisible] = useState(false);
   const [position, setPosition] = useState({ top: 0, left: 0 });
@@ -136,6 +137,20 @@ export function FloatingToolbar({ editor }: FloatingToolbarProps) {
           <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
         </svg>
       </FloatingButton>
+      {onAddComment && (
+        <>
+          <div className="w-px h-5 bg-gray-200 dark:bg-gray-600 mx-0.5" />
+          <FloatingButton
+            onClick={onAddComment}
+            active={false}
+            title="Add comment"
+          >
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+          </FloatingButton>
+        </>
+      )}
     </div>
   );
 }

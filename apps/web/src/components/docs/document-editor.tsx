@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
@@ -26,6 +26,8 @@ import { DragHandle } from "./drag-handle";
 import { Callout } from "./extensions/callout";
 import { ToggleBlock } from "./extensions/toggle";
 import { FileAttachment } from "./extensions/file-attachment";
+import { CommentMark } from "./extensions/comment-mark";
+import { CommentsPanel } from "./comments-panel";
 
 // 12 distinct colors for collaborator cursors
 const CURSOR_COLORS = [
@@ -63,6 +65,7 @@ export function DocumentEditor({ document, readOnly = false, currentUser }: Docu
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("saved");
   const [connectionStatus, setConnectionStatus] = useState<"connected" | "connecting" | "disconnected">("connecting");
   const [collaborators, setCollaborators] = useState<CollaboratorPresence[]>([]);
+  const [commentsPanelOpen, setCommentsPanelOpen] = useState(false);
 
   // Create Yjs document
   const ydoc = useMemo(() => new Y.Doc(), []);
@@ -228,6 +231,7 @@ export function DocumentEditor({ document, readOnly = false, currentUser }: Docu
       ToggleBlock,
       FileAttachment,
       SlashCommand,
+      CommentMark,
     ],
     editable: !readOnly,
     editorProps: {
@@ -280,6 +284,29 @@ export function DocumentEditor({ document, readOnly = false, currentUser }: Docu
       },
     },
   });
+
+  const handleAddComment = useCallback(() => {
+    if (!editor) return;
+    const { from, to, empty } = editor.state.selection;
+    if (empty) return;
+    const selectedText = editor.state.doc.textBetween(from, to, " ");
+    const content = window.prompt("Add a comment:");
+    if (!content?.trim()) return;
+    const anchor = { from, to, text: selectedText.slice(0, 200) };
+    // Create comment via API then add mark
+    api
+      .createDocumentComment(document.id, {
+        content: content.trim(),
+        anchorJson: anchor,
+      })
+      .then((res) => {
+        editor.chain().focus().setComment(res.comment.id).run();
+        setCommentsPanelOpen(true);
+      })
+      .catch(() => {
+        // Failed to create comment
+      });
+  }, [editor, document.id]);
 
   return (
     <div className="flex flex-col h-full">
@@ -360,14 +387,39 @@ export function DocumentEditor({ document, readOnly = false, currentUser }: Docu
             />
             <span className="capitalize">{connectionStatus}</span>
           </div>
+
+          {/* Comments toggle */}
+          <button
+            onClick={() => setCommentsPanelOpen(!commentsPanelOpen)}
+            className={`flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors ${
+              commentsPanelOpen
+                ? "bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400"
+                : "text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 dark:text-gray-400"
+            }`}
+            title="Toggle comments panel"
+          >
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+            Comments
+          </button>
         </div>
       </div>
 
-      {/* Editor content with floating toolbar and drag handle */}
-      <div className="flex-1 overflow-y-auto bg-white dark:bg-gray-900 relative">
-        <FloatingToolbar editor={editor} />
-        <DragHandle editor={editor} />
-        <EditorContent editor={editor} />
+      {/* Editor content with floating toolbar, drag handle, and comments panel */}
+      <div className="flex flex-1 overflow-hidden">
+        <div className="flex-1 overflow-y-auto bg-white dark:bg-gray-900 relative">
+          <FloatingToolbar editor={editor} onAddComment={readOnly ? undefined : handleAddComment} />
+          <DragHandle editor={editor} />
+          <EditorContent editor={editor} />
+        </div>
+        <CommentsPanel
+          documentId={document.id}
+          editor={editor}
+          currentUser={currentUser}
+          isOpen={commentsPanelOpen}
+          onClose={() => setCommentsPanelOpen(false)}
+        />
       </div>
     </div>
   );

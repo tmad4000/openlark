@@ -655,6 +655,7 @@ class ApiClient {
     data: {
       content: string;
       blockId?: string;
+      anchorJson?: { from: number; to: number; text: string };
       threadId?: string;
     }
   ) {
@@ -665,6 +666,26 @@ class ApiClient {
         body: JSON.stringify(data),
       }
     );
+  }
+
+  async resolveComment(commentId: string) {
+    return this.request<{ comment: DocumentComment }>(
+      `/docs/comments/${commentId}/resolve`,
+      { method: "POST" }
+    );
+  }
+
+  async unresolveComment(commentId: string) {
+    return this.request<{ comment: DocumentComment }>(
+      `/docs/comments/${commentId}/unresolve`,
+      { method: "POST" }
+    );
+  }
+
+  async deleteComment(commentId: string) {
+    return this.request<void>(`/docs/comments/${commentId}`, {
+      method: "DELETE",
+    });
   }
 
   // Notification endpoints
@@ -931,6 +952,7 @@ export interface DocumentComment {
   userId: string;
   content: string;
   blockId: string | null;
+  anchorJson: { from: number; to: number; text: string } | null;
   threadId: string | null;
   resolved: string | null;
   createdAt: string;

@@ -935,8 +935,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 56,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added CommentMark TipTap extension for highlighted text anchoring, comment button in floating toolbar, CommentsPanel component with threaded replies and resolve/reopen. API client extended with resolve/unresolve/delete methods. Backend comment API already existed."
     },
     {
       "id": "US-057",
