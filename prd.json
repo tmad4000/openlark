@@ -1439,8 +1439,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 85,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created apps/web/src/app/app/email/page.tsx with three-column layout: folder sidebar (Inbox, Sent, Drafts, Archive, Trash with unread badge), scrollable email list (sender, subject, date, unread dot, star flag, attachment indicator, search, pagination), and email detail view (HTML body rendering, sender avatar, to/cc display, attachment links, reply/forward/archive/delete actions). Compose dialog uses Radix Dialog with to, cc toggle, subject, rich text body, and send via POST /api/email/send. All actions (mark read, flag, archive, delete) call appropriate API endpoints. Typecheck passes."
     },
     {
       "id": "US-086",
