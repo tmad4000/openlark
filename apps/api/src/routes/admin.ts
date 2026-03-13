@@ -8,8 +8,9 @@ import {
   departmentMembers,
   invitations,
   roles,
+  auditLogs,
 } from "../db/schema";
-import { eq, and, isNull, ilike, sql } from "drizzle-orm";
+import { eq, and, isNull, ilike, sql, desc, gte, lte } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
 
 const UUID_REGEX =
@@ -862,6 +863,257 @@ export async function adminRoutes(fastify: FastifyInstance) {
       await db.delete(roles).where(eq(roles.id, roleId));
 
       return reply.status(200).send({ success: true });
+    }
+  );
+
+  // ─── Audit Logs ──────────────────────────────────────────────────
+
+  interface AuditLogsQuery {
+    actor_id?: string;
+    action?: string;
+    entity_type?: string;
+    from?: string;
+    to?: string;
+    cursor?: string;
+    limit?: string;
+    search?: string;
+  }
+
+  /**
+   * GET /admin/audit-logs - List audit logs with filtering
+   */
+  fastify.get<{ Querystring: AuditLogsQuery }>(
+    "/admin/audit-logs",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      if (!(await requireAdmin(request, reply))) return;
+
+      const orgId = request.user.orgId!;
+      const {
+        actor_id,
+        action,
+        entity_type,
+        from,
+        to,
+        cursor,
+        limit: limitStr,
+        search,
+      } = request.query;
+
+      const pageLimit = Math.min(parseInt(limitStr || "50", 10), 200);
+
+      const conditions = [eq(auditLogs.orgId, orgId)];
+
+      if (actor_id && UUID_REGEX.test(actor_id)) {
+        conditions.push(eq(auditLogs.actorId, actor_id));
+      }
+      if (action) {
+        conditions.push(eq(auditLogs.action, action));
+      }
+      if (entity_type) {
+        conditions.push(eq(auditLogs.entityType, entity_type));
+      }
+      if (from) {
+        const fromDate = new Date(from);
+        if (!isNaN(fromDate.getTime())) {
+          conditions.push(gte(auditLogs.createdAt, fromDate));
+        }
+      }
+      if (to) {
+        const toDate = new Date(to);
+        if (!isNaN(toDate.getTime())) {
+          conditions.push(lte(auditLogs.createdAt, toDate));
+        }
+      }
+      if (cursor && UUID_REGEX.test(cursor)) {
+        // Cursor-based: get the createdAt of the cursor item
+        const [cursorLog] = await db
+          .select({ createdAt: auditLogs.createdAt })
+          .from(auditLogs)
+          .where(eq(auditLogs.id, cursor))
+          .limit(1);
+        if (cursorLog) {
+          conditions.push(lte(auditLogs.createdAt, cursorLog.createdAt));
+          conditions.push(sql`${auditLogs.id} != ${cursor}`);
+        }
+      }
+      if (search && search.trim()) {
+        const term = `%${search.trim()}%`;
+        conditions.push(
+          sql`(${auditLogs.action} ILIKE ${term} OR ${auditLogs.entityType} ILIKE ${term} OR ${auditLogs.entityId}::text ILIKE ${term})`
+        );
+      }
+
+      const logs = await db
+        .select({
+          id: auditLogs.id,
+          actorId: auditLogs.actorId,
+          actorName: users.displayName,
+          actorEmail: users.email,
+          action: auditLogs.action,
+          entityType: auditLogs.entityType,
+          entityId: auditLogs.entityId,
+          diff: auditLogs.diff,
+          ip: auditLogs.ip,
+          userAgent: auditLogs.userAgent,
+          createdAt: auditLogs.createdAt,
+        })
+        .from(auditLogs)
+        .leftJoin(users, eq(auditLogs.actorId, users.id))
+        .where(and(...conditions))
+        .orderBy(desc(auditLogs.createdAt))
+        .limit(pageLimit + 1);
+
+      const hasMore = logs.length > pageLimit;
+      const results = hasMore ? logs.slice(0, pageLimit) : logs;
+      const nextCursor = hasMore ? results[results.length - 1].id : null;
+
+      return reply.status(200).send({
+        logs: results,
+        nextCursor,
+        hasMore,
+      });
+    }
+  );
+
+  /**
+   * GET /admin/audit-logs/actions - Get distinct action types for filter dropdown
+   */
+  fastify.get(
+    "/admin/audit-logs/actions",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      if (!(await requireAdmin(request, reply))) return;
+
+      const orgId = request.user.orgId!;
+      const actions = await db
+        .selectDistinct({ action: auditLogs.action })
+        .from(auditLogs)
+        .where(eq(auditLogs.orgId, orgId))
+        .orderBy(auditLogs.action);
+
+      return reply
+        .status(200)
+        .send({ actions: actions.map((a) => a.action) });
+    }
+  );
+
+  /**
+   * GET /admin/audit-logs/entity-types - Get distinct entity types for filter dropdown
+   */
+  fastify.get(
+    "/admin/audit-logs/entity-types",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      if (!(await requireAdmin(request, reply))) return;
+
+      const orgId = request.user.orgId!;
+      const types = await db
+        .selectDistinct({ entityType: auditLogs.entityType })
+        .from(auditLogs)
+        .where(eq(auditLogs.orgId, orgId))
+        .orderBy(auditLogs.entityType);
+
+      return reply
+        .status(200)
+        .send({ entityTypes: types.map((t) => t.entityType) });
+    }
+  );
+
+  /**
+   * POST /admin/audit-logs/export - Export filtered audit logs as CSV
+   */
+  fastify.post<{ Body: AuditLogsQuery }>(
+    "/admin/audit-logs/export",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      if (!(await requireAdmin(request, reply))) return;
+
+      const orgId = request.user.orgId!;
+      const { actor_id, action, entity_type, from, to } = request.body || {};
+
+      const conditions = [eq(auditLogs.orgId, orgId)];
+
+      if (actor_id && UUID_REGEX.test(actor_id)) {
+        conditions.push(eq(auditLogs.actorId, actor_id));
+      }
+      if (action) {
+        conditions.push(eq(auditLogs.action, action));
+      }
+      if (entity_type) {
+        conditions.push(eq(auditLogs.entityType, entity_type));
+      }
+      if (from) {
+        const fromDate = new Date(from);
+        if (!isNaN(fromDate.getTime())) {
+          conditions.push(gte(auditLogs.createdAt, fromDate));
+        }
+      }
+      if (to) {
+        const toDate = new Date(to);
+        if (!isNaN(toDate.getTime())) {
+          conditions.push(lte(auditLogs.createdAt, toDate));
+        }
+      }
+
+      const logs = await db
+        .select({
+          id: auditLogs.id,
+          actorId: auditLogs.actorId,
+          actorName: users.displayName,
+          actorEmail: users.email,
+          action: auditLogs.action,
+          entityType: auditLogs.entityType,
+          entityId: auditLogs.entityId,
+          diff: auditLogs.diff,
+          ip: auditLogs.ip,
+          userAgent: auditLogs.userAgent,
+          createdAt: auditLogs.createdAt,
+        })
+        .from(auditLogs)
+        .leftJoin(users, eq(auditLogs.actorId, users.id))
+        .where(and(...conditions))
+        .orderBy(desc(auditLogs.createdAt))
+        .limit(10000);
+
+      // Build CSV
+      const escCsv = (v: string | null | undefined) => {
+        if (v == null) return "";
+        const s = String(v);
+        if (s.includes(",") || s.includes('"') || s.includes("\n")) {
+          return `"${s.replace(/"/g, '""')}"`;
+        }
+        return s;
+      };
+
+      const header =
+        "ID,Timestamp,Actor Name,Actor Email,Action,Entity Type,Entity ID,IP,User Agent,Changes";
+      const rows = logs.map(
+        (l) =>
+          [
+            escCsv(l.id),
+            escCsv(l.createdAt?.toISOString()),
+            escCsv(l.actorName),
+            escCsv(l.actorEmail),
+            escCsv(l.action),
+            escCsv(l.entityType),
+            escCsv(l.entityId),
+            escCsv(l.ip),
+            escCsv(l.userAgent),
+            escCsv(l.diff ? JSON.stringify(l.diff) : ""),
+          ].join(",")
+      );
+
+      const csv = [header, ...rows].join("\n");
+
+      return reply
+        .status(200)
+        .header("Content-Type", "text/csv; charset=utf-8")
+        .header(
+          "Content-Disposition",
+          `attachment; filename="audit-logs-${new Date().toISOString().slice(0, 10)}.csv"`
+        )
+        .send(csv);
     }
   );
 }

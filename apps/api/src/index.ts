@@ -29,6 +29,7 @@ import { meetingsRoutes } from "./routes/meetings";
 import { formsRoutes } from "./routes/forms";
 import { adminRoutes } from "./routes/admin";
 import { wsRoutes } from "./routes/ws";
+import { auditLogPlugin } from "./middleware/audit";
 import { closeRedis } from "./lib/redis";
 import { startAutomationWorker, stopAutomationWorker } from "./lib/automation-worker";
 import { startTranscriptionWorker, stopTranscriptionWorker } from "./lib/transcription-worker";
@@ -43,6 +44,9 @@ await fastify.register(cors, {
 
 // Register WebSocket plugin
 await fastify.register(websocket);
+
+// Register audit logging plugin (logs all state-changing API calls)
+await fastify.register(auditLogPlugin);
 
 // Register routes
 await fastify.register(authRoutes);

@@ -17,6 +17,10 @@ import {
   Check,
   X,
   Mail,
+  FileText,
+  Download,
+  Filter,
+  Calendar,
 } from "lucide-react";
 
 // ── Types ───────────────────────────────────────────────────────────
@@ -127,7 +131,21 @@ function roleBadgeColor(role: string) {
 
 // ── Tabs ─────────────────────────────────────────────────────────────
 
-type TabId = "org" | "members" | "departments" | "roles" | "security";
+interface AuditLogEntry {
+  id: string;
+  actorId: string;
+  actorName: string | null;
+  actorEmail: string | null;
+  action: string;
+  entityType: string;
+  entityId: string | null;
+  diff: Record<string, unknown> | null;
+  ip: string | null;
+  userAgent: string | null;
+  createdAt: string;
+}
+
+type TabId = "org" | "members" | "departments" | "roles" | "security" | "audit";
 
 const TABS: { id: TabId; label: string; icon: any }[] = [
   { id: "org", label: "Organization", icon: Building2 },
@@ -135,6 +153,7 @@ const TABS: { id: TabId; label: string; icon: any }[] = [
   { id: "departments", label: "Departments", icon: Network },
   { id: "roles", label: "Roles", icon: Shield },
   { id: "security", label: "Security", icon: Lock },
+  { id: "audit", label: "Audit Logs", icon: FileText },
 ];
 
 // ── Main Component ──────────────────────────────────────────────────
@@ -177,6 +196,22 @@ export default function AdminPage() {
   // Security state
   const [security, setSecurity] = useState<SecuritySettings>({ ...DEFAULT_SECURITY });
   const [securitySaving, setSecuritySaving] = useState(false);
+
+  // Audit log state
+  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
+  const [auditNextCursor, setAuditNextCursor] = useState<string | null>(null);
+  const [auditHasMore, setAuditHasMore] = useState(false);
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [auditFilterActor, setAuditFilterActor] = useState("");
+  const [auditFilterAction, setAuditFilterAction] = useState("");
+  const [auditFilterEntity, setAuditFilterEntity] = useState("");
+  const [auditFilterFrom, setAuditFilterFrom] = useState("");
+  const [auditFilterTo, setAuditFilterTo] = useState("");
+  const [auditSearch, setAuditSearch] = useState("");
+  const [auditActions, setAuditActions] = useState<string[]>([]);
+  const [auditEntityTypes, setAuditEntityTypes] = useState<string[]>([]);
+  const [auditExpandedId, setAuditExpandedId] = useState<string | null>(null);
+  const [auditExporting, setAuditExporting] = useState(false);
 
   const token = getCookie("session_token");
 
@@ -289,6 +324,50 @@ export default function AdminPage() {
     }
   }, [apiFetch]);
 
+  const fetchAuditLogs = useCallback(async (append = false, cursor?: string | null) => {
+    setAuditLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (auditFilterActor) params.set("actor_id", auditFilterActor);
+      if (auditFilterAction) params.set("action", auditFilterAction);
+      if (auditFilterEntity) params.set("entity_type", auditFilterEntity);
+      if (auditFilterFrom) params.set("from", auditFilterFrom);
+      if (auditFilterTo) params.set("to", auditFilterTo);
+      if (auditSearch) params.set("search", auditSearch);
+      if (cursor) params.set("cursor", cursor);
+      params.set("limit", "50");
+      const q = params.toString() ? `?${params.toString()}` : "";
+      const res = await apiFetch(`/api/admin/audit-logs${q}`);
+      if (res?.ok) {
+        const data = await res.json();
+        if (append) {
+          setAuditLogs((prev) => [...prev, ...data.logs]);
+        } else {
+          setAuditLogs(data.logs);
+        }
+        setAuditNextCursor(data.nextCursor);
+        setAuditHasMore(data.hasMore);
+      }
+    } finally {
+      setAuditLoading(false);
+    }
+  }, [apiFetch, auditFilterActor, auditFilterAction, auditFilterEntity, auditFilterFrom, auditFilterTo, auditSearch]);
+
+  const fetchAuditFilterOptions = useCallback(async () => {
+    const [actionsRes, typesRes] = await Promise.all([
+      apiFetch("/api/admin/audit-logs/actions"),
+      apiFetch("/api/admin/audit-logs/entity-types"),
+    ]);
+    if (actionsRes?.ok) {
+      const data = await actionsRes.json();
+      setAuditActions(data.actions || []);
+    }
+    if (typesRes?.ok) {
+      const data = await typesRes.json();
+      setAuditEntityTypes(data.entityTypes || []);
+    }
+  }, [apiFetch]);
+
   // ── Load data on tab change ───────────────────────────────────────
 
   useEffect(() => {
@@ -298,7 +377,8 @@ export default function AdminPage() {
     if (activeTab === "departments") fetchDepts();
     if (activeTab === "roles") fetchRoles();
     if (activeTab === "security") fetchSecurity();
-  }, [activeTab, error, isLoading, fetchOrg, fetchMembers, fetchDepts, fetchRoles, fetchSecurity]);
+    if (activeTab === "audit") { fetchAuditLogs(); fetchAuditFilterOptions(); }
+  }, [activeTab, error, isLoading, fetchOrg, fetchMembers, fetchDepts, fetchRoles, fetchSecurity, fetchAuditLogs, fetchAuditFilterOptions]);
 
   // ── Org handlers ──────────────────────────────────────────────────
 
@@ -1228,6 +1308,300 @@ export default function AdminPage() {
             >
               {securitySaving ? "Saving..." : "Save Security Settings"}
             </button>
+          </div>
+        )}
+
+        {/* ── Audit Logs Tab ──────────────────────────────────── */}
+        {activeTab === "audit" && (
+          <div>
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-semibold text-gray-900">
+                Audit Logs
+              </h3>
+              <button
+                onClick={async () => {
+                  setAuditExporting(true);
+                  try {
+                    const res = await apiFetch("/api/admin/audit-logs/export", {
+                      method: "POST",
+                      body: JSON.stringify({
+                        actor_id: auditFilterActor || undefined,
+                        action: auditFilterAction || undefined,
+                        entity_type: auditFilterEntity || undefined,
+                        from: auditFilterFrom || undefined,
+                        to: auditFilterTo || undefined,
+                      }),
+                    });
+                    if (res?.ok) {
+                      const blob = await res.blob();
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = `audit-logs-${new Date().toISOString().slice(0, 10)}.csv`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    }
+                  } finally {
+                    setAuditExporting(false);
+                  }
+                }}
+                disabled={auditExporting}
+                className="flex items-center gap-2 px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+              >
+                <Download className="w-4 h-4" />
+                {auditExporting ? "Exporting..." : "Export CSV"}
+              </button>
+            </div>
+
+            {/* Filters */}
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
+              <div className="flex items-center gap-2 mb-3 text-sm font-medium text-gray-700">
+                <Filter className="w-4 h-4" />
+                Filters
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Search
+                  </label>
+                  <input
+                    type="text"
+                    value={auditSearch}
+                    onChange={(e) => setAuditSearch(e.target.value)}
+                    placeholder="Search..."
+                    className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Action
+                  </label>
+                  <select
+                    value={auditFilterAction}
+                    onChange={(e) => setAuditFilterAction(e.target.value)}
+                    className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">All actions</option>
+                    {auditActions.map((a) => (
+                      <option key={a} value={a}>
+                        {a}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Entity Type
+                  </label>
+                  <select
+                    value={auditFilterEntity}
+                    onChange={(e) => setAuditFilterEntity(e.target.value)}
+                    className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">All types</option>
+                    {auditEntityTypes.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">
+                    From
+                  </label>
+                  <input
+                    type="date"
+                    value={auditFilterFrom}
+                    onChange={(e) => setAuditFilterFrom(e.target.value)}
+                    className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">
+                    To
+                  </label>
+                  <input
+                    type="date"
+                    value={auditFilterTo}
+                    onChange={(e) => setAuditFilterTo(e.target.value)}
+                    className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2 mt-3">
+                <button
+                  onClick={() => fetchAuditLogs()}
+                  className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                >
+                  Apply Filters
+                </button>
+                <button
+                  onClick={() => {
+                    setAuditFilterActor("");
+                    setAuditFilterAction("");
+                    setAuditFilterEntity("");
+                    setAuditFilterFrom("");
+                    setAuditFilterTo("");
+                    setAuditSearch("");
+                  }}
+                  className="px-3 py-1.5 text-sm text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+
+            {/* Audit Log Table */}
+            <div className="border border-gray-200 rounded-lg overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-200">
+                    <th className="text-left px-4 py-3 font-medium text-gray-600">
+                      Timestamp
+                    </th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600">
+                      Actor
+                    </th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600">
+                      Action
+                    </th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600">
+                      Entity
+                    </th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600">
+                      IP
+                    </th>
+                    <th className="w-8"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {auditLogs.length === 0 && !auditLoading && (
+                    <tr>
+                      <td
+                        colSpan={6}
+                        className="text-center py-12 text-gray-400"
+                      >
+                        No audit logs found
+                      </td>
+                    </tr>
+                  )}
+                  {auditLogs.map((log) => (
+                    <tr
+                      key={log.id}
+                      className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
+                      onClick={() =>
+                        setAuditExpandedId(
+                          auditExpandedId === log.id ? null : log.id
+                        )
+                      }
+                    >
+                      <td className="px-4 py-3 text-gray-500 whitespace-nowrap">
+                        {new Date(log.createdAt).toLocaleString()}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="font-medium text-gray-900">
+                          {log.actorName || "Unknown"}
+                        </div>
+                        <div className="text-xs text-gray-400">
+                          {log.actorEmail}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700">
+                          {log.action}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-gray-900">{log.entityType}</span>
+                        {log.entityId && (
+                          <span className="text-xs text-gray-400 ml-1">
+                            {log.entityId.slice(0, 8)}...
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-gray-500 text-xs">
+                        {log.ip || "-"}
+                      </td>
+                      <td className="px-4 py-3">
+                        <ChevronDown
+                          className={`w-4 h-4 text-gray-400 transition-transform ${auditExpandedId === log.id ? "rotate-180" : ""}`}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                  {auditLogs.map(
+                    (log) =>
+                      auditExpandedId === log.id && (
+                        <tr key={`${log.id}-detail`} className="bg-gray-50">
+                          <td colSpan={6} className="px-4 py-4">
+                            <div className="grid grid-cols-2 gap-4 text-sm">
+                              <div>
+                                <span className="font-medium text-gray-600">
+                                  Actor ID:
+                                </span>{" "}
+                                <span className="text-gray-800 font-mono text-xs">
+                                  {log.actorId}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="font-medium text-gray-600">
+                                  Entity ID:
+                                </span>{" "}
+                                <span className="text-gray-800 font-mono text-xs">
+                                  {log.entityId || "-"}
+                                </span>
+                              </div>
+                              <div className="col-span-2">
+                                <span className="font-medium text-gray-600">
+                                  User Agent:
+                                </span>{" "}
+                                <span className="text-gray-500 text-xs break-all">
+                                  {log.userAgent || "-"}
+                                </span>
+                              </div>
+                              {log.diff && (
+                                <div className="col-span-2">
+                                  <span className="font-medium text-gray-600">
+                                    Changes:
+                                  </span>
+                                  <pre className="mt-1 p-3 bg-white border border-gray-200 rounded-md text-xs overflow-x-auto font-mono">
+                                    {JSON.stringify(log.diff, null, 2)}
+                                  </pre>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Load More */}
+            {auditHasMore && (
+              <div className="text-center mt-4">
+                <button
+                  onClick={() => fetchAuditLogs(true, auditNextCursor)}
+                  disabled={auditLoading}
+                  className="px-4 py-2 text-sm text-blue-600 border border-blue-300 rounded-lg hover:bg-blue-50 disabled:opacity-50"
+                >
+                  {auditLoading ? "Loading..." : "Load More"}
+                </button>
+              </div>
+            )}
+
+            {auditLoading && auditLogs.length === 0 && (
+              <div className="text-center py-12 text-gray-400">
+                Loading audit logs...
+              </div>
+            )}
+
+            <p className="text-xs text-gray-400 mt-4">
+              Audit logs are retained for 180+ days. All state-changing API
+              actions are automatically recorded.
+            </p>
           </div>
         )}
       </div>

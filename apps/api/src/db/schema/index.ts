@@ -24,3 +24,4 @@ export * from "./meetings";
 export * from "./meeting-recordings";
 export * from "./forms";
 export * from "./roles";
+export * from "./audit-logs";

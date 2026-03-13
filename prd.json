@@ -1693,8 +1693,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 100,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created audit_logs table (id, org_id, actor_id, action, entity_type, entity_id, diff jsonb, ip, user_agent, created_at) with indexes on org_id, actor_id, action, entity_type, created_at. Added Fastify onResponse hook plugin that automatically logs all state-changing (POST/PUT/PATCH/DELETE) API calls. Added admin API routes: GET /admin/audit-logs (searchable, filterable with cursor pagination), GET /admin/audit-logs/actions and /entity-types for filter dropdowns, POST /admin/audit-logs/export for CSV export. Added Audit Logs tab to admin console with table view, filters (actor, action, entity type, date range, search), expandable detail rows showing diff/user-agent, CSV export button, and load-more pagination. Logs retained indefinitely (180+ days). Typecheck passes."
     },
     {
       "id": "US-101",
