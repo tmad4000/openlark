@@ -1605,8 +1605,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 95,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created /app/minutes/[id] page with: video/audio player with playback controls (play/pause, seek, 0.5x-2x speed, silence skipping toggle), tabbed UI (Transcript, Summary, Action Items, Chapters). Transcript shows timestamped paragraphs with speaker labels - clicking seeks player. Summary tab shows overview, key points, decisions. Action Items tab with Create Task button. Chapters tab with expandable sections and seek-to-time. Comment on specific transcript paragraphs with inline comment input. Added API endpoints: GET /minutes/:id (with meeting, recording, participants, comments), GET /meetings/:id/minutes, POST /minutes/:id/comments. Typecheck passes."
     },
     {
       "id": "US-096",

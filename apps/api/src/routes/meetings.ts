@@ -1,7 +1,7 @@
 import { FastifyInstance } from "fastify";
 import { db } from "../db";
-import { meetings, meetingParticipants, meetingRecordings, minutes, users } from "../db/schema";
-import { eq } from "drizzle-orm";
+import { meetings, meetingParticipants, meetingRecordings, minutes, minutesComments, users } from "../db/schema";
+import { eq, and } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
 import { AccessToken, VideoGrant } from "livekit-server-sdk";
 import { queueTranscriptionJob } from "../lib/transcription-worker";
@@ -258,6 +258,161 @@ export const meetingsRoutes = async (fastify: FastifyInstance) => {
       await queueTranscriptionJob(recording.id, meeting.id);
 
       return reply.status(201).send({ recording });
+    }
+  );
+
+  /**
+   * GET /minutes/:id - Get minutes by ID with meeting info and recording
+   */
+  fastify.get<{
+    Params: { id: string };
+  }>(
+    "/minutes/:id",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id } = request.params;
+
+      if (!UUID_REGEX.test(id)) {
+        return reply.status(400).send({ error: "Invalid minutes ID" });
+      }
+
+      const [minutesRecord] = await db
+        .select()
+        .from(minutes)
+        .where(eq(minutes.id, id))
+        .limit(1);
+
+      if (!minutesRecord) {
+        return reply.status(404).send({ error: "Minutes not found" });
+      }
+
+      // Fetch meeting info
+      const [meeting] = await db
+        .select()
+        .from(meetings)
+        .where(eq(meetings.id, minutesRecord.meetingId))
+        .limit(1);
+
+      // Fetch recording info
+      let recording = null;
+      if (minutesRecord.recordingId) {
+        const [rec] = await db
+          .select()
+          .from(meetingRecordings)
+          .where(eq(meetingRecordings.id, minutesRecord.recordingId))
+          .limit(1);
+        recording = rec || null;
+      }
+
+      // Fetch participants
+      const participants = await db
+        .select({
+          userId: meetingParticipants.userId,
+          role: meetingParticipants.role,
+          displayName: users.displayName,
+          avatarUrl: users.avatarUrl,
+        })
+        .from(meetingParticipants)
+        .innerJoin(users, eq(meetingParticipants.userId, users.id))
+        .where(eq(meetingParticipants.meetingId, minutesRecord.meetingId));
+
+      // Fetch comments with user info
+      const comments = await db
+        .select({
+          id: minutesComments.id,
+          paragraphIndex: minutesComments.paragraphIndex,
+          content: minutesComments.content,
+          createdAt: minutesComments.createdAt,
+          userId: minutesComments.userId,
+          displayName: users.displayName,
+          avatarUrl: users.avatarUrl,
+        })
+        .from(minutesComments)
+        .innerJoin(users, eq(minutesComments.userId, users.id))
+        .where(eq(minutesComments.minutesId, id));
+
+      return reply.send({
+        minutes: minutesRecord,
+        meeting,
+        recording,
+        participants,
+        comments,
+      });
+    }
+  );
+
+  /**
+   * GET /meetings/:id/minutes - Get minutes for a meeting
+   */
+  fastify.get<{
+    Params: { id: string };
+  }>(
+    "/meetings/:id/minutes",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id } = request.params;
+
+      if (!UUID_REGEX.test(id)) {
+        return reply.status(400).send({ error: "Invalid meeting ID" });
+      }
+
+      const minutesList = await db
+        .select()
+        .from(minutes)
+        .where(eq(minutes.meetingId, id));
+
+      return reply.send({ minutes: minutesList });
+    }
+  );
+
+  /**
+   * POST /minutes/:id/comments - Add a comment to a transcript paragraph
+   */
+  fastify.post<{
+    Params: { id: string };
+    Body: { paragraphIndex: number; content: string };
+  }>(
+    "/minutes/:id/comments",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const user = request.user;
+      const { id } = request.params;
+      const { paragraphIndex, content } = request.body;
+
+      if (!UUID_REGEX.test(id)) {
+        return reply.status(400).send({ error: "Invalid minutes ID" });
+      }
+
+      if (typeof paragraphIndex !== "number" || paragraphIndex < 0) {
+        return reply.status(400).send({ error: "Invalid paragraph index" });
+      }
+
+      if (!content || content.trim().length === 0) {
+        return reply.status(400).send({ error: "Comment content is required" });
+      }
+
+      // Verify minutes exist
+      const [minutesRecord] = await db
+        .select()
+        .from(minutes)
+        .where(eq(minutes.id, id))
+        .limit(1);
+
+      if (!minutesRecord) {
+        return reply.status(404).send({ error: "Minutes not found" });
+      }
+
+      const [comment] = await db
+        .insert(minutesComments)
+        .values({
+          minutesId: id,
+          userId: user.id,
+          paragraphIndex,
+          content: content.trim(),
+        })
+        .returning();
+
+      return reply.status(201).send({ comment });
     }
   );
 };

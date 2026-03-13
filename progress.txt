@@ -95,3 +95,4 @@
 [2026-03-13 13:00] US-092 — Start meeting from chat — PASS
 [2026-03-13 13:45] US-093 — Meeting recording and Minutes schema — PASS
 [2026-03-13 14:30] US-094 — AI meeting transcription and summary — PASS
+[2026-03-13 15:15] US-095 — Minutes viewer UI — PASS
