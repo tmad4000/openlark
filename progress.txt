@@ -84,3 +84,4 @@
 [2026-03-13 04:45] US-081 — Attendance schema and clock-in API — PASS
 [2026-03-13 05:30] US-082 — Attendance UI - clock in/out and dashboard — PASS
 [2026-03-13 06:15] US-083 — Leave management - request and balance — PASS
+[2026-03-13 07:00] US-084 — Email schema and basic client API — PASS

@@ -18,3 +18,4 @@ export * from "./tasks";
 export * from "./approvals";
 export * from "./okrs";
 export * from "./attendance";
+export * from "./emails";

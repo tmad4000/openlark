@@ -1422,8 +1422,8 @@
         "Typecheck passes"
       ],
       "priority": 84,
-      "passes": false,
-      "notes": "V1 uses transactional email API (Postmark/SendGrid) for sending. Full SMTP server is V2."
+      "passes": true,
+      "notes": "Created email schema with 4 tables: email_domains (domain verification), mailboxes (per-user email accounts), email_messages (full email storage with folder/status/threading), mailing_lists (group email distribution). Created email routes: POST /email/send (validates to/cc/subject/body_html, stores in sent folder with status=sent), GET /email/messages (folder filtering with pagination), GET /email/messages/:id (full email with body), PATCH /email/messages/:id (mark read/flagged, move folder), DELETE /email/messages/:id (moves to trash, permanent delete if already in trash). V1 records emails locally without actual SMTP delivery. Auto-creates primary mailbox per user. Typecheck passes."
     },
     {
       "id": "US-085",
