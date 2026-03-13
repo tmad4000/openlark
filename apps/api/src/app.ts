@@ -9,6 +9,7 @@ import {
   invitationRoutes,
   acceptInviteRoutes,
   departmentRoutes,
+  userRoutes,
 } from "./modules/auth/index.js";
 import {
   messengerRoutes,
@@ -59,6 +60,9 @@ export async function buildApp() {
 
       // Department management (nested under orgs)
       api.register(departmentRoutes, { prefix: "/orgs/:id/departments" });
+
+      // User profile management
+      api.register(userRoutes, { prefix: "/users" });
 
       // Messenger module (HTTP + WebSocket)
       api.register(messengerRoutes, { prefix: "/messenger" });

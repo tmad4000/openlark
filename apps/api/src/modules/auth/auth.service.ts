@@ -797,6 +797,108 @@ export class AuthService {
     return result.length > 0;
   }
 
+  // ── User profile management ──────────────────────────────────────
+
+  async getUserProfile(userId: string) {
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(and(eq(users.id, userId), isNull(users.deletedAt)))
+      .limit(1);
+
+    if (!user) return null;
+
+    // Get department memberships
+    const memberships = await db
+      .select({
+        departmentId: departmentMembers.departmentId,
+        role: departmentMembers.role,
+        departmentName: departments.name,
+      })
+      .from(departmentMembers)
+      .innerJoin(departments, eq(departmentMembers.departmentId, departments.id))
+      .where(
+        and(
+          eq(departmentMembers.userId, userId),
+          isNull(departments.deletedAt)
+        )
+      );
+
+    const { passwordHash: _, totpSecret: __, ...safeUser } = user;
+    return { ...safeUser, departments: memberships };
+  }
+
+  async updateUserProfile(
+    userId: string,
+    input: {
+      displayName?: string;
+      avatarUrl?: string | null;
+      timezone?: string;
+      locale?: string;
+      workingHoursStart?: string;
+      workingHoursEnd?: string;
+      phone?: string | null;
+    }
+  ) {
+    const updates: Record<string, unknown> = { updatedAt: new Date() };
+    if (input.displayName !== undefined) updates.displayName = input.displayName;
+    if (input.avatarUrl !== undefined) updates.avatarUrl = input.avatarUrl;
+    if (input.timezone !== undefined) updates.timezone = input.timezone;
+    if (input.locale !== undefined) updates.locale = input.locale;
+    if (input.workingHoursStart !== undefined) updates.workingHoursStart = input.workingHoursStart;
+    if (input.workingHoursEnd !== undefined) updates.workingHoursEnd = input.workingHoursEnd;
+    if (input.phone !== undefined) updates.phone = input.phone;
+
+    const [user] = await db
+      .update(users)
+      .set(updates)
+      .where(and(eq(users.id, userId), isNull(users.deletedAt)))
+      .returning();
+
+    if (!user) return null;
+
+    const { passwordHash: _, totpSecret: __, ...safeUser } = user;
+    return safeUser;
+  }
+
+  async getPublicProfile(userId: string, requestingOrgId: string) {
+    const [user] = await db
+      .select({
+        id: users.id,
+        displayName: users.displayName,
+        avatarUrl: users.avatarUrl,
+        status: users.status,
+        orgId: users.orgId,
+      })
+      .from(users)
+      .where(and(eq(users.id, userId), isNull(users.deletedAt)))
+      .limit(1);
+
+    if (!user) return null;
+
+    // Only show users in the same org
+    if (user.orgId !== requestingOrgId) return null;
+
+    // Get department info
+    const memberships = await db
+      .select({
+        departmentId: departmentMembers.departmentId,
+        role: departmentMembers.role,
+        departmentName: departments.name,
+      })
+      .from(departmentMembers)
+      .innerJoin(departments, eq(departmentMembers.departmentId, departments.id))
+      .where(
+        and(
+          eq(departmentMembers.userId, userId),
+          isNull(departments.deletedAt)
+        )
+      );
+
+    const { orgId: _orgId, ...publicUser } = user;
+    return { ...publicUser, departments: memberships };
+  }
+
   async getDepartmentMembers(deptId: string) {
     return db
       .select({

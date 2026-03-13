@@ -240,8 +240,8 @@
         "Typecheck passes"
       ],
       "priority": 15,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Routes at /api/v1/users. GET /me returns full profile with department memberships. PATCH /me validates with Zod schema. GET /:id returns public profile scoped to same org."
     },
     {
       "id": "US-016",

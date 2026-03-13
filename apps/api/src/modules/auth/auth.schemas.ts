@@ -70,6 +70,17 @@ export const addDepartmentMemberSchema = z.object({
   role: z.enum(["head", "member"]).default("member"),
 });
 
+export const updateProfileSchema = z.object({
+  displayName: z.string().min(1).max(255).optional(),
+  avatarUrl: z.string().url().nullable().optional(),
+  timezone: z.string().max(100).optional(),
+  locale: z.string().max(10).optional(),
+  workingHoursStart: z.string().regex(/^\d{2}:\d{2}$/, "Must be HH:MM format").optional(),
+  workingHoursEnd: z.string().regex(/^\d{2}:\d{2}$/, "Must be HH:MM format").optional(),
+  phone: z.string().max(50).nullable().optional(),
+});
+
+export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 export type CreateInvitationsInput = z.infer<typeof createInvitationsSchema>;
 export type AcceptInvitationInput = z.infer<typeof acceptInvitationSchema>;
 export type CreateDepartmentInput = z.infer<typeof createDepartmentSchema>;
