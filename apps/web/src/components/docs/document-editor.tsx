@@ -29,6 +29,7 @@ import { FileAttachment } from "./extensions/file-attachment";
 import { CommentMark } from "./extensions/comment-mark";
 import { CommentsPanel } from "./comments-panel";
 import { SharingDialog } from "./sharing-dialog";
+import { VersionHistoryPanel } from "./version-history-panel";
 
 // 12 distinct colors for collaborator cursors
 const CURSOR_COLORS = [
@@ -68,6 +69,7 @@ export function DocumentEditor({ document, readOnly = false, currentUser }: Docu
   const [collaborators, setCollaborators] = useState<CollaboratorPresence[]>([]);
   const [commentsPanelOpen, setCommentsPanelOpen] = useState(false);
   const [sharingDialogOpen, setSharingDialogOpen] = useState(false);
+  const [versionPanelOpen, setVersionPanelOpen] = useState(false);
 
   // Create Yjs document
   const ydoc = useMemo(() => new Y.Doc(), []);
@@ -390,6 +392,23 @@ export function DocumentEditor({ document, readOnly = false, currentUser }: Docu
             <span className="capitalize">{connectionStatus}</span>
           </div>
 
+          {/* Version history button */}
+          <button
+            onClick={() => setVersionPanelOpen(!versionPanelOpen)}
+            className={`flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors ${
+              versionPanelOpen
+                ? "bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400"
+                : "text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 dark:text-gray-400"
+            }`}
+            title="Version history"
+          >
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M12 8v4l3 3" />
+              <circle cx="12" cy="12" r="9" />
+            </svg>
+            Versions
+          </button>
+
           {/* Share button */}
           <button
             onClick={() => setSharingDialogOpen(true)}
@@ -435,6 +454,15 @@ export function DocumentEditor({ document, readOnly = false, currentUser }: Docu
           currentUser={currentUser}
           isOpen={commentsPanelOpen}
           onClose={() => setCommentsPanelOpen(false)}
+        />
+        <VersionHistoryPanel
+          documentId={document.id}
+          isOpen={versionPanelOpen}
+          onClose={() => setVersionPanelOpen(false)}
+          onRestore={() => {
+            // Reload the page to pick up restored content
+            window.location.reload();
+          }}
         />
       </div>
 

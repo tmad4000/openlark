@@ -656,10 +656,11 @@ class ApiClient {
     );
   }
 
-  async restoreDocumentVersion(versionId: string) {
-    return this.request<void>(`/docs/versions/${versionId}/restore`, {
-      method: "POST",
-    });
+  async restoreDocumentVersion(documentId: string, versionId: string) {
+    return this.request<void>(
+      `/docs/documents/${documentId}/versions/${versionId}/restore`,
+      { method: "POST" }
+    );
   }
 
   // Document comments

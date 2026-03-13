@@ -970,8 +970,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 58,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added VersionHistoryPanel component with create named version form, version list with timestamps, click-to-preview expansion, and restore button with confirmation. Integrated into DocumentEditor header with toggle button. Fixed restoreDocumentVersion API client to use correct route with documentId parameter."
     },
     {
       "id": "US-059",
