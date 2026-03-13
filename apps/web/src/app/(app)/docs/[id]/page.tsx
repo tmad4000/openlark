@@ -12,7 +12,7 @@ import { ArrowLeft, FileText } from "lucide-react";
 export default function DocPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: documentId } = use(params);
   const router = useRouter();
-  const { organization } = useAuth();
+  const { user, organization } = useAuth();
   const [document, setDocument] = useState<Document | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -96,7 +96,7 @@ export default function DocPage({ params }: { params: Promise<{ id: string }> })
             </div>
           </div>
         ) : document ? (
-          <DocumentEditor document={document} readOnly={false} />
+          <DocumentEditor document={document} readOnly={false} currentUser={user} />
         ) : null}
       </AppShell>
 

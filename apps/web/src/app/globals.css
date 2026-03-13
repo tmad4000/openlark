@@ -162,3 +162,29 @@
   outline: 2px solid #3b82f6;
   outline-offset: 2px;
 }
+
+/* Collaboration cursor styles */
+.collaboration-cursor__caret {
+  border-left: 2px solid;
+  border-color: inherit;
+  margin-left: -1px;
+  margin-right: -1px;
+  pointer-events: none;
+  position: relative;
+  word-break: normal;
+}
+
+.collaboration-cursor__label {
+  border-radius: 3px 3px 3px 0;
+  color: white;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  padding: 1px 6px 2px;
+  position: absolute;
+  top: -1.4em;
+  left: -1px;
+  white-space: nowrap;
+  pointer-events: none;
+  user-select: none;
+}

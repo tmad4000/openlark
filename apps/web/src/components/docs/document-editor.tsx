@@ -12,19 +12,41 @@ import { TableCell } from "@tiptap/extension-table-cell";
 import { TableHeader } from "@tiptap/extension-table-header";
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
 import Collaboration from "@tiptap/extension-collaboration";
+import CollaborationCursor from "@tiptap/extension-collaboration-cursor";
 import Underline from "@tiptap/extension-underline";
 import Link from "@tiptap/extension-link";
 import Image from "@tiptap/extension-image";
 import { all, createLowlight } from "lowlight";
 import * as Y from "yjs";
 import { WebsocketProvider } from "y-websocket";
-import { api, type Document } from "@/lib/api";
+import { api, type Document, type User } from "@/lib/api";
 import { SlashCommand } from "./slash-command-menu";
 import { FloatingToolbar } from "./floating-toolbar";
 import { DragHandle } from "./drag-handle";
 import { Callout } from "./extensions/callout";
 import { ToggleBlock } from "./extensions/toggle";
 import { FileAttachment } from "./extensions/file-attachment";
+
+// 12 distinct colors for collaborator cursors
+const CURSOR_COLORS = [
+  "#E06C75", "#61AFEF", "#98C379", "#E5C07B", "#C678DD", "#56B6C2",
+  "#FF6B6B", "#4ECDC4", "#F7DC6F", "#BB8FCE", "#85C1E9", "#F0B27A",
+];
+
+function getCursorColor(userId: string): string {
+  let hash = 0;
+  for (let i = 0; i < userId.length; i++) {
+    hash = ((hash << 5) - hash + userId.charCodeAt(i)) | 0;
+  }
+  return CURSOR_COLORS[Math.abs(hash) % CURSOR_COLORS.length];
+}
+
+export interface CollaboratorPresence {
+  userId: string;
+  name: string;
+  avatarUrl: string | null;
+  color: string;
+}
 
 // Create lowlight instance with all languages
 const lowlight = createLowlight(all);
@@ -34,11 +56,13 @@ type SaveStatus = "saved" | "saving" | "unsaved";
 interface DocumentEditorProps {
   document: Document;
   readOnly?: boolean;
+  currentUser?: User | null;
 }
 
-export function DocumentEditor({ document, readOnly = false }: DocumentEditorProps) {
+export function DocumentEditor({ document, readOnly = false, currentUser }: DocumentEditorProps) {
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("saved");
   const [connectionStatus, setConnectionStatus] = useState<"connected" | "connecting" | "disconnected">("connecting");
+  const [collaborators, setCollaborators] = useState<CollaboratorPresence[]>([]);
 
   // Create Yjs document
   const ydoc = useMemo(() => new Y.Doc(), []);
@@ -82,6 +106,45 @@ export function DocumentEditor({ document, readOnly = false }: DocumentEditorPro
       provider.off("status", onStatus);
     };
   }, [provider]);
+
+  // Set local awareness state and track remote collaborators
+  useEffect(() => {
+    if (!provider || !currentUser) return;
+
+    const awareness = provider.awareness;
+    const color = getCursorColor(currentUser.id);
+
+    // Set our own presence
+    awareness.setLocalStateField("user", {
+      userId: currentUser.id,
+      name: currentUser.displayName,
+      avatarUrl: currentUser.avatarUrl,
+      color,
+    });
+
+    const updateCollaborators = () => {
+      const states = awareness.getStates();
+      const others: CollaboratorPresence[] = [];
+      states.forEach((state, clientId) => {
+        if (clientId === awareness.clientID) return;
+        const u = state.user as CollaboratorPresence | undefined;
+        if (u?.userId) {
+          // Deduplicate by userId (user may have multiple tabs)
+          if (!others.some((o) => o.userId === u.userId)) {
+            others.push(u);
+          }
+        }
+      });
+      setCollaborators(others);
+    };
+
+    awareness.on("change", updateCollaborators);
+    updateCollaborators();
+
+    return () => {
+      awareness.off("change", updateCollaborators);
+    };
+  }, [provider, currentUser]);
 
   // Cleanup provider on unmount
   useEffect(() => {
@@ -135,6 +198,19 @@ export function DocumentEditor({ document, readOnly = false }: DocumentEditorPro
       Collaboration.configure({
         document: ydoc,
       }),
+      ...(provider
+        ? [
+            CollaborationCursor.configure({
+              provider,
+              user: currentUser
+                ? {
+                    name: currentUser.displayName,
+                    color: getCursorColor(currentUser.id),
+                  }
+                : { name: "Anonymous", color: "#999999" },
+            }),
+          ]
+        : []),
       Underline,
       Link.configure({
         openOnClick: false,
@@ -216,6 +292,35 @@ export function DocumentEditor({ document, readOnly = false }: DocumentEditorPro
         </div>
 
         <div className="flex items-center gap-3">
+          {/* Collaborator presence avatars */}
+          {collaborators.length > 0 && (
+            <div className="flex items-center -space-x-2">
+              {collaborators.slice(0, 5).map((c) => (
+                <div
+                  key={c.userId}
+                  className="relative w-7 h-7 rounded-full border-2 border-white dark:border-gray-900 flex items-center justify-center text-[10px] font-medium text-white"
+                  style={{ backgroundColor: c.color }}
+                  title={c.name}
+                >
+                  {c.avatarUrl ? (
+                    <img
+                      src={c.avatarUrl}
+                      alt={c.name}
+                      className="w-full h-full rounded-full object-cover"
+                    />
+                  ) : (
+                    c.name.charAt(0).toUpperCase()
+                  )}
+                </div>
+              ))}
+              {collaborators.length > 5 && (
+                <div className="w-7 h-7 rounded-full border-2 border-white dark:border-gray-900 bg-gray-400 flex items-center justify-center text-[10px] font-medium text-white">
+                  +{collaborators.length - 5}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Auto-save status */}
           <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
             {saveStatus === "saving" && (
