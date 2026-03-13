@@ -35,6 +35,7 @@ import { auditLogPlugin } from "./middleware/audit";
 import { closeRedis } from "./lib/redis";
 import { startAutomationWorker, stopAutomationWorker } from "./lib/automation-worker";
 import { startTranscriptionWorker, stopTranscriptionWorker } from "./lib/transcription-worker";
+import { startWebhookWorker, stopWebhookWorker } from "./lib/webhook-worker";
 
 const fastify = Fastify({
   logger: true,
@@ -100,6 +101,7 @@ const start = async () => {
     // Start workers
     startAutomationWorker();
     startTranscriptionWorker();
+    startWebhookWorker();
   } catch (err) {
     fastify.log.error(err);
     process.exit(1);
@@ -112,6 +114,7 @@ const shutdown = async () => {
   await fastify.close();
   await stopAutomationWorker();
   await stopTranscriptionWorker();
+  await stopWebhookWorker();
   await closeRedis();
   process.exit(0);
 };

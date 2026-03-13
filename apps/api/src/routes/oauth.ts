@@ -1,8 +1,8 @@
 import { FastifyInstance } from "fastify";
 import crypto from "crypto";
 import { db } from "../db";
-import { oauthApps, eventSubscriptions } from "../db/schema";
-import { eq, and } from "drizzle-orm";
+import { oauthApps, eventSubscriptions, webhookDeliveries } from "../db/schema";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
 
 const UUID_REGEX =
@@ -447,6 +447,63 @@ export async function oauthRoutes(fastify: FastifyInstance) {
       }
 
       return reply.status(200).send({ message: "Subscription deleted" });
+    }
+  );
+
+  // ── Webhook Delivery Logs ──────────────────────────────────────────
+
+  // Get webhook delivery logs for an app
+  fastify.get<{ Params: { appId: string }; Querystring: { limit?: string } }>(
+    "/apps/:appId/deliveries",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      if (!(await requireAdmin(request, reply))) return;
+
+      const { appId } = request.params;
+      if (!UUID_REGEX.test(appId)) {
+        return reply.status(400).send({ error: "Invalid app ID" });
+      }
+
+      // Verify app belongs to org
+      const [app] = await db
+        .select({ id: oauthApps.id })
+        .from(oauthApps)
+        .where(
+          and(
+            eq(oauthApps.id, appId),
+            eq(oauthApps.orgId, request.user.orgId!)
+          )
+        )
+        .limit(1);
+
+      if (!app) {
+        return reply.status(404).send({ error: "App not found" });
+      }
+
+      // Get all subscription IDs for this app
+      const subs = await db
+        .select({ id: eventSubscriptions.id })
+        .from(eventSubscriptions)
+        .where(eq(eventSubscriptions.appId, app.id));
+
+      const subIds = subs.map((s) => s.id);
+      if (subIds.length === 0) {
+        return reply.status(200).send({ deliveries: [] });
+      }
+
+      const queryLimit = Math.min(
+        parseInt(request.query.limit || "50", 10) || 50,
+        200
+      );
+
+      const deliveries = await db
+        .select()
+        .from(webhookDeliveries)
+        .where(inArray(webhookDeliveries.subscriptionId, subIds))
+        .orderBy(desc(webhookDeliveries.createdAt))
+        .limit(queryLimit);
+
+      return reply.status(200).send({ deliveries });
     }
   );
 

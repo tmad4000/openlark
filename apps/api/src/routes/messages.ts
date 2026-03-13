@@ -10,6 +10,7 @@ import {
   createThreadReplyNotification,
   createBuzzNotification,
 } from "../lib/notifications";
+import { dispatchWebhookEvent } from "../lib/webhook-worker";
 
 // UUID validation regex
 const UUID_REGEX =
@@ -233,10 +234,23 @@ export async function messagesRoutes(fastify: FastifyInstance) {
 
       // Get chat info for notifications
       const [chatInfo] = await db
-        .select({ name: chats.name, type: chats.type })
+        .select({ name: chats.name, type: chats.type, orgId: chats.orgId })
         .from(chats)
         .where(eq(chats.id, chatId))
         .limit(1);
+
+      // Dispatch webhook event for message.created
+      if (chatInfo?.orgId) {
+        dispatchWebhookEvent("message.created", chatInfo.orgId, {
+          messageId: newMessage.id,
+          chatId,
+          senderId: currentUserId,
+          type,
+          content,
+          threadId: thread_id || null,
+          createdAt: newMessage.createdAt,
+        }).catch(() => {});
+      }
 
       // Get message text preview for notifications
       const messagePreview = typeof content.text === "string" ? content.text :

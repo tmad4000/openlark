@@ -13,6 +13,7 @@ import { eq, and, or, inArray, desc, sql } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
 import { publish, getChatChannel, getUserPresenceChannel } from "../lib/redis";
 import { createNotification } from "../lib/notifications";
+import { dispatchWebhookEvent } from "../lib/webhook-worker";
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -319,6 +320,18 @@ export async function approvalsRoutes(fastify: FastifyInstance) {
         }
       }
 
+      // Dispatch webhook event for approval.submitted
+      if (user.orgId) {
+        dispatchWebhookEvent("approval.submitted", user.orgId, {
+          requestId: approvalRequest.id,
+          templateId: template_id,
+          templateName: template.name,
+          requesterId: user.id,
+          formData: form_data,
+          status: "pending",
+        }).catch(() => {});
+      }
+
       return reply.status(201).send({
         request: { ...approvalRequest, steps },
       });
@@ -540,6 +553,18 @@ export async function approvalsRoutes(fastify: FastifyInstance) {
           entityType: "approval",
           entityId: id,
         });
+      }
+
+      // Dispatch webhook event for approval.decided
+      if (user.orgId) {
+        dispatchWebhookEvent("approval.decided", user.orgId, {
+          requestId: id,
+          stepId: stepId,
+          decision,
+          decidedBy: user.id,
+          comment: comment || null,
+          requestStatus: updatedRequest.status,
+        }).catch(() => {});
       }
 
       return reply.send({ step: updatedStep, request: updatedRequest });

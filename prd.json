@@ -1743,8 +1743,8 @@
         "Typecheck passes"
       ],
       "priority": 103,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created webhook_deliveries table with id, subscription_id (fk to event_subscriptions), event_type, payload (jsonb), status (enum: pending/delivered/failed), attempts, last_attempt_at, created_at. Created webhook-worker.ts with BullMQ queue for reliable async delivery. dispatchWebhookEvent() finds active subscriptions for an event type within an org, creates delivery records, and queues jobs. Delivery POSTs to callback_url with HMAC-SHA256 signature header (X-OpenLark-Signature) and timestamp. Retry with custom exponential backoff: 1s, 5s, 30s, 5m, 30m (max 5 attempts). Added webhook dispatch calls to messages.ts (message.created), chats.ts (chat.created, user.joined), and approvals.ts (approval.submitted, approval.decided). GET /apps/:appId/deliveries returns delivery logs. Developer console UI shows collapsible webhook delivery logs section with status badges, attempt counts, and timestamps. Webhook worker started/stopped in server lifecycle. Migration 0019_webhook_deliveries.sql. Typecheck passes."
     },
     {
       "id": "US-104",

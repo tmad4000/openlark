@@ -41,6 +41,17 @@ interface SubscriptionData {
   createdAt: string;
 }
 
+interface DeliveryData {
+  id: string;
+  subscriptionId: string;
+  eventType: string;
+  payload: Record<string, unknown>;
+  status: "pending" | "delivered" | "failed";
+  attempts: number;
+  lastAttemptAt: string | null;
+  createdAt: string;
+}
+
 // ── Helpers ─────────────────────────────────────────────────────────
 
 function getCookie(name: string): string | null {
@@ -115,6 +126,8 @@ export default function DeveloperConsolePage() {
     event_type: EVENT_TYPES[0],
     callback_url: "",
   });
+  const [deliveries, setDeliveries] = useState<DeliveryData[]>([]);
+  const [showDeliveries, setShowDeliveries] = useState(false);
 
   // Edit state
   const [editing, setEditing] = useState(false);
@@ -175,6 +188,17 @@ export default function DeveloperConsolePage() {
         const data = await res.json();
         setSelectedApp(data.app);
         setSubscriptions(data.eventSubscriptions || []);
+      }
+    },
+    [apiFetch]
+  );
+
+  const loadDeliveries = useCallback(
+    async (id: string) => {
+      const res = await apiFetch(`/api/apps/${id}/deliveries?limit=50`);
+      if (res && res.ok) {
+        const data = await res.json();
+        setDeliveries(data.deliveries || []);
       }
     },
     [apiFetch]
@@ -724,6 +748,92 @@ export default function DeveloperConsolePage() {
                 </div>
               ))}
             </div>
+          )}
+        </div>
+
+        {/* Webhook Delivery Logs */}
+        <div className="bg-white border rounded-lg p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+              <RefreshCw className="w-4 h-4" />
+              Webhook Delivery Logs
+            </h2>
+            <button
+              onClick={() => {
+                if (!showDeliveries && selectedApp) {
+                  loadDeliveries(selectedApp.id);
+                }
+                setShowDeliveries(!showDeliveries);
+              }}
+              className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700"
+            >
+              {showDeliveries ? (
+                <>
+                  <ChevronDown className="w-3.5 h-3.5" />
+                  Hide
+                </>
+              ) : (
+                <>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                  Show
+                </>
+              )}
+            </button>
+          </div>
+
+          {showDeliveries && (
+            <>
+              {deliveries.length === 0 ? (
+                <p className="text-sm text-gray-400 py-4 text-center">
+                  No webhook deliveries yet
+                </p>
+              ) : (
+                <div className="divide-y max-h-96 overflow-y-auto">
+                  {deliveries.map((d) => (
+                    <div key={d.id} className="py-2 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium">
+                          {d.eventType}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-400">
+                            {d.attempts} attempt{d.attempts !== 1 ? "s" : ""}
+                          </span>
+                          <span
+                            className={`text-xs px-2 py-0.5 rounded ${
+                              d.status === "delivered"
+                                ? "bg-green-50 text-green-700"
+                                : d.status === "failed"
+                                  ? "bg-red-50 text-red-700"
+                                  : "bg-yellow-50 text-yellow-700"
+                            }`}
+                          >
+                            {d.status}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="text-xs text-gray-400">
+                        {new Date(d.createdAt).toLocaleString()}
+                        {d.lastAttemptAt && (
+                          <span className="ml-2">
+                            Last attempt:{" "}
+                            {new Date(d.lastAttemptAt).toLocaleString()}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <button
+                onClick={() =>
+                  selectedApp && loadDeliveries(selectedApp.id)
+                }
+                className="mt-2 text-xs text-blue-600 hover:text-blue-700"
+              >
+                Refresh
+              </button>
+            </>
           )}
         </div>
       </div>

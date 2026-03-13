@@ -5,6 +5,7 @@ import { eq, and, or, inArray, desc, gt, sql, isNull } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
 import { createSystemMessage } from "./messages";
 import { getTypingUsers, getOnlineUsers } from "../lib/redis";
+import { dispatchWebhookEvent } from "../lib/webhook-worker";
 
 interface GetChatsQuery {
   filter?: "dm" | "group" | "unread" | "muted" | "done";
@@ -665,6 +666,17 @@ export async function chatsRoutes(fastify: FastifyInstance) {
           addedBy: request.user.displayName,
           members: memberNames,
         });
+      }
+
+      // Dispatch webhook event for chat.created
+      if (newChat.orgId) {
+        dispatchWebhookEvent("chat.created", newChat.orgId, {
+          chatId: newChat.id,
+          name: name?.trim() || null,
+          type,
+          createdBy: currentUserId,
+          memberIds: [currentUserId, ...uniqueMemberIds],
+        }).catch(() => {});
       }
 
       const chatWithMembers = await getChatWithMembers(newChat.id);
@@ -1436,6 +1448,20 @@ export async function chatsRoutes(fastify: FastifyInstance) {
         addedBy: request.user.displayName,
         members: memberNames,
       });
+
+      // Dispatch webhook event for user.joined
+      const [chatForWebhook] = await db
+        .select({ orgId: chats.orgId })
+        .from(chats)
+        .where(eq(chats.id, id))
+        .limit(1);
+      if (chatForWebhook?.orgId) {
+        dispatchWebhookEvent("user.joined", chatForWebhook.orgId, {
+          chatId: id,
+          memberIds: newMemberIds,
+          addedBy: currentUserId,
+        }).catch(() => {});
+      }
 
       // Get updated member list
       const members = await db
