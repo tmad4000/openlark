@@ -255,8 +255,8 @@
         "Typecheck passes"
       ],
       "priority": 16,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "GET /contacts?q=&cursor=&limit= with cursor-based pagination. GET /contacts/departments returns tree with memberCount. Both scoped to authenticated user org."
     },
     {
       "id": "US-017",

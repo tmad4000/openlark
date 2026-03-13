@@ -10,6 +10,7 @@ import {
   acceptInviteRoutes,
   departmentRoutes,
   userRoutes,
+  contactsRoutes,
 } from "./modules/auth/index.js";
 import {
   messengerRoutes,
@@ -63,6 +64,9 @@ export async function buildApp() {
 
       // User profile management
       api.register(userRoutes, { prefix: "/users" });
+
+      // Contacts directory
+      api.register(contactsRoutes, { prefix: "/contacts" });
 
       // Messenger module (HTTP + WebSocket)
       api.register(messengerRoutes, { prefix: "/messenger" });

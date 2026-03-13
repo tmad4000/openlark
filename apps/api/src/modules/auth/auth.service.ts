@@ -10,7 +10,7 @@ import {
   departmentMembers,
 } from "../../db/schema/index.js";
 import { config } from "../../config.js";
-import { eq, and, isNull, gt, ilike } from "drizzle-orm";
+import { eq, and, or, isNull, gt, ilike, sql, count } from "drizzle-orm";
 import type { User, Organization } from "../../db/schema/auth.js";
 import crypto from "crypto";
 
@@ -912,6 +912,83 @@ export class AuthService {
       .from(departmentMembers)
       .innerJoin(users, eq(departmentMembers.userId, users.id))
       .where(eq(departmentMembers.departmentId, deptId));
+  }
+
+  // ── Contacts directory ──────────────────────────────────────
+
+  async searchContacts(
+    orgId: string,
+    opts: { q?: string; cursor?: string; limit?: number }
+  ) {
+    const limit = Math.min(opts.limit || 50, 100);
+
+    const conditions = [
+      eq(users.orgId, orgId),
+      isNull(users.deletedAt),
+      eq(users.status, "active"),
+    ];
+
+    if (opts.q && opts.q.trim().length > 0) {
+      const pattern = `%${opts.q.trim()}%`;
+      conditions.push(
+        or(ilike(users.displayName, pattern), ilike(users.email, pattern))!
+      );
+    }
+
+    if (opts.cursor) {
+      conditions.push(gt(users.id, opts.cursor));
+    }
+
+    const results = await db
+      .select({
+        id: users.id,
+        email: users.email,
+        displayName: users.displayName,
+        avatarUrl: users.avatarUrl,
+        status: users.status,
+      })
+      .from(users)
+      .where(and(...conditions))
+      .orderBy(users.id)
+      .limit(limit + 1);
+
+    const hasMore = results.length > limit;
+    const items = hasMore ? results.slice(0, limit) : results;
+    const nextCursor = hasMore ? items[items.length - 1]!.id : null;
+
+    return { items, nextCursor, hasMore };
+  }
+
+  async getDepartmentTreeWithCounts(orgId: string) {
+    const depts = await db
+      .select({
+        id: departments.id,
+        name: departments.name,
+        parentId: departments.parentId,
+        createdAt: departments.createdAt,
+        updatedAt: departments.updatedAt,
+      })
+      .from(departments)
+      .where(and(eq(departments.orgId, orgId), isNull(departments.deletedAt)))
+      .orderBy(departments.name);
+
+    // Get member counts per department
+    const counts = await db
+      .select({
+        departmentId: departmentMembers.departmentId,
+        memberCount: count(departmentMembers.userId),
+      })
+      .from(departmentMembers)
+      .innerJoin(departments, eq(departmentMembers.departmentId, departments.id))
+      .where(and(eq(departments.orgId, orgId), isNull(departments.deletedAt)))
+      .groupBy(departmentMembers.departmentId);
+
+    const countMap = new Map(counts.map((c) => [c.departmentId, Number(c.memberCount)]));
+
+    return depts.map((d) => ({
+      ...d,
+      memberCount: countMap.get(d.id) || 0,
+    }));
   }
 }
 
