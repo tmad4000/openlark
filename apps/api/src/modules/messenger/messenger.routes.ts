@@ -139,6 +139,40 @@ export async function messengerRoutes(app: FastifyInstance) {
     }
   );
 
+  // ============ CHAT MEMBER SELF-UPDATE ============
+
+  // PATCH /messenger/chat-members/:chatId/me - Update own chat member settings
+  app.patch<{ Params: { chatId: string } }>(
+    "/chat-members/:chatId/me",
+    async (req, reply) => {
+      try {
+        const input = updateMemberSchema.parse(req.body);
+        // Only allow self-update fields (no role changes via this endpoint)
+        const { role: _role, ...selfFields } = input;
+        const member = await messengerService.updateMember(
+          req.params.chatId,
+          req.user!.id,
+          selfFields,
+          req.user!.id
+        );
+
+        if (!member) {
+          return reply.status(403).send({
+            code: "NOT_A_MEMBER",
+            message: "You are not a member of this chat",
+          });
+        }
+
+        return reply.send({ data: { member } });
+      } catch (error) {
+        if (error instanceof ZodError) {
+          return reply.status(400).send(formatZodError(error));
+        }
+        throw error;
+      }
+    }
+  );
+
   // ============ MEMBER ENDPOINTS ============
 
   // GET /messenger/chats/:chatId/members - List chat members

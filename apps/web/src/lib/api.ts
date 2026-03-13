@@ -273,6 +273,19 @@ class ApiClient {
     );
   }
 
+  async updateChatMemberSettings(
+    chatId: string,
+    settings: Partial<ChatMemberSettings>
+  ) {
+    return this.request<{ member: ChatMember }>(
+      `/messenger/chat-members/${chatId}/me`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(settings),
+      }
+    );
+  }
+
   async forwardMessage(messageId: string, chatIds: string[]) {
     return this.request<{ messages: Message[]; count: number }>(
       `/messenger/messages/${messageId}/forward`,
@@ -528,6 +541,13 @@ export interface Organization {
   logoUrl: string | null;
 }
 
+export interface ChatMemberSettings {
+  muted: boolean;
+  done: boolean;
+  pinned: boolean;
+  label: string | null;
+}
+
 export interface Chat {
   id: string;
   orgId: string;
@@ -537,6 +557,7 @@ export interface Chat {
   isPublic: boolean;
   createdAt: string;
   updatedAt: string;
+  memberSettings?: ChatMemberSettings;
 }
 
 export interface ChatMember {

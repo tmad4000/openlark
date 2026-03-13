@@ -200,6 +200,8 @@ export default function MessengerPage() {
   const { status: wsStatus, isConnected, sendTyping } = useWebSocket({
     onMessage: useCallback((event: NewMessageEvent) => {
       const msg = event.message;
+      // Reactivate done chats when new message arrives
+      ChatList.reactivateChat(event.chatId);
       // Route thread replies to the thread panel
       if (msg.threadId && msg.threadId === ThreadPanel.currentThreadId) {
         ThreadPanel.addReply(msg);

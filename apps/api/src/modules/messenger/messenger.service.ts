@@ -142,15 +142,22 @@ export class MessengerService {
   }
 
   /**
-   * Get user's chats
+   * Get user's chats with member settings
    *
    * Returns all chats where the user is a member, regardless of org.
    * This supports external groups (FR-2.29) where users from different
    * orgs can be members of the same chat.
+   * Includes per-user member settings (muted, done, pinned, label).
    */
-  async getUserChats(userId: string, _orgId: string): Promise<Chat[]> {
+  async getUserChats(userId: string, _orgId: string): Promise<(Chat & { memberSettings: { muted: boolean; done: boolean; pinned: boolean; label: string | null } })[]> {
     const result = await db
-      .select({ chat: chats })
+      .select({
+        chat: chats,
+        muted: chatMembers.muted,
+        done: chatMembers.done,
+        pinned: chatMembers.pinned,
+        label: chatMembers.label,
+      })
       .from(chats)
       .innerJoin(chatMembers, eq(chats.id, chatMembers.chatId))
       .where(
@@ -162,7 +169,15 @@ export class MessengerService {
       )
       .orderBy(desc(chats.updatedAt));
 
-    return result.map((r) => r.chat);
+    return result.map((r) => ({
+      ...r.chat,
+      memberSettings: {
+        muted: r.muted,
+        done: r.done,
+        pinned: r.pinned,
+        label: r.label,
+      },
+    }));
   }
 
   /**
@@ -236,6 +251,8 @@ export class MessengerService {
         role: chatMembers.role,
         joinedAt: chatMembers.joinedAt,
         muted: chatMembers.muted,
+        done: chatMembers.done,
+        pinned: chatMembers.pinned,
         label: chatMembers.label,
         lastReadMessageId: chatMembers.lastReadMessageId,
         leftAt: chatMembers.leftAt,

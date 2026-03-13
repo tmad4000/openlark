@@ -55,6 +55,8 @@ export type AddMemberInput = z.infer<typeof addMemberSchema>;
 export const updateMemberSchema = z.object({
   role: z.enum(chatMemberRoles).optional(),
   muted: z.boolean().optional(),
+  done: z.boolean().optional(),
+  pinned: z.boolean().optional(),
   label: z.string().max(100).nullable().optional(),
 });
 

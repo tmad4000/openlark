@@ -575,8 +575,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 35,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added done/pinned columns to chat_members schema. Added PATCH /chat-members/:chatId/me endpoint. ChatList has right-click context menu with Mute, Done, Pin to Top, Add Label. Muted chats show BellOff icon. Pinned chats sort to top. Done chats filtered from active list, reactivate on new message. Labels show as colored tags."
     },
     {
       "id": "US-036",
