@@ -1865,8 +1865,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 110,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created ai_jobs schema (apps/api/src/db/schema/ai-jobs.ts) with id, type (complete/rewrite/summarize/expand/adjust_tone), input (jsonb), output (jsonb), status, model, cost_tokens, created_at, user/org FKs, indexes. Extended lib/ai.ts with general-purpose aiComplete() function supporting all actions with pluggable LLM backends (OpenAI, Anthropic, Ollama via LLM_BACKEND env). Created POST /ai/complete route (apps/api/src/routes/ai.ts) accepting {prompt, context, text, action, tone}, with per-user quota tracking (200/day via Redis). Added GET /ai/usage endpoint for usage stats. Added AI action menu to DocumentEditor BubbleMenu with Sparkles button showing rewrite, summarize, expand, and adjust tone options with loading state. Typecheck passes."
     },
     {
       "id": "US-111",

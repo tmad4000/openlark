@@ -321,6 +321,170 @@ async function callAnthropic(userMessage: string): Promise<string> {
   return textBlock?.text || "";
 }
 
+// ── General-purpose AI Completion ──────────────────────────────────────
+
+export type AiActionType = "complete" | "rewrite" | "summarize" | "expand" | "adjust_tone";
+
+const AI_ACTION_PROMPTS: Record<AiActionType, string> = {
+  complete: "You are a helpful writing assistant. Complete the user's text naturally, continuing in the same style and tone. Return ONLY the completion text, no explanations.",
+  rewrite: "You are a helpful writing assistant. Rewrite the following text to improve clarity, grammar, and flow while preserving the original meaning. Return ONLY the rewritten text, no explanations.",
+  summarize: "You are a helpful writing assistant. Summarize the following text concisely, capturing the key points. Return ONLY the summary text, no explanations.",
+  expand: "You are a helpful writing assistant. Expand on the following text by adding more detail, examples, and supporting points while keeping the same tone. Return ONLY the expanded text, no explanations.",
+  adjust_tone: "You are a helpful writing assistant. Adjust the tone of the following text as requested. Return ONLY the adjusted text, no explanations.",
+};
+
+export interface AiCompleteRequest {
+  prompt?: string;
+  context?: string;
+  text?: string;
+  action: AiActionType;
+  tone?: string;
+}
+
+export interface AiCompleteResult {
+  text: string;
+  model: string;
+  tokensUsed: number;
+}
+
+/**
+ * Run a general-purpose AI completion/rewrite/summarize/expand action.
+ */
+export async function aiComplete(request: AiCompleteRequest): Promise<AiCompleteResult> {
+  const systemPrompt = AI_ACTION_PROMPTS[request.action];
+  let userMessage = "";
+
+  if (request.action === "complete" && request.prompt) {
+    userMessage = request.context
+      ? `Context:\n${request.context}\n\nText to complete:\n${request.prompt}`
+      : request.prompt;
+  } else if (request.action === "adjust_tone") {
+    userMessage = `Tone: ${request.tone || "professional"}\n\nText:\n${request.text || request.prompt || ""}`;
+  } else {
+    userMessage = request.text || request.prompt || "";
+    if (request.context) {
+      userMessage = `Context:\n${request.context}\n\nText:\n${userMessage}`;
+    }
+  }
+
+  let responseText: string;
+  let model: string;
+  let tokensUsed = 0;
+
+  switch (LLM_BACKEND) {
+    case "anthropic":
+      model = LLM_MODEL || "claude-sonnet-4-20250514";
+      responseText = await callAnthropicGeneral(systemPrompt, userMessage, model);
+      break;
+    case "ollama":
+      model = LLM_MODEL || "llama3";
+      responseText = await callOllamaGeneral(systemPrompt, userMessage, model);
+      break;
+    case "openai":
+    default:
+      model = LLM_MODEL || "gpt-4o";
+      responseText = await callOpenAIGeneral(systemPrompt, userMessage, model);
+      break;
+  }
+
+  // Rough token estimate (4 chars per token)
+  tokensUsed = Math.ceil((userMessage.length + responseText.length) / 4);
+
+  return { text: responseText, model, tokensUsed };
+}
+
+async function callOpenAIGeneral(systemPrompt: string, userMessage: string, model: string): Promise<string> {
+  if (!OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY is required for OpenAI LLM");
+  }
+
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userMessage },
+      ],
+      temperature: 0.7,
+      max_tokens: 2048,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`OpenAI API error: ${response.status} ${errorText}`);
+  }
+
+  const data = await response.json() as {
+    choices: Array<{ message: { content: string } }>;
+  };
+  return data.choices[0].message.content;
+}
+
+async function callAnthropicGeneral(systemPrompt: string, userMessage: string, model: string): Promise<string> {
+  if (!ANTHROPIC_API_KEY) {
+    throw new Error("ANTHROPIC_API_KEY is required for Anthropic LLM");
+  }
+
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "x-api-key": ANTHROPIC_API_KEY,
+      "anthropic-version": "2023-06-01",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: 2048,
+      system: systemPrompt,
+      messages: [{ role: "user", content: userMessage }],
+      temperature: 0.7,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Anthropic API error: ${response.status} ${errorText}`);
+  }
+
+  const data = await response.json() as {
+    content: Array<{ type: string; text: string }>;
+  };
+  const textBlock = data.content.find((b) => b.type === "text");
+  return textBlock?.text || "";
+}
+
+async function callOllamaGeneral(systemPrompt: string, userMessage: string, model: string): Promise<string> {
+  const response = await fetch(`${OLLAMA_URL}/api/chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userMessage },
+      ],
+      stream: false,
+      options: { temperature: 0.7 },
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Ollama API error: ${response.status} ${errorText}`);
+  }
+
+  const data = await response.json() as {
+    message: { content: string };
+  };
+  return data.message.content;
+}
+
 async function callOllama(userMessage: string): Promise<string> {
   const model = LLM_MODEL || "llama3";
 

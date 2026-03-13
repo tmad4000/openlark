@@ -55,6 +55,12 @@ import {
   Info,
   Upload,
   MessageSquare,
+  Sparkles,
+  RefreshCw,
+  AlignLeft,
+  Maximize2,
+  Palette,
+  Loader2,
 } from "lucide-react";
 import { Extension } from "@tiptap/react";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
@@ -770,6 +776,85 @@ function ImageUploadDialog({ isOpen, onClose, onUpload }: ImageUploadDialogProps
   );
 }
 
+// AI Action Menu component
+interface AiActionMenuProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onAction: (action: string, tone?: string) => void;
+  isLoading: boolean;
+}
+
+function AiActionMenu({ isOpen, onClose, onAction, isLoading }: AiActionMenuProps) {
+  const [showToneOptions, setShowToneOptions] = useState(false);
+
+  if (!isOpen) return null;
+
+  const toneOptions = ["professional", "casual", "formal", "friendly", "concise", "creative"];
+
+  return (
+    <div className="absolute top-full left-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-50 min-w-[200px] overflow-hidden">
+      {isLoading ? (
+        <div className="flex items-center gap-2 px-4 py-3 text-sm text-gray-500">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          Processing...
+        </div>
+      ) : showToneOptions ? (
+        <div>
+          <button
+            onClick={() => setShowToneOptions(false)}
+            className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-500 hover:bg-gray-50 border-b border-gray-100"
+          >
+            &larr; Back
+          </button>
+          {toneOptions.map((tone) => (
+            <button
+              key={tone}
+              onClick={() => { onAction("adjust_tone", tone); setShowToneOptions(false); }}
+              className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700"
+            >
+              <span className="capitalize">{tone}</span>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div>
+          <div className="px-3 py-1.5 text-xs font-semibold text-gray-400 uppercase tracking-wider bg-gray-50 border-b border-gray-100">
+            AI Actions
+          </div>
+          <button
+            onClick={() => onAction("rewrite")}
+            className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Rewrite
+          </button>
+          <button
+            onClick={() => onAction("summarize")}
+            className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700"
+          >
+            <AlignLeft className="w-4 h-4" />
+            Summarize
+          </button>
+          <button
+            onClick={() => onAction("expand")}
+            className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700"
+          >
+            <Maximize2 className="w-4 h-4" />
+            Expand
+          </button>
+          <button
+            onClick={() => setShowToneOptions(true)}
+            className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700"
+          >
+            <Palette className="w-4 h-4" />
+            Adjust tone...
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const DocumentEditorInner = forwardRef<DocumentEditorHandle, DocumentEditorProps>(function DocumentEditor({
   documentId,
   yjsDocId,
@@ -785,6 +870,8 @@ const DocumentEditorInner = forwardRef<DocumentEditorHandle, DocumentEditorProps
   const [isSynced, setIsSynced] = useState(false);
   const [showLinkDialog, setShowLinkDialog] = useState(false);
   const [showImageDialog, setShowImageDialog] = useState(false);
+  const [showAiMenu, setShowAiMenu] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
   const [slashMenuOpen, setSlashMenuOpen] = useState(false);
   const [slashMenuQuery, setSlashMenuQuery] = useState("");
   const [slashMenuPosition, setSlashMenuPosition] = useState<{ from: number; to: number } | null>(null);
@@ -1175,6 +1262,53 @@ const DocumentEditorInner = forwardRef<DocumentEditorHandle, DocumentEditorProps
     [editor]
   );
 
+  // Handle AI action on selected text
+  const handleAiAction = useCallback(
+    async (action: string, tone?: string) => {
+      if (!editor) return;
+      const { from, to } = editor.state.selection;
+      if (from === to) return; // No selection
+
+      const selectedText = editor.state.doc.textBetween(from, to, " ");
+      if (!selectedText.trim()) return;
+
+      setAiLoading(true);
+      try {
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+        const response = await fetch(`${apiUrl}/ai/complete`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            text: selectedText,
+            action,
+            tone,
+          }),
+        });
+
+        if (!response.ok) {
+          const err = await response.json();
+          console.error("AI action failed:", err);
+          return;
+        }
+
+        const result = await response.json();
+        if (result.text) {
+          // Replace selected text with AI result
+          editor.chain().focus().deleteSelection().insertContent(result.text).run();
+        }
+      } catch (error) {
+        console.error("AI action error:", error);
+      } finally {
+        setAiLoading(false);
+        setShowAiMenu(false);
+      }
+    },
+    [editor, token]
+  );
+
   // Expose methods for comment management via ref
   useImperativeHandle(ref, () => ({
     setCommentMark: (commentId: string, from: number, to: number) => {
@@ -1327,6 +1461,26 @@ const DocumentEditorInner = forwardRef<DocumentEditorHandle, DocumentEditorProps
         >
           <MessageSquare className="w-4 h-4" />
         </button>
+        <div className="w-px h-5 bg-gray-200 mx-1" />
+        <div className="relative">
+          <button
+            onClick={() => setShowAiMenu(!showAiMenu)}
+            className={`p-1.5 rounded transition-colors ${
+              showAiMenu
+                ? "bg-purple-100 text-purple-600"
+                : "text-gray-600 hover:bg-gray-100"
+            }`}
+            title="AI Actions"
+          >
+            <Sparkles className="w-4 h-4" />
+          </button>
+          <AiActionMenu
+            isOpen={showAiMenu}
+            onClose={() => setShowAiMenu(false)}
+            onAction={handleAiAction}
+            isLoading={aiLoading}
+          />
+        </div>
 
         {/* Link Dialog */}
         <LinkDialog
