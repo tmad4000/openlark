@@ -644,8 +644,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 39,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Backend already implemented (schema, routes, service). Added frontend: Announcement type and API client methods in api.ts, announcements tab in chat-tabs.tsx, AnnouncementsView component with create/edit/delete for admins/owners, announcement banner at top of chat view, announcements loaded on chat select."
     },
     {
       "id": "US-040",

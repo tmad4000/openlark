@@ -12,10 +12,11 @@ import { ThreadPanel } from "@/components/messenger/thread-panel";
 import { AppShell } from "@/components/layout/app-shell";
 import { ChatTabs, type CustomTab } from "@/components/messenger/chat-tabs";
 import { cn } from "@/lib/utils";
-import { MessageSquare, Wifi, WifiOff, Loader2, Pin, X, Star, FileText, File, Info } from "lucide-react";
-import { api, type Chat, type Pin as PinType, type Favorite, type Message } from "@/lib/api";
+import { MessageSquare, Wifi, WifiOff, Loader2, Pin, X, Star, FileText, File, Info, Megaphone } from "lucide-react";
+import { api, type Chat, type Pin as PinType, type Favorite, type Message, type Announcement, type ChatMember } from "@/lib/api";
 import { ForwardDialog } from "@/components/messenger/forward-dialog";
 import { GroupSettingsPanel } from "@/components/messenger/group-settings-panel";
+import { AnnouncementsView } from "@/components/messenger/announcements-view";
 
 export default function MessengerPage() {
   const { user, organization } = useAuth();
@@ -35,6 +36,8 @@ export default function MessengerPage() {
   const [sharedFiles, setSharedFiles] = useState<Array<{ id: string; name: string; url: string; size: number; sharedAt: string; sharedBy: string }>>([]);
   const [showGroupSettings, setShowGroupSettings] = useState(false);
   const [selectedChatType, setSelectedChatType] = useState<string | null>(null);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [chatMembers, setChatMembers] = useState<ChatMember[]>([]);
 
   // Sender map ref for thread panel
   const senderMapRef = useRef<Map<string, { displayName: string | null; avatarUrl: string | null }>>(new Map());
@@ -57,6 +60,12 @@ export default function MessengerPage() {
     api.getUserFavorites().then((res) => {
       setFavoritedMessageIds(new Set(res.favorites.map((f) => f.messageId)));
     }).catch(() => {});
+    api.getAnnouncements(selectedChatId).then((res) => {
+      setAnnouncements(res.announcements);
+    }).catch(() => setAnnouncements([]));
+    api.getChatMembers(selectedChatId).then((res) => {
+      setChatMembers(res.members);
+    }).catch(() => setChatMembers([]));
   }, [selectedChatId]);
 
   const handlePinMessage = useCallback(async (messageId: string) => {
@@ -130,6 +139,25 @@ export default function MessengerPage() {
   const handleForwardMessage = useCallback((message: Message) => {
     setForwardMessages([message]);
     setIsForwardDialogOpen(true);
+  }, []);
+
+  // Announcement handlers
+  const handleCreateAnnouncement = useCallback(async (content: string) => {
+    if (!selectedChatId) return;
+    const res = await api.createAnnouncement(selectedChatId, content);
+    setAnnouncements((prev) => [res.announcement, ...prev]);
+  }, [selectedChatId]);
+
+  const handleUpdateAnnouncement = useCallback(async (id: string, content: string) => {
+    const res = await api.updateAnnouncement(id, { content });
+    setAnnouncements((prev) =>
+      prev.map((a) => (a.id === id ? res.announcement : a))
+    );
+  }, []);
+
+  const handleDeleteAnnouncement = useCallback(async (id: string) => {
+    await api.deleteAnnouncement(id);
+    setAnnouncements((prev) => prev.filter((a) => a.id !== id));
   }, []);
 
   // Custom tab management (per chat, stored in localStorage)
@@ -422,12 +450,31 @@ export default function MessengerPage() {
                 pinnedCount={pinnedMessages.length}
                 docsCount={sharedDocs.length}
                 filesCount={sharedFiles.length}
+                announcementsCount={announcements.length}
                 customTabs={getCustomTabsForChat(selectedChatId)}
                 onAddCustomTab={handleAddCustomTab}
                 onDeleteCustomTab={handleDeleteCustomTab}
                 onReorderCustomTabs={handleReorderCustomTabs}
               />
             </div>
+
+            {/* Announcement banner at top of chat */}
+            {chatTab === "chat" && announcements.length > 0 && (
+              <div
+                className="px-4 py-2 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800 flex items-center gap-2 cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
+                onClick={() => setChatTab("announcements")}
+              >
+                <Megaphone className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+                <p className="text-sm text-amber-800 dark:text-amber-200 truncate flex-1">
+                  {announcements[0].content}
+                </p>
+                {announcements.length > 1 && (
+                  <span className="text-xs text-amber-600 dark:text-amber-400 flex-shrink-0">
+                    +{announcements.length - 1} more
+                  </span>
+                )}
+              </div>
+            )}
 
             {/* Tab content */}
             {chatTab === "chat" ? (
@@ -454,6 +501,18 @@ export default function MessengerPage() {
               <SharedDocsView docs={sharedDocs} />
             ) : chatTab === "files" ? (
               <SharedFilesView files={sharedFiles} />
+            ) : chatTab === "announcements" ? (
+              <AnnouncementsView
+                announcements={announcements}
+                isPrivileged={(() => {
+                  const m = chatMembers.find((cm) => cm.userId === user?.id);
+                  return m?.role === "owner" || m?.role === "admin";
+                })()}
+                currentUserId={user?.id || ""}
+                onCreate={handleCreateAnnouncement}
+                onUpdate={handleUpdateAnnouncement}
+                onDelete={handleDeleteAnnouncement}
+              />
             ) : (
               <CustomTabView tab={getCustomTabsForChat(selectedChatId).find((t) => t.id === chatTab)} />
             )}

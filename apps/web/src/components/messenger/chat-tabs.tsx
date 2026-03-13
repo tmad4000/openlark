@@ -2,9 +2,9 @@
 
 import { useState, useCallback, useRef } from "react";
 import { cn } from "@/lib/utils";
-import { Pin, FileText, File, Plus, X, GripVertical, ExternalLink } from "lucide-react";
+import { Pin, FileText, File, Plus, X, GripVertical, ExternalLink, Megaphone } from "lucide-react";
 
-export type BuiltinTab = "chat" | "docs" | "files" | "pins";
+export type BuiltinTab = "chat" | "docs" | "files" | "pins" | "announcements";
 
 export interface CustomTab {
   id: string;
@@ -18,6 +18,7 @@ interface ChatTabsProps {
   pinnedCount: number;
   docsCount: number;
   filesCount: number;
+  announcementsCount: number;
   customTabs: CustomTab[];
   onAddCustomTab: (name: string, url: string) => void;
   onDeleteCustomTab: (id: string) => void;
@@ -30,6 +31,7 @@ export function ChatTabs({
   pinnedCount,
   docsCount,
   filesCount,
+  announcementsCount,
   customTabs,
   onAddCustomTab,
   onDeleteCustomTab,
@@ -123,6 +125,14 @@ export function ChatTabs({
             <Pin className="h-3.5 w-3.5" />
             Pins
             {badge(pinnedCount)}
+          </button>
+        )}
+
+        {announcementsCount > 0 && (
+          <button onClick={() => onTabChange("announcements")} className={tabClass("announcements")}>
+            <Megaphone className="h-3.5 w-3.5" />
+            Announcements
+            {badge(announcementsCount)}
           </button>
         )}
 

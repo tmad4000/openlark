@@ -342,6 +342,43 @@ class ApiClient {
     );
   }
 
+  // Announcement endpoints
+  async getAnnouncements(chatId: string) {
+    return this.request<{ announcements: Announcement[] }>(
+      `/messenger/chats/${chatId}/announcements`
+    );
+  }
+
+  async createAnnouncement(chatId: string, content: string) {
+    return this.request<{ announcement: Announcement }>(
+      `/messenger/chats/${chatId}/announcements`,
+      {
+        method: "POST",
+        body: JSON.stringify({ content }),
+      }
+    );
+  }
+
+  async updateAnnouncement(
+    announcementId: string,
+    data: { content?: string; isPinned?: boolean }
+  ) {
+    return this.request<{ announcement: Announcement }>(
+      `/messenger/announcements/${announcementId}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      }
+    );
+  }
+
+  async deleteAnnouncement(announcementId: string) {
+    return this.request<{ success: boolean }>(
+      `/messenger/announcements/${announcementId}`,
+      { method: "DELETE" }
+    );
+  }
+
   // Calendar endpoints
   async getCalendars() {
     return this.request<{ calendars: Calendar[] }>("/calendar/calendars");
@@ -675,6 +712,16 @@ export interface Favorite {
   messageId: string;
   createdAt: string;
   message?: Message;
+}
+
+export interface Announcement {
+  id: string;
+  chatId: string;
+  content: string;
+  authorId: string;
+  isPinned: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // Calendar types
