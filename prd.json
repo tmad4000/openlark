@@ -627,8 +627,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 38,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added CodeBlockLowlight TipTap extension with lowlight syntax highlighting (common languages). Cmd+Option+C keyboard shortcut inserts/toggles code block. Code block toolbar button with language selector dropdown (21 languages: JavaScript, TypeScript, Python, Go, Rust, Java, C++, etc.). Messages with rich content (code blocks, formatting) store HTML in contentJson.html for rendering. MessageRichContent component renders HTML with prose styling. Copy button on rendered code blocks (appears on hover, shows checkmark after copy). Triple-backtick markdown syntax supported via TipTap's built-in input rules. GitHub-dark syntax theme in globals.css."
     },
     {
       "id": "US-039",

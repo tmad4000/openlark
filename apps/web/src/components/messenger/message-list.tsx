@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import { api, type Message, type MessageReaction } from "@/lib/api";
 import { useAuth } from "@/hooks/use-auth";
-import { Loader2, Clock, AlertCircle, MessageSquareText, Pin, Star, Pencil, Trash2, Check, X, Forward } from "lucide-react";
+import { Loader2, Clock, AlertCircle, MessageSquareText, Pin, Star, Pencil, Trash2, Check, X, Forward, Copy, CheckCheck } from "lucide-react";
 import {
   ReadReceiptIndicator,
   type ReadStatus,
@@ -803,6 +803,8 @@ function MessageBubble({
                 </button>
               </div>
             </div>
+          ) : message.contentJson?.html ? (
+            <MessageRichContent html={message.contentJson.html} isOwn={isOwn} />
           ) : (
             <div className="text-sm whitespace-pre-wrap break-words">
               {getMessageContent()}
@@ -861,5 +863,63 @@ function MessageBubble({
         />
       </div>
     </div>
+  );
+}
+
+// Rich content renderer with code block copy buttons
+function MessageRichContent({ html, isOwn }: { html: string; isOwn: boolean }) {
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+
+  const handleCopyCode = useCallback(async (index: number) => {
+    if (!contentRef.current) return;
+    const codeBlocks = contentRef.current.querySelectorAll("pre code");
+    const codeEl = codeBlocks[index];
+    if (!codeEl) return;
+    try {
+      await navigator.clipboard.writeText(codeEl.textContent || "");
+      setCopiedIndex(index);
+      setTimeout(() => setCopiedIndex(null), 2000);
+    } catch {
+      // fallback - ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!contentRef.current) return;
+    const preElements = contentRef.current.querySelectorAll("pre");
+    // Clean up existing buttons first
+    contentRef.current.querySelectorAll(".code-copy-btn").forEach((el) => el.remove());
+
+    preElements.forEach((pre, index) => {
+      pre.style.position = "relative";
+      const btn = document.createElement("button");
+      btn.className = "code-copy-btn";
+      btn.title = "Copy code";
+      btn.setAttribute("data-index", String(index));
+      btn.innerHTML = copiedIndex === index
+        ? '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/><path d="M20 6 9 17l-5-5"/></svg>'
+        : '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>';
+      btn.onclick = () => handleCopyCode(index);
+      pre.appendChild(btn);
+    });
+  }, [html, copiedIndex, handleCopyCode]);
+
+  return (
+    <div
+      ref={contentRef}
+      className={cn(
+        "text-sm prose prose-sm max-w-none break-words",
+        "[&_p]:my-0 [&_ul]:my-1 [&_ol]:my-1 [&_blockquote]:my-1",
+        "[&_pre]:relative [&_pre]:rounded-md [&_pre]:p-3 [&_pre]:my-2 [&_pre]:text-xs [&_pre]:overflow-x-auto",
+        "[&_pre]:bg-gray-900 [&_pre]:text-gray-100",
+        "[&_code]:text-xs",
+        "[&_.code-copy-btn]:absolute [&_.code-copy-btn]:top-2 [&_.code-copy-btn]:right-2 [&_.code-copy-btn]:p-1.5 [&_.code-copy-btn]:rounded [&_.code-copy-btn]:bg-gray-700 [&_.code-copy-btn]:hover:bg-gray-600 [&_.code-copy-btn]:text-gray-300 [&_.code-copy-btn]:transition-colors [&_.code-copy-btn]:opacity-0 [&_pre:hover_.code-copy-btn]:opacity-100",
+        isOwn
+          ? "prose-invert [&_pre]:bg-blue-800/50 [&_.code-copy-btn]:bg-blue-700 [&_.code-copy-btn]:hover:bg-blue-600"
+          : "dark:prose-invert [&_pre]:bg-gray-900 [&_pre]:dark:bg-gray-950"
+      )}
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
   );
 }

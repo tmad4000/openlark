@@ -641,6 +641,7 @@ export interface Message {
   type: string;
   contentJson: {
     text?: string;
+    html?: string;
     mentions?: Array<{ id: string; label: string }>;
     forwarded?: ForwardedInfo;
   };

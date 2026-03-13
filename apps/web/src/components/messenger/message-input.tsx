@@ -16,6 +16,7 @@ import {
   ListOrdered,
   Quote,
   Code,
+  Code2,
   Link as LinkIcon,
   Smile,
   Paperclip,
@@ -29,6 +30,8 @@ import Placeholder from "@tiptap/extension-placeholder";
 import Underline from "@tiptap/extension-underline";
 import Link from "@tiptap/extension-link";
 import Mention from "@tiptap/extension-mention";
+import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
+import { common, createLowlight } from "lowlight";
 import {
   createMentionSuggestion,
   type MentionItem,
@@ -105,11 +108,18 @@ export function MessageInput({
     [chatId, user?.id]
   );
 
+  const lowlight = useMemo(() => createLowlight(common), []);
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
         heading: false,
         horizontalRule: false,
+        codeBlock: false, // Use CodeBlockLowlight instead
+      }),
+      CodeBlockLowlight.configure({
+        lowlight,
+        defaultLanguage: "javascript",
       }),
       Placeholder.configure({
         placeholder: "Type a message...",
@@ -148,6 +158,12 @@ export function MessageInput({
           handleSend();
           return true;
         }
+        // Cmd+Option+C to insert code block
+        if (event.key === "c" && (event.metaKey || event.ctrlKey) && event.altKey) {
+          event.preventDefault();
+          editor?.chain().focus().toggleCodeBlock().run();
+          return true;
+        }
         // Emit typing indicator on keypress
         handleTypingActivity();
         return false;
@@ -182,8 +198,15 @@ export function MessageInput({
     }
     extractMentions(editorJson as Record<string, unknown>);
 
+    // Get HTML for rich rendering (code blocks, formatting)
+    const html = editor.getHTML();
+    const hasRichContent = html.includes("<pre>") || html.includes("<code>") || html.includes("<strong>") || html.includes("<em>");
+
     // Build content with mentions if present
     const contentJson: Record<string, unknown> = { text };
+    if (hasRichContent) {
+      contentJson.html = html;
+    }
     if (mentions.length > 0) {
       contentJson.mentions = mentions;
     }
@@ -325,6 +348,7 @@ export function MessageInput({
           >
             <Code className="h-4 w-4" />
           </ToolbarButton>
+          <CodeBlockDropdown editor={editor} />
           <ToolbarButton
             onClick={handleSetLink}
             active={editor.isActive("link")}
@@ -466,5 +490,86 @@ function ToolbarButton({
 function ToolbarDivider() {
   return (
     <div className="w-px h-5 bg-gray-200 dark:bg-gray-700 mx-0.5" />
+  );
+}
+
+// Code block languages
+const CODE_LANGUAGES = [
+  { value: "javascript", label: "JavaScript" },
+  { value: "typescript", label: "TypeScript" },
+  { value: "python", label: "Python" },
+  { value: "go", label: "Go" },
+  { value: "rust", label: "Rust" },
+  { value: "java", label: "Java" },
+  { value: "cpp", label: "C++" },
+  { value: "c", label: "C" },
+  { value: "csharp", label: "C#" },
+  { value: "ruby", label: "Ruby" },
+  { value: "php", label: "PHP" },
+  { value: "swift", label: "Swift" },
+  { value: "kotlin", label: "Kotlin" },
+  { value: "sql", label: "SQL" },
+  { value: "bash", label: "Bash" },
+  { value: "css", label: "CSS" },
+  { value: "html", label: "HTML" },
+  { value: "json", label: "JSON" },
+  { value: "yaml", label: "YAML" },
+  { value: "xml", label: "XML" },
+  { value: "markdown", label: "Markdown" },
+];
+
+// Code block toolbar dropdown
+function CodeBlockDropdown({ editor }: { editor: ReturnType<typeof useEditor> }) {
+  const [showDropdown, setShowDropdown] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setShowDropdown(false);
+      }
+    }
+    if (showDropdown) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [showDropdown]);
+
+  if (!editor) return null;
+
+  const isActive = editor.isActive("codeBlock");
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <ToolbarButton
+        onClick={() => {
+          if (isActive) {
+            editor.chain().focus().toggleCodeBlock().run();
+          } else {
+            setShowDropdown(!showDropdown);
+          }
+        }}
+        active={isActive}
+        title="Code Block (Cmd+Option+C)"
+      >
+        <Code2 className="h-4 w-4" />
+      </ToolbarButton>
+      {showDropdown && (
+        <div className="absolute bottom-8 left-0 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 z-50 max-h-48 overflow-y-auto w-40">
+          {CODE_LANGUAGES.map((lang) => (
+            <button
+              key={lang.value}
+              onClick={() => {
+                editor.chain().focus().toggleCodeBlock({ language: lang.value }).run();
+                setShowDropdown(false);
+              }}
+              className="w-full text-left px-3 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+            >
+              {lang.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
