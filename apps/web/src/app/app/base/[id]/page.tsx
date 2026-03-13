@@ -37,6 +37,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ArrowRight,
+  Images,
 } from "lucide-react";
 import { ViewToolbar } from "@/components/base/ViewToolbar";
 import { AutomationsPanel } from "@/components/base/AutomationsPanel";
@@ -1015,6 +1016,245 @@ function KanbanView({
             ) : null}
           </DragOverlay>
         </DndContext>
+      </div>
+    </div>
+  );
+}
+
+// Gallery View Component
+function GalleryView({
+  table,
+  records,
+  view,
+  onRecordClick,
+  onUpdateViewConfig,
+  onAddRecord,
+}: {
+  table: TableWithDetails;
+  records: RecordData[];
+  view: ViewData;
+  onRecordClick: (record: RecordData) => void;
+  onUpdateViewConfig: (config: Partial<ViewConfig>) => void;
+  onAddRecord: (initialData?: Record<string, unknown>) => void;
+}) {
+  const [showConfig, setShowConfig] = useState(false);
+
+  // Find cover image field (attachment type or url type)
+  const coverFieldId = view.config?.coverFieldId;
+  const coverField = coverFieldId
+    ? table.fields.find((f) => f.id === coverFieldId)
+    : table.fields.find((f) => f.type === "attachment" || f.type === "url");
+
+  // Title field (first text field)
+  const titleField = table.fields.find((f) => f.type === "text") || table.fields[0] || null;
+
+  // Visible fields on cards (exclude title, cover, and hidden fields)
+  const hiddenFields = view.config?.hiddenFields || [];
+  const visibleFields = table.fields.filter(
+    (f) =>
+      f.id !== titleField?.id &&
+      f.id !== coverField?.id &&
+      !hiddenFields.includes(f.id)
+  );
+
+  // Candidate fields for cover image
+  const coverCandidates = table.fields.filter(
+    (f) => f.type === "attachment" || f.type === "url"
+  );
+
+  const getCoverUrl = (record: RecordData): string | null => {
+    if (!coverField) return null;
+    const value = record.data[coverField.id];
+    if (!value) return null;
+    if (typeof value === "string") return value;
+    if (Array.isArray(value) && value.length > 0) {
+      const first = value[0];
+      if (typeof first === "string") return first;
+      if (first && typeof first === "object" && "url" in first) return (first as { url: string }).url;
+    }
+    if (typeof value === "object" && value !== null && "url" in value) return (value as { url: string }).url;
+    return null;
+  };
+
+  const formatFieldValue = (field: FieldData, value: unknown): string => {
+    if (value === null || value === undefined) return "";
+    if (field.type === "checkbox") return value ? "Yes" : "No";
+    if (field.type === "date" || field.type === "datetime") {
+      try {
+        return new Date(String(value)).toLocaleDateString();
+      } catch {
+        return String(value);
+      }
+    }
+    if (Array.isArray(value)) return value.join(", ");
+    return String(value);
+  };
+
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Config bar */}
+      <div className="flex items-center gap-2 px-4 py-2 border-b border-gray-200 bg-gray-50">
+        <button
+          onClick={() => setShowConfig(!showConfig)}
+          className={`flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border transition-colors ${
+            showConfig
+              ? "border-blue-500 bg-blue-50 text-blue-700"
+              : "border-gray-300 text-gray-700 hover:bg-white"
+          }`}
+        >
+          <Settings className="w-4 h-4" />
+          Configure
+        </button>
+        {coverField && (
+          <span className="text-sm text-gray-500">
+            Cover: {coverField.name}
+          </span>
+        )}
+        <div className="flex-1" />
+        <span className="text-sm text-gray-500">
+          {records.length} record{records.length !== 1 ? "s" : ""}
+        </span>
+      </div>
+
+      {/* Config panel */}
+      {showConfig && (
+        <div className="px-4 py-3 border-b border-gray-200 bg-white space-y-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Cover Image Field
+            </label>
+            <select
+              value={coverField?.id || ""}
+              onChange={(e) =>
+                onUpdateViewConfig({ coverFieldId: e.target.value || undefined })
+              }
+              className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">None</option>
+              {coverCandidates.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Visible Fields on Cards
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {table.fields
+                .filter((f) => f.id !== titleField?.id && f.id !== coverField?.id)
+                .map((field) => {
+                  const isHidden = hiddenFields.includes(field.id);
+                  return (
+                    <button
+                      key={field.id}
+                      onClick={() => {
+                        const newHidden = isHidden
+                          ? hiddenFields.filter((id) => id !== field.id)
+                          : [...hiddenFields, field.id];
+                        onUpdateViewConfig({ hiddenFields: newHidden });
+                      }}
+                      className={`px-2 py-1 text-xs rounded-full border transition-colors ${
+                        isHidden
+                          ? "border-gray-200 text-gray-400 bg-gray-50"
+                          : "border-blue-300 text-blue-700 bg-blue-50"
+                      }`}
+                    >
+                      {field.name}
+                    </button>
+                  );
+                })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Gallery grid */}
+      <div className="flex-1 overflow-auto p-4">
+        {records.length === 0 ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center">
+              <Images className="w-16 h-16 mx-auto text-gray-300 mb-4" />
+              <p className="text-gray-500 mb-4">No records yet</p>
+              <button
+                onClick={() => onAddRecord()}
+                className="text-blue-600 hover:text-blue-700 font-medium"
+              >
+                Add a record
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+            {records.map((record) => {
+              const coverUrl = getCoverUrl(record);
+              const title = titleField
+                ? String(record.data[titleField.id] || "Untitled")
+                : "Untitled";
+
+              return (
+                <div
+                  key={record.id}
+                  onClick={() => onRecordClick(record)}
+                  className="bg-white border border-gray-200 rounded-lg overflow-hidden cursor-pointer hover:shadow-md hover:border-gray-300 transition-all group"
+                >
+                  {/* Cover image */}
+                  <div className="aspect-[4/3] bg-gray-100 overflow-hidden">
+                    {coverUrl ? (
+                      <img
+                        src={coverUrl}
+                        alt={title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Images className="w-8 h-8 text-gray-300" />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Card content */}
+                  <div className="p-3">
+                    <h3 className="font-medium text-gray-900 text-sm truncate mb-1">
+                      {title}
+                    </h3>
+                    {visibleFields.slice(0, 3).map((field) => {
+                      const value = record.data[field.id];
+                      const formatted = formatFieldValue(field, value);
+                      if (!formatted) return null;
+                      return (
+                        <div
+                          key={field.id}
+                          className="flex items-center gap-1.5 text-xs text-gray-500 mt-0.5"
+                        >
+                          <span className="text-gray-400 truncate max-w-[60px]">
+                            {field.name}:
+                          </span>
+                          <span className="truncate">{formatted}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Add record card */}
+            <button
+              onClick={() => onAddRecord()}
+              className="border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center min-h-[200px] hover:border-blue-400 hover:bg-blue-50 transition-colors group"
+            >
+              <div className="text-center">
+                <Plus className="w-8 h-8 mx-auto text-gray-400 group-hover:text-blue-500" />
+                <span className="text-sm text-gray-500 group-hover:text-blue-600 mt-1 block">
+                  Add record
+                </span>
+              </div>
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -2205,7 +2445,7 @@ export default function BasePage() {
   const [newFieldType, setNewFieldType] = useState("text");
   const [isAddViewOpen, setIsAddViewOpen] = useState(false);
   const [newViewName, setNewViewName] = useState("");
-  const [newViewType, setNewViewType] = useState<"grid" | "kanban" | "calendar" | "gantt" | "form">("grid");
+  const [newViewType, setNewViewType] = useState<"grid" | "kanban" | "calendar" | "gantt" | "gallery" | "form">("grid");
   const [showAutomations, setShowAutomations] = useState(false);
   const [showDashboard, setShowDashboard] = useState(false);
 
@@ -2639,7 +2879,7 @@ export default function BasePage() {
       {activeTable && (
         <div className="flex items-center border-b border-gray-200 px-2 bg-white">
           {activeTable.views.map((view) => {
-            const ViewIcon = view.type === "kanban" ? Kanban : view.type === "calendar" ? Calendar : view.type === "gantt" ? GanttChart : view.type === "form" ? FileText : Grid3X3;
+            const ViewIcon = view.type === "kanban" ? Kanban : view.type === "calendar" ? Calendar : view.type === "gantt" ? GanttChart : view.type === "gallery" ? Images : view.type === "form" ? FileText : Grid3X3;
             return (
               <button
                 key={view.id}
@@ -2787,6 +3027,15 @@ export default function BasePage() {
                 onCellEdit={editCell}
                 onRecordClick={handleRecordClick}
                 onUpdateViewConfig={updateViewConfig}
+              />
+            ) : activeView?.type === "gallery" ? (
+              <GalleryView
+                table={activeTable}
+                records={records}
+                view={activeView}
+                onRecordClick={handleRecordClick}
+                onUpdateViewConfig={updateViewConfig}
+                onAddRecord={addRecord}
               />
             ) : (
               <GridView
@@ -3007,6 +3256,17 @@ export default function BasePage() {
                   >
                     <GanttChart className="w-5 h-5" />
                     <span className="font-medium">Gantt</span>
+                  </button>
+                  <button
+                    onClick={() => setNewViewType("gallery")}
+                    className={`flex items-center gap-2 px-4 py-3 border rounded-lg transition-colors ${
+                      newViewType === "gallery"
+                        ? "border-blue-500 bg-blue-50 text-blue-700"
+                        : "border-gray-200 hover:border-gray-300"
+                    }`}
+                  >
+                    <Images className="w-5 h-5" />
+                    <span className="font-medium">Gallery</span>
                   </button>
                   <button
                     onClick={() => setNewViewType("form")}
