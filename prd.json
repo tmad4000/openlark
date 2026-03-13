@@ -1059,8 +1059,8 @@
         "Typecheck passes"
       ],
       "priority": 63,
-      "passes": false,
-      "notes": "Filtering syntax: {field_id: {op: 'eq|gt|lt|contains|in', value: ...}}"
+      "passes": true,
+      "notes": "Created apps/api/src/modules/base/ with schemas, service, routes, and index. Full CRUD for bases, tables, fields, and records. Records support pagination (page/limit), sorting (sort/order), and JSONB filtering (eq/gt/lt/contains/in). Registered under /api/v1/base prefix. Auto-creates default grid view when creating a table. Filtering syntax: {field_id: {op: 'eq|gt|lt|contains|in', value: ...}}"
     },
     {
       "id": "US-064",

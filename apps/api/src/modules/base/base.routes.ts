@@ -1,0 +1,578 @@
+import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
+import {
+  createBaseSchema,
+  updateBaseSchema,
+  createTableSchema,
+  createFieldSchema,
+  updateFieldSchema,
+  createRecordSchema,
+  updateRecordSchema,
+  recordsQuerySchema,
+} from "./base.schemas.js";
+import { authenticate } from "../auth/middleware.js";
+import { formatZodError } from "../../utils/validation.js";
+import { baseService } from "./base.service.js";
+import { ZodError } from "zod";
+
+export async function baseRoutes(app: FastifyInstance) {
+  app.addHook("preHandler", authenticate);
+
+  // ============ BASE ROUTES ============
+
+  // List bases
+  app.get("/bases", async (req: FastifyRequest, reply: FastifyReply) => {
+    const bases = await baseService.getUserBases(req.user!.id, req.user!.orgId);
+    return { data: { bases } };
+  });
+
+  // Create base
+  app.post("/bases", async (req: FastifyRequest, reply: FastifyReply) => {
+    try {
+      const input = createBaseSchema.parse(req.body);
+      const base = await baseService.createBase(
+        input,
+        req.user!.id,
+        req.user!.orgId
+      );
+      return reply.status(201).send({ data: { base } });
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return reply.status(400).send(formatZodError(error));
+      }
+      throw error;
+    }
+  });
+
+  // Get base
+  app.get<{ Params: { id: string } }>(
+    "/bases/:id",
+    async (req, reply) => {
+      const base = await baseService.getBaseById(req.params.id);
+      if (!base) {
+        return reply.status(404).send({
+          statusCode: 404,
+          error: "Not Found",
+          message: "Base not found",
+        });
+      }
+
+      const canAccess = await baseService.canAccessBase(
+        req.params.id,
+        req.user!.orgId
+      );
+      if (!canAccess) {
+        return reply.status(403).send({
+          statusCode: 403,
+          error: "Forbidden",
+          message: "You do not have access to this base",
+        });
+      }
+
+      return { data: { base } };
+    }
+  );
+
+  // Update base
+  app.patch<{ Params: { id: string } }>(
+    "/bases/:id",
+    async (req, reply) => {
+      try {
+        const canAccess = await baseService.canAccessBase(
+          req.params.id,
+          req.user!.orgId
+        );
+        if (!canAccess) {
+          return reply.status(403).send({
+            statusCode: 403,
+            error: "Forbidden",
+            message: "You do not have access to this base",
+          });
+        }
+
+        const input = updateBaseSchema.parse(req.body);
+        const updated = await baseService.updateBase(req.params.id, input);
+        if (!updated) {
+          return reply.status(404).send({
+            statusCode: 404,
+            error: "Not Found",
+            message: "Base not found",
+          });
+        }
+
+        return { data: { base: updated } };
+      } catch (error) {
+        if (error instanceof ZodError) {
+          return reply.status(400).send(formatZodError(error));
+        }
+        throw error;
+      }
+    }
+  );
+
+  // Delete base
+  app.delete<{ Params: { id: string } }>(
+    "/bases/:id",
+    async (req, reply) => {
+      const canAccess = await baseService.canAccessBase(
+        req.params.id,
+        req.user!.orgId
+      );
+      if (!canAccess) {
+        return reply.status(403).send({
+          statusCode: 403,
+          error: "Forbidden",
+          message: "You do not have access to this base",
+        });
+      }
+
+      const deleted = await baseService.deleteBase(req.params.id);
+      if (!deleted) {
+        return reply.status(404).send({
+          statusCode: 404,
+          error: "Not Found",
+          message: "Base not found",
+        });
+      }
+
+      return reply.status(204).send();
+    }
+  );
+
+  // ============ TABLE ROUTES ============
+
+  // List tables for a base
+  app.get<{ Params: { id: string } }>(
+    "/bases/:id/tables",
+    async (req, reply) => {
+      const canAccess = await baseService.canAccessBase(
+        req.params.id,
+        req.user!.orgId
+      );
+      if (!canAccess) {
+        return reply.status(403).send({
+          statusCode: 403,
+          error: "Forbidden",
+          message: "You do not have access to this base",
+        });
+      }
+
+      const tables = await baseService.getBaseTables(req.params.id);
+      return { data: { tables } };
+    }
+  );
+
+  // Create table in base
+  app.post<{ Params: { id: string } }>(
+    "/bases/:id/tables",
+    async (req, reply) => {
+      try {
+        const canAccess = await baseService.canAccessBase(
+          req.params.id,
+          req.user!.orgId
+        );
+        if (!canAccess) {
+          return reply.status(403).send({
+            statusCode: 403,
+            error: "Forbidden",
+            message: "You do not have access to this base",
+          });
+        }
+
+        const input = createTableSchema.parse(req.body);
+        const table = await baseService.createTable(req.params.id, input);
+        return reply.status(201).send({ data: { table } });
+      } catch (error) {
+        if (error instanceof ZodError) {
+          return reply.status(400).send(formatZodError(error));
+        }
+        throw error;
+      }
+    }
+  );
+
+  // ============ FIELD ROUTES ============
+
+  // List fields for a table
+  app.get<{ Params: { id: string } }>(
+    "/tables/:id/fields",
+    async (req, reply) => {
+      const baseId = await baseService.getTableBaseId(req.params.id);
+      if (!baseId) {
+        return reply.status(404).send({
+          statusCode: 404,
+          error: "Not Found",
+          message: "Table not found",
+        });
+      }
+
+      const canAccess = await baseService.canAccessBase(
+        baseId,
+        req.user!.orgId
+      );
+      if (!canAccess) {
+        return reply.status(403).send({
+          statusCode: 403,
+          error: "Forbidden",
+          message: "You do not have access to this base",
+        });
+      }
+
+      const fields = await baseService.getTableFields(req.params.id);
+      return { data: { fields } };
+    }
+  );
+
+  // Create field in table
+  app.post<{ Params: { id: string } }>(
+    "/tables/:id/fields",
+    async (req, reply) => {
+      try {
+        const baseId = await baseService.getTableBaseId(req.params.id);
+        if (!baseId) {
+          return reply.status(404).send({
+            statusCode: 404,
+            error: "Not Found",
+            message: "Table not found",
+          });
+        }
+
+        const canAccess = await baseService.canAccessBase(
+          baseId,
+          req.user!.orgId
+        );
+        if (!canAccess) {
+          return reply.status(403).send({
+            statusCode: 403,
+            error: "Forbidden",
+            message: "You do not have access to this base",
+          });
+        }
+
+        const input = createFieldSchema.parse(req.body);
+        const field = await baseService.createField(req.params.id, input);
+        return reply.status(201).send({ data: { field } });
+      } catch (error) {
+        if (error instanceof ZodError) {
+          return reply.status(400).send(formatZodError(error));
+        }
+        throw error;
+      }
+    }
+  );
+
+  // Update field
+  app.patch<{ Params: { id: string } }>(
+    "/fields/:id",
+    async (req, reply) => {
+      try {
+        const field = await baseService.getFieldById(req.params.id);
+        if (!field) {
+          return reply.status(404).send({
+            statusCode: 404,
+            error: "Not Found",
+            message: "Field not found",
+          });
+        }
+
+        const baseId = await baseService.getTableBaseId(field.tableId);
+        if (!baseId) {
+          return reply.status(404).send({
+            statusCode: 404,
+            error: "Not Found",
+            message: "Table not found",
+          });
+        }
+
+        const canAccess = await baseService.canAccessBase(
+          baseId,
+          req.user!.orgId
+        );
+        if (!canAccess) {
+          return reply.status(403).send({
+            statusCode: 403,
+            error: "Forbidden",
+            message: "You do not have access to this base",
+          });
+        }
+
+        const input = updateFieldSchema.parse(req.body);
+        const updated = await baseService.updateField(req.params.id, input);
+
+        if (!updated) {
+          return reply.status(404).send({
+            statusCode: 404,
+            error: "Not Found",
+            message: "Field not found",
+          });
+        }
+
+        return { data: { field: updated } };
+      } catch (error) {
+        if (error instanceof ZodError) {
+          return reply.status(400).send(formatZodError(error));
+        }
+        throw error;
+      }
+    }
+  );
+
+  // Delete field
+  app.delete<{ Params: { id: string } }>(
+    "/fields/:id",
+    async (req, reply) => {
+      const field = await baseService.getFieldById(req.params.id);
+      if (!field) {
+        return reply.status(404).send({
+          statusCode: 404,
+          error: "Not Found",
+          message: "Field not found",
+        });
+      }
+
+      const baseId = await baseService.getTableBaseId(field.tableId);
+      if (!baseId) {
+        return reply.status(404).send({
+          statusCode: 404,
+          error: "Not Found",
+          message: "Table not found",
+        });
+      }
+
+      const canAccess = await baseService.canAccessBase(
+        baseId,
+        req.user!.orgId
+      );
+      if (!canAccess) {
+        return reply.status(403).send({
+          statusCode: 403,
+          error: "Forbidden",
+          message: "You do not have access to this base",
+        });
+      }
+
+      const deleted = await baseService.deleteField(req.params.id);
+      if (!deleted) {
+        return reply.status(404).send({
+          statusCode: 404,
+          error: "Not Found",
+          message: "Field not found",
+        });
+      }
+
+      return reply.status(204).send();
+    }
+  );
+
+  // ============ RECORD ROUTES ============
+
+  // Create record
+  app.post<{ Params: { id: string } }>(
+    "/tables/:id/records",
+    async (req, reply) => {
+      try {
+        const baseId = await baseService.getTableBaseId(req.params.id);
+        if (!baseId) {
+          return reply.status(404).send({
+            statusCode: 404,
+            error: "Not Found",
+            message: "Table not found",
+          });
+        }
+
+        const canAccess = await baseService.canAccessBase(
+          baseId,
+          req.user!.orgId
+        );
+        if (!canAccess) {
+          return reply.status(403).send({
+            statusCode: 403,
+            error: "Forbidden",
+            message: "You do not have access to this base",
+          });
+        }
+
+        const input = createRecordSchema.parse(req.body);
+        const record = await baseService.createRecord(
+          req.params.id,
+          input,
+          req.user!.id
+        );
+        return reply.status(201).send({ data: { record } });
+      } catch (error) {
+        if (error instanceof ZodError) {
+          return reply.status(400).send(formatZodError(error));
+        }
+        throw error;
+      }
+    }
+  );
+
+  // List records with pagination, filtering, sorting
+  app.get<{ Params: { id: string } }>(
+    "/tables/:id/records",
+    async (req, reply) => {
+      const baseId = await baseService.getTableBaseId(req.params.id);
+      if (!baseId) {
+        return reply.status(404).send({
+          statusCode: 404,
+          error: "Not Found",
+          message: "Table not found",
+        });
+      }
+
+      const canAccess = await baseService.canAccessBase(
+        baseId,
+        req.user!.orgId
+      );
+      if (!canAccess) {
+        return reply.status(403).send({
+          statusCode: 403,
+          error: "Forbidden",
+          message: "You do not have access to this base",
+        });
+      }
+
+      const parseResult = recordsQuerySchema.safeParse(req.query);
+      if (!parseResult.success) {
+        return reply.status(400).send(formatZodError(parseResult.error));
+      }
+
+      const { page, limit, sort, order, filter: filterStr } = parseResult.data;
+
+      let filter: Record<string, { op: string; value: unknown }> | undefined;
+      if (filterStr) {
+        try {
+          filter = JSON.parse(filterStr);
+        } catch {
+          return reply.status(400).send({
+            code: "VALIDATION_ERROR",
+            message: "Invalid filter JSON",
+          });
+        }
+      }
+
+      const result = await baseService.getTableRecords(req.params.id, {
+        page,
+        limit,
+        sort,
+        order,
+        filter,
+      });
+
+      return {
+        data: {
+          records: result.records,
+          pagination: {
+            page,
+            limit,
+            total: result.total,
+            totalPages: Math.ceil(result.total / limit),
+          },
+        },
+      };
+    }
+  );
+
+  // Update record
+  app.patch<{ Params: { id: string } }>(
+    "/records/:id",
+    async (req, reply) => {
+      try {
+        const tableId = await baseService.getRecordTableId(req.params.id);
+        if (!tableId) {
+          return reply.status(404).send({
+            statusCode: 404,
+            error: "Not Found",
+            message: "Record not found",
+          });
+        }
+
+        const baseId = await baseService.getTableBaseId(tableId);
+        if (!baseId) {
+          return reply.status(404).send({
+            statusCode: 404,
+            error: "Not Found",
+            message: "Table not found",
+          });
+        }
+
+        const canAccess = await baseService.canAccessBase(
+          baseId,
+          req.user!.orgId
+        );
+        if (!canAccess) {
+          return reply.status(403).send({
+            statusCode: 403,
+            error: "Forbidden",
+            message: "You do not have access to this base",
+          });
+        }
+
+        const input = updateRecordSchema.parse(req.body);
+        const record = await baseService.updateRecord(req.params.id, input.data);
+
+        if (!record) {
+          return reply.status(404).send({
+            statusCode: 404,
+            error: "Not Found",
+            message: "Record not found",
+          });
+        }
+
+        return { data: { record } };
+      } catch (error) {
+        if (error instanceof ZodError) {
+          return reply.status(400).send(formatZodError(error));
+        }
+        throw error;
+      }
+    }
+  );
+
+  // Delete record (soft delete)
+  app.delete<{ Params: { id: string } }>(
+    "/records/:id",
+    async (req, reply) => {
+      const tableId = await baseService.getRecordTableId(req.params.id);
+      if (!tableId) {
+        return reply.status(404).send({
+          statusCode: 404,
+          error: "Not Found",
+          message: "Record not found",
+        });
+      }
+
+      const baseId = await baseService.getTableBaseId(tableId);
+      if (!baseId) {
+        return reply.status(404).send({
+          statusCode: 404,
+          error: "Not Found",
+          message: "Table not found",
+        });
+      }
+
+      const canAccess = await baseService.canAccessBase(
+        baseId,
+        req.user!.orgId
+      );
+      if (!canAccess) {
+        return reply.status(403).send({
+          statusCode: 403,
+          error: "Forbidden",
+          message: "You do not have access to this base",
+        });
+      }
+
+      const deleted = await baseService.deleteRecord(req.params.id);
+      if (!deleted) {
+        return reply.status(404).send({
+          statusCode: 404,
+          error: "Not Found",
+          message: "Record not found",
+        });
+      }
+
+      return reply.status(204).send();
+    }
+  );
+}

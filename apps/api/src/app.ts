@@ -20,6 +20,7 @@ import { calendarRoutes } from "./modules/calendar/index.js";
 import { docsRoutes } from "./modules/docs/index.js";
 import { notificationRoutes, buzzRoutes } from "./modules/notifications/index.js";
 import { wikiRoutes } from "./modules/wiki/index.js";
+import { baseRoutes } from "./modules/base/index.js";
 
 export async function buildApp() {
   const app = Fastify({
@@ -88,6 +89,9 @@ export async function buildApp() {
 
       // Wiki module
       api.register(wikiRoutes, { prefix: "/wiki" });
+
+      // Base module (spreadsheet/database)
+      api.register(baseRoutes, { prefix: "/base" });
     },
     { prefix: "/api/v1" }
   );

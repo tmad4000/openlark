@@ -50,3 +50,4 @@
 [2026-03-13 12:00] US-060 — Wiki space schema and API — PASS
 [2026-03-13 13:00] US-061 — Wiki UI - space list and page tree navigation — PASS
 [2026-03-13 14:00] US-062 — Base schema - tables, fields, records, views — PASS
+[2026-03-13 15:00] US-063 — Base CRUD API - tables, fields, records — PASS
