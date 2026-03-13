@@ -11,6 +11,7 @@ import {
   BookOpen,
   Mail,
   FileCheck,
+  Target,
   Settings,
   User,
   LogOut,
@@ -48,6 +49,7 @@ const NAV_ITEMS = [
   { id: "base", label: "Base", icon: Database, href: "/app/base" },
   { id: "wiki", label: "Wiki", icon: BookOpen, href: "/app/wiki" },
   { id: "approvals", label: "Approvals", icon: FileCheck, href: "/app/approvals" },
+  { id: "okr", label: "OKR", icon: Target, href: "/app/okr" },
   { id: "email", label: "Email", icon: Mail, href: "/app/email" },
   { id: "admin", label: "Admin", icon: Settings, href: "/app/admin" },
 ];
