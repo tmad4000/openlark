@@ -1776,8 +1776,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 105,
-      "passes": false,
-      "notes": "Simple one-way notification bots - no event receiving."
+      "passes": true,
+      "notes": "Created notification_bots table (id, chatId, orgId, name, iconUrl, webhookToken, createdBy, timestamps) with indexes on chatId and webhookToken. Added CRUD API routes: GET/POST /chats/:chatId/notification-bots (list/create), PATCH /notification-bots/:botId (update), DELETE /notification-bots/:botId (delete), POST /notification-bots/:botId/regenerate (regenerate webhook URL). Public webhook receiver at POST /webhooks/notification/:token accepts {text} or {card} payloads without authentication (URL is the secret). Bot messages use deterministic sender IDs and display bot name/icon. Added Notification Bots section in group chat settings UI with add/delete/copy URL/regenerate controls. Typecheck passes."
     },
     {
       "id": "US-106",

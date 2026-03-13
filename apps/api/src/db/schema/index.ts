@@ -28,3 +28,4 @@ export * from "./audit-logs";
 export * from "./oauth-apps";
 export * from "./event-subscriptions";
 export * from "./webhook-deliveries";
+export * from "./notification-bots";

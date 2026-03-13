@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { Search, Plus, MessageCircle, Users, Bell, BellOff, AtSign, Info, Wifi, WifiOff, Loader2, Check, CheckCheck, Circle, MoreHorizontal, Reply, X, MessageSquare, Pin, Star, Pencil, Trash2, Forward, Square, CheckSquare, Tag, FileText, File, FolderOpen, ExternalLink, GripVertical, Shield, Crown, UserPlus, UserMinus, Settings, Globe, Lock, ChevronDown, ChevronRight, LogOut, Megaphone, Zap, ListTodo, Calendar, Languages, Video } from "lucide-react";
+import { Search, Plus, MessageCircle, Users, Bell, BellOff, AtSign, Info, Wifi, WifiOff, Loader2, Check, CheckCheck, Circle, MoreHorizontal, Reply, X, MessageSquare, Pin, Star, Pencil, Trash2, Forward, Square, CheckSquare, Tag, FileText, File, FolderOpen, ExternalLink, GripVertical, Shield, Crown, UserPlus, UserMinus, Settings, Globe, Lock, ChevronDown, ChevronRight, LogOut, Megaphone, Zap, ListTodo, Calendar, Languages, Video, Link, RefreshCw, Copy } from "lucide-react";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as ContextMenu from "@radix-ui/react-context-menu";
 import MessageInput, { MentionUser } from "@/components/MessageInput";
@@ -4947,6 +4947,15 @@ interface ChatDetails {
   updatedAt: string;
 }
 
+interface NotificationBot {
+  id: string;
+  name: string;
+  iconUrl: string | null;
+  webhookUrl: string;
+  webhookToken: string;
+  createdAt: string;
+}
+
 interface OrgUser {
   id: string;
   email: string;
@@ -4978,6 +4987,11 @@ function ChatInfoPanel({
   const [selectedUsersToAdd, setSelectedUsersToAdd] = useState<Set<string>>(new Set());
   const [isAddingMembers, setIsAddingMembers] = useState(false);
   const [confirmRemoveMember, setConfirmRemoveMember] = useState<string | null>(null);
+  const [notificationBots, setNotificationBots] = useState<NotificationBot[]>([]);
+  const [showNotificationBots, setShowNotificationBots] = useState(false);
+  const [isAddingBot, setIsAddingBot] = useState(false);
+  const [newBotName, setNewBotName] = useState("Notification Bot");
+  const [copiedBotId, setCopiedBotId] = useState<string | null>(null);
 
   // Load chat details and members
   useEffect(() => {
@@ -5041,6 +5055,107 @@ function ChatInfoPanel({
 
     loadOrgUsers();
   }, [showAddMemberDialog]);
+
+  // Load notification bots when section is expanded
+  useEffect(() => {
+    const loadNotificationBots = async () => {
+      if (!showNotificationBots) return;
+      const token = getCookie("session_token");
+      if (!token) return;
+
+      try {
+        const res = await fetch(`/api/chats/${chatId}/notification-bots`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setNotificationBots(data);
+        }
+      } catch (err) {
+        console.error("Failed to load notification bots:", err);
+      }
+    };
+
+    loadNotificationBots();
+  }, [chatId, showNotificationBots]);
+
+  const addNotificationBot = async () => {
+    const token = getCookie("session_token");
+    if (!token) return;
+
+    setIsAddingBot(true);
+    try {
+      const res = await fetch(`/api/chats/${chatId}/notification-bots`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ name: newBotName }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to add bot");
+      }
+
+      const bot = await res.json();
+      setNotificationBots((prev) => [...prev, bot]);
+      setNewBotName("Notification Bot");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to add bot");
+    } finally {
+      setIsAddingBot(false);
+    }
+  };
+
+  const regenerateBotWebhook = async (botId: string) => {
+    const token = getCookie("session_token");
+    if (!token) return;
+
+    try {
+      const res = await fetch(`/api/notification-bots/${botId}/regenerate`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) throw new Error("Failed to regenerate");
+
+      const updated = await res.json();
+      setNotificationBots((prev) =>
+        prev.map((b) =>
+          b.id === botId
+            ? { ...b, webhookToken: updated.webhookToken, webhookUrl: updated.webhookUrl }
+            : b
+        )
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to regenerate");
+    }
+  };
+
+  const deleteNotificationBot = async (botId: string) => {
+    const token = getCookie("session_token");
+    if (!token) return;
+
+    try {
+      const res = await fetch(`/api/notification-bots/${botId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) throw new Error("Failed to delete");
+      setNotificationBots((prev) => prev.filter((b) => b.id !== botId));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete bot");
+    }
+  };
+
+  const copyWebhookUrl = (botId: string, url: string) => {
+    navigator.clipboard.writeText(url);
+    setCopiedBotId(botId);
+    setTimeout(() => setCopiedBotId(null), 2000);
+  };
 
   // Filter members by search
   const filteredMembers = useMemo(() => {
@@ -5438,6 +5553,128 @@ function ChatInfoPanel({
                         </button>
                       </div>
                     )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Notification Bots (for groups, owner/admin only) */}
+            {isGroupChat && canChangeSettings && (
+              <div className="border-b border-gray-100">
+                <button
+                  onClick={() => setShowNotificationBots(!showNotificationBots)}
+                  className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    <Link className="w-5 h-5 text-gray-500" />
+                    <span className="font-medium text-gray-700">Notification Bots</span>
+                    {notificationBots.length > 0 && (
+                      <span className="text-xs text-gray-400">({notificationBots.length})</span>
+                    )}
+                  </div>
+                  {showNotificationBots ? (
+                    <ChevronDown className="w-5 h-5 text-gray-400" />
+                  ) : (
+                    <ChevronRight className="w-5 h-5 text-gray-400" />
+                  )}
+                </button>
+
+                {showNotificationBots && (
+                  <div className="px-4 pb-4 space-y-3">
+                    {/* Add new bot */}
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={newBotName}
+                        onChange={(e) => setNewBotName(e.target.value)}
+                        placeholder="Bot name"
+                        className="flex-1 px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <button
+                        onClick={addNotificationBot}
+                        disabled={isAddingBot || !newBotName.trim()}
+                        className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1"
+                      >
+                        {isAddingBot ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Plus className="w-4 h-4" />
+                        )}
+                        Add
+                      </button>
+                    </div>
+
+                    {/* Bot list */}
+                    {notificationBots.length === 0 && (
+                      <p className="text-sm text-gray-500 text-center py-2">
+                        No notification bots yet. Add one to get a webhook URL.
+                      </p>
+                    )}
+
+                    {notificationBots.map((bot) => (
+                      <div
+                        key={bot.id}
+                        className="border border-gray-200 rounded-lg p-3 space-y-2"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
+                              {bot.iconUrl ? (
+                                <img
+                                  src={bot.iconUrl}
+                                  alt={bot.name}
+                                  className="w-full h-full rounded-full object-cover"
+                                />
+                              ) : (
+                                <Bell className="w-4 h-4 text-purple-600" />
+                              )}
+                            </div>
+                            <span className="text-sm font-medium text-gray-900">
+                              {bot.name}
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => deleteNotificationBot(bot.id)}
+                            className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"
+                            title="Delete bot"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+
+                        {/* Webhook URL */}
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="text"
+                            readOnly
+                            value={bot.webhookUrl}
+                            className="flex-1 px-2 py-1 text-xs bg-gray-50 border border-gray-200 rounded font-mono truncate"
+                          />
+                          <button
+                            onClick={() => copyWebhookUrl(bot.id, bot.webhookUrl)}
+                            className="p-1 rounded hover:bg-gray-100 text-gray-500 transition-colors"
+                            title="Copy webhook URL"
+                          >
+                            {copiedBotId === bot.id ? (
+                              <Check className="w-4 h-4 text-green-500" />
+                            ) : (
+                              <Copy className="w-4 h-4" />
+                            )}
+                          </button>
+                          <button
+                            onClick={() => regenerateBotWebhook(bot.id)}
+                            className="p-1 rounded hover:bg-gray-100 text-gray-500 transition-colors"
+                            title="Regenerate webhook URL"
+                          >
+                            <RefreshCw className="w-4 h-4" />
+                          </button>
+                        </div>
+
+                        <p className="text-xs text-gray-400">
+                          POST {`{text}`} or {`{card}`} to this URL to send messages.
+                        </p>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
