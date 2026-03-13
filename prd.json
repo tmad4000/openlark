@@ -1675,8 +1675,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 99,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added Security tab to admin console with: password policy (min length, require uppercase/number/special, expiry days), 2FA requirement toggle, external communication toggle, configurable session timeout. All settings saved to organization.settings JSONB via PATCH /admin/org/security endpoint. Typecheck passes."
     },
     {
       "id": "US-100",

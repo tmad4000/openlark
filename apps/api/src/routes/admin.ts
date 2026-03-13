@@ -172,6 +172,71 @@ export async function adminRoutes(fastify: FastifyInstance) {
     }
   );
 
+  // ─── Security Settings ──────────────────────────────────────────
+
+  interface SecuritySettingsBody {
+    passwordMinLength?: number;
+    passwordRequireUppercase?: boolean;
+    passwordRequireNumber?: boolean;
+    passwordRequireSpecial?: boolean;
+    passwordExpiryDays?: number;
+    require2FA?: boolean;
+    allowExternalComm?: boolean;
+    sessionTimeoutMinutes?: number;
+  }
+
+  /**
+   * PATCH /admin/org/security - Update organization security settings
+   * Saves to the `settings` JSONB column under `settings.security`
+   */
+  fastify.patch<{ Body: SecuritySettingsBody }>(
+    "/admin/org/security",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      if (!(await requireAdmin(request, reply))) return;
+
+      const orgId = request.user.orgId!;
+
+      // Fetch current org to merge settings
+      const [org] = await db
+        .select()
+        .from(organizations)
+        .where(eq(organizations.id, orgId))
+        .limit(1);
+
+      if (!org) {
+        return reply.status(404).send({ error: "Organization not found" });
+      }
+
+      const currentSettings = (org.settings as Record<string, unknown>) || {};
+      const body = request.body;
+
+      const securitySettings: Record<string, unknown> = {
+        passwordMinLength: body.passwordMinLength ?? 8,
+        passwordRequireUppercase: body.passwordRequireUppercase ?? false,
+        passwordRequireNumber: body.passwordRequireNumber ?? false,
+        passwordRequireSpecial: body.passwordRequireSpecial ?? false,
+        passwordExpiryDays: body.passwordExpiryDays ?? 0,
+        require2FA: body.require2FA ?? false,
+        allowExternalComm: body.allowExternalComm ?? true,
+        sessionTimeoutMinutes: body.sessionTimeoutMinutes ?? 0,
+      };
+
+      const updatedSettings = {
+        ...currentSettings,
+        security: securitySettings,
+      };
+
+      const [updatedOrg] = await db
+        .update(organizations)
+        .set({ settings: updatedSettings, updatedAt: new Date() })
+        .where(eq(organizations.id, orgId))
+        .returning();
+
+      return reply.status(200).send({ org: updatedOrg });
+    }
+  );
+
   // ─── Members Management ───────────────────────────────────────────
 
   /**

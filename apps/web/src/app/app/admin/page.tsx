@@ -6,6 +6,7 @@ import {
   Users,
   Network,
   Shield,
+  Lock,
   Plus,
   Search,
   Trash2,
@@ -63,6 +64,28 @@ interface RoleData {
   createdAt: string;
 }
 
+interface SecuritySettings {
+  passwordMinLength: number;
+  passwordRequireUppercase: boolean;
+  passwordRequireNumber: boolean;
+  passwordRequireSpecial: boolean;
+  passwordExpiryDays: number;
+  require2FA: boolean;
+  allowExternalComm: boolean;
+  sessionTimeoutMinutes: number;
+}
+
+const DEFAULT_SECURITY: SecuritySettings = {
+  passwordMinLength: 8,
+  passwordRequireUppercase: false,
+  passwordRequireNumber: false,
+  passwordRequireSpecial: false,
+  passwordExpiryDays: 0,
+  require2FA: false,
+  allowExternalComm: true,
+  sessionTimeoutMinutes: 0,
+};
+
 const MODULES = [
   "messenger",
   "calendar",
@@ -104,13 +127,14 @@ function roleBadgeColor(role: string) {
 
 // ── Tabs ─────────────────────────────────────────────────────────────
 
-type TabId = "org" | "members" | "departments" | "roles";
+type TabId = "org" | "members" | "departments" | "roles" | "security";
 
 const TABS: { id: TabId; label: string; icon: any }[] = [
   { id: "org", label: "Organization", icon: Building2 },
   { id: "members", label: "Members", icon: Users },
   { id: "departments", label: "Departments", icon: Network },
   { id: "roles", label: "Roles", icon: Shield },
+  { id: "security", label: "Security", icon: Lock },
 ];
 
 // ── Main Component ──────────────────────────────────────────────────
@@ -149,6 +173,10 @@ export default function AdminPage() {
   const [newRolePerms, setNewRolePerms] = useState<Record<string, string[]>>({});
   const [editingRole, setEditingRole] = useState<string | null>(null);
   const [editRolePerms, setEditRolePerms] = useState<Record<string, string[]>>({});
+
+  // Security state
+  const [security, setSecurity] = useState<SecuritySettings>({ ...DEFAULT_SECURITY });
+  const [securitySaving, setSecuritySaving] = useState(false);
 
   const token = getCookie("session_token");
 
@@ -246,6 +274,21 @@ export default function AdminPage() {
     }
   }, [apiFetch]);
 
+  // ── Fetch security settings ──────────────────────────────────────
+
+  const fetchSecurity = useCallback(async () => {
+    const res = await apiFetch("/api/admin/org");
+    if (res?.ok) {
+      const data = await res.json();
+      const s = data.org?.settings?.security;
+      if (s) {
+        setSecurity({ ...DEFAULT_SECURITY, ...s });
+      } else {
+        setSecurity({ ...DEFAULT_SECURITY });
+      }
+    }
+  }, [apiFetch]);
+
   // ── Load data on tab change ───────────────────────────────────────
 
   useEffect(() => {
@@ -254,7 +297,8 @@ export default function AdminPage() {
     if (activeTab === "members") fetchMembers();
     if (activeTab === "departments") fetchDepts();
     if (activeTab === "roles") fetchRoles();
-  }, [activeTab, error, isLoading, fetchOrg, fetchMembers, fetchDepts, fetchRoles]);
+    if (activeTab === "security") fetchSecurity();
+  }, [activeTab, error, isLoading, fetchOrg, fetchMembers, fetchDepts, fetchRoles, fetchSecurity]);
 
   // ── Org handlers ──────────────────────────────────────────────────
 
@@ -270,6 +314,23 @@ export default function AdminPage() {
       // ignore
     } finally {
       setOrgSaving(false);
+    }
+  };
+
+  // ── Security handlers ───────────────────────────────────────────
+
+  const handleSaveSecurity = async () => {
+    setSecuritySaving(true);
+    try {
+      await apiFetch("/api/admin/org/security", {
+        method: "PATCH",
+        body: JSON.stringify(security),
+      });
+      await fetchSecurity();
+    } catch {
+      // ignore
+    } finally {
+      setSecuritySaving(false);
     }
   };
 
@@ -980,6 +1041,193 @@ export default function AdminPage() {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* ─── Security Tab ──────────────────────────────────────── */}
+        {activeTab === "security" && (
+          <div className="max-w-2xl">
+            <h3 className="text-xl font-semibold text-gray-900 mb-6">
+              Security Settings
+            </h3>
+
+            {/* Password Policy */}
+            <div className="mb-8">
+              <h4 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">
+                Password Policy
+              </h4>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Minimum Password Length
+                  </label>
+                  <input
+                    type="number"
+                    min={6}
+                    max={128}
+                    value={security.passwordMinLength}
+                    onChange={(e) =>
+                      setSecurity((s) => ({
+                        ...s,
+                        passwordMinLength: parseInt(e.target.value) || 8,
+                      }))
+                    }
+                    className="w-24 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <label className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={security.passwordRequireUppercase}
+                    onChange={(e) =>
+                      setSecurity((s) => ({
+                        ...s,
+                        passwordRequireUppercase: e.target.checked,
+                      }))
+                    }
+                    className="rounded"
+                  />
+                  <span className="text-sm text-gray-700">
+                    Require uppercase letter
+                  </span>
+                </label>
+                <label className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={security.passwordRequireNumber}
+                    onChange={(e) =>
+                      setSecurity((s) => ({
+                        ...s,
+                        passwordRequireNumber: e.target.checked,
+                      }))
+                    }
+                    className="rounded"
+                  />
+                  <span className="text-sm text-gray-700">
+                    Require number
+                  </span>
+                </label>
+                <label className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={security.passwordRequireSpecial}
+                    onChange={(e) =>
+                      setSecurity((s) => ({
+                        ...s,
+                        passwordRequireSpecial: e.target.checked,
+                      }))
+                    }
+                    className="rounded"
+                  />
+                  <span className="text-sm text-gray-700">
+                    Require special character
+                  </span>
+                </label>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Password Expiry (days)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={365}
+                    value={security.passwordExpiryDays}
+                    onChange={(e) =>
+                      setSecurity((s) => ({
+                        ...s,
+                        passwordExpiryDays: parseInt(e.target.value) || 0,
+                      }))
+                    }
+                    className="w-24 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Set to 0 to disable password expiration
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Two-Factor Authentication */}
+            <div className="mb-8">
+              <h4 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">
+                Two-Factor Authentication
+              </h4>
+              <label className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  checked={security.require2FA}
+                  onChange={(e) =>
+                    setSecurity((s) => ({
+                      ...s,
+                      require2FA: e.target.checked,
+                    }))
+                  }
+                  className="rounded"
+                />
+                <span className="text-sm text-gray-700">
+                  Require two-factor authentication for all members
+                </span>
+              </label>
+            </div>
+
+            {/* External Communication */}
+            <div className="mb-8">
+              <h4 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">
+                External Communication
+              </h4>
+              <label className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  checked={security.allowExternalComm}
+                  onChange={(e) =>
+                    setSecurity((s) => ({
+                      ...s,
+                      allowExternalComm: e.target.checked,
+                    }))
+                  }
+                  className="rounded"
+                />
+                <span className="text-sm text-gray-700">
+                  Allow members to message external users
+                </span>
+              </label>
+            </div>
+
+            {/* Session Timeout */}
+            <div className="mb-8">
+              <h4 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">
+                Session Management
+              </h4>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Idle Session Timeout (minutes)
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  max={1440}
+                  value={security.sessionTimeoutMinutes}
+                  onChange={(e) =>
+                    setSecurity((s) => ({
+                      ...s,
+                      sessionTimeoutMinutes: parseInt(e.target.value) || 0,
+                    }))
+                  }
+                  className="w-24 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Set to 0 to disable idle timeout
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={handleSaveSecurity}
+              disabled={securitySaving}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm"
+            >
+              {securitySaving ? "Saving..." : "Save Security Settings"}
+            </button>
           </div>
         )}
       </div>
