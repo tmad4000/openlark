@@ -21,6 +21,7 @@ import { docsRoutes } from "./modules/docs/index.js";
 import { notificationRoutes, buzzRoutes } from "./modules/notifications/index.js";
 import { wikiRoutes } from "./modules/wiki/index.js";
 import { baseRoutes } from "./modules/base/index.js";
+import { automationRoutes } from "./modules/automations/index.js";
 
 export async function buildApp() {
   const app = Fastify({
@@ -92,6 +93,9 @@ export async function buildApp() {
 
       // Base module (spreadsheet/database)
       api.register(baseRoutes, { prefix: "/base" });
+
+      // Automations module (base automations engine)
+      api.register(automationRoutes, { prefix: "/base" });
     },
     { prefix: "/api/v1" }
   );

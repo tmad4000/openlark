@@ -8,6 +8,7 @@ import {
   pgEnum,
   index,
   integer,
+  boolean,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { users, organizations } from "./auth";
@@ -181,6 +182,77 @@ export const baseViewsRelations = relations(baseViews, ({ one }) => ({
   }),
 }));
 
+// Automation enums
+export const automationTypeEnum = pgEnum("automation_type", [
+  "automation",
+  "workflow",
+]);
+
+export const automationRunStatusEnum = pgEnum("automation_run_status", [
+  "success",
+  "failed",
+]);
+
+// Base automations table
+export const baseAutomations = pgTable(
+  "base_automations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    baseId: uuid("base_id")
+      .notNull()
+      .references(() => bases.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 255 }).notNull(),
+    trigger: jsonb("trigger").notNull(),
+    actions: jsonb("actions").notNull().default([]),
+    enabled: boolean("enabled").notNull().default(true),
+    type: automationTypeEnum("type").notNull().default("automation"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [index("base_automations_base_id_idx").on(table.baseId)]
+);
+
+// Automation runs table
+export const automationRuns = pgTable(
+  "automation_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    automationId: uuid("automation_id")
+      .notNull()
+      .references(() => baseAutomations.id, { onDelete: "cascade" }),
+    triggerEvent: jsonb("trigger_event").notNull(),
+    status: automationRunStatusEnum("status").notNull(),
+    error: text("error"),
+    startedAt: timestamp("started_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("automation_runs_automation_id_idx").on(table.automationId),
+  ]
+);
+
+// Automation relations
+export const baseAutomationsRelations = relations(
+  baseAutomations,
+  ({ one, many }) => ({
+    base: one(bases, {
+      fields: [baseAutomations.baseId],
+      references: [bases.id],
+    }),
+    runs: many(automationRuns),
+  })
+);
+
+export const automationRunsRelations = relations(automationRuns, ({ one }) => ({
+  automation: one(baseAutomations, {
+    fields: [automationRuns.automationId],
+    references: [baseAutomations.id],
+  }),
+}));
+
 // Type exports
 export type Base = typeof bases.$inferSelect;
 export type NewBase = typeof bases.$inferInsert;
@@ -192,3 +264,7 @@ export type BaseRecord = typeof baseRecords.$inferSelect;
 export type NewBaseRecord = typeof baseRecords.$inferInsert;
 export type BaseView = typeof baseViews.$inferSelect;
 export type NewBaseView = typeof baseViews.$inferInsert;
+export type BaseAutomation = typeof baseAutomations.$inferSelect;
+export type NewBaseAutomation = typeof baseAutomations.$inferInsert;
+export type AutomationRun = typeof automationRuns.$inferSelect;
+export type NewAutomationRun = typeof automationRuns.$inferInsert;

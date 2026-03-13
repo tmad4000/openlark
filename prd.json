@@ -1144,8 +1144,8 @@
         "Typecheck passes"
       ],
       "priority": 68,
-      "passes": false,
-      "notes": "Automations run as background jobs. Keep execution within 30s timeout."
+      "passes": true,
+      "notes": "Added base_automations and automation_runs tables to schema. BullMQ worker processes automation runs with supported triggers (record_created, record_updated, record_matches_condition, scheduled, button_clicked, webhook_received) and actions (update_record, create_record, send_message, http_request). CRUD API routes registered under /api/v1/base."
     },
     {
       "id": "US-069",
