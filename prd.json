@@ -885,8 +885,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 53,
-      "passes": false,
-      "notes": "Use @tiptap/extension-collaboration and @tiptap/extension-collaboration-cursor for Yjs integration."
+      "passes": true,
+      "notes": "TipTap editor with Yjs collaboration on /app/docs/[id] route. SlashCommand extension with fuzzy search for all block types (paragraph, H1-H6, lists, todo, blockquote, hr, code block). FloatingToolbar for inline formatting (bold, italic, underline, strikethrough, code, link). DragHandle for block reordering. Auto-save indicator with saving/saved states. CodeBlockLowlight for syntax highlighting. Underline and Link extensions added. tippy.js used for slash command popover."
     },
     {
       "id": "US-054",

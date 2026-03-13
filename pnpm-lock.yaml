@@ -103,6 +103,43 @@ importers:
         specifier: ^8.19.0
         version: 8.19.0
 
+  apps/collab:
+    dependencies:
+      '@hocuspocus/extension-database':
+        specifier: ^3.4.4
+        version: 3.4.4(y-protocols@1.0.7(yjs@13.6.29))(yjs@13.6.29)
+      '@hocuspocus/server':
+        specifier: ^3.4.4
+        version: 3.4.4(y-protocols@1.0.7(yjs@13.6.29))(yjs@13.6.29)
+      drizzle-orm:
+        specifier: ^0.38.4
+        version: 0.38.4(@types/react@19.2.14)(postgres@3.4.8)(react@19.2.4)
+      jsonwebtoken:
+        specifier: ^9.0.2
+        version: 9.0.3
+      postgres:
+        specifier: ^3.4.5
+        version: 3.4.8
+      yjs:
+        specifier: ^13.6.29
+        version: 13.6.29
+      zod:
+        specifier: ^3.24.1
+        version: 3.25.76
+    devDependencies:
+      '@types/jsonwebtoken':
+        specifier: ^9.0.7
+        version: 9.0.10
+      '@types/node':
+        specifier: ^22.10.5
+        version: 22.19.13
+      tsx:
+        specifier: ^4.19.2
+        version: 4.21.0
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+
   apps/web:
     dependencies:
       '@openlark/shared':
@@ -204,6 +241,9 @@ importers:
       tailwind-merge:
         specifier: ^3.5.0
         version: 3.5.0
+      tippy.js:
+        specifier: ^6.3.7
+        version: 6.3.7
       y-websocket:
         specifier: ^3.0.0
         version: 3.0.0(yjs@13.6.29)
@@ -1199,6 +1239,9 @@ packages:
 
   '@pinojs/redact@0.4.0':
     resolution: {integrity: sha512-k2ENnmBugE/rzQfEcdWHcCY+/FM3VLzH9cYEsbdsoqrvzAKRhUZeRNhAZvB8OitQJ1TBed3yqWtdjzS6wJKBwg==}
+
+  '@popperjs/core@2.11.8':
+    resolution: {integrity: sha512-P1st0aksCrn9sGZhp8GMYwBnQsbvAWsZAX44oXNNvLHGqAOcoVxmjZiohstwQ7SqKnbR47akdNi+uleWD8+g6A==}
 
   '@radix-ui/primitive@1.1.3':
     resolution: {integrity: sha512-JTF99U/6XIjCBo0wqkU5sK10glYe27MRRsfwoiq5zzOEZLHU3A3KCMa5X/azekYRCJ0HlwI0crAXS/5dEHTzDg==}
@@ -4221,6 +4264,9 @@ packages:
     resolution: {integrity: sha512-azl+t0z7pw/z958Gy9svOTuzqIk6xq+NSheJzn5MMWtWTFywIacg2wUlzKFGtt3cthx0r2SxMK0yzJOR0IES7Q==}
     engines: {node: '>=14.0.0'}
 
+  tippy.js@6.3.7:
+    resolution: {integrity: sha512-E1d3oP2emgJ9dRQZdf3Kkn0qJgI6ZLpyS5z6ZkY1DF3kaQaBsGZsndEpHwx+eC+tYM41HaSNvNtLx8tU57FzTQ==}
+
   tldts-core@6.1.86:
     resolution: {integrity: sha512-Je6p7pkk+KMzMv2XXKmAE3McmolOQFdxkKw0R8EYNr7sELW46JqnNeTX8ybPiQgvg1ymCoF8LXs5fzFaZvJPTA==}
 
@@ -5301,6 +5347,8 @@ snapshots:
   '@petamoriken/float16@3.9.3': {}
 
   '@pinojs/redact@0.4.0': {}
+
+  '@popperjs/core@2.11.8': {}
 
   '@radix-ui/primitive@1.1.3': {}
 
@@ -8514,6 +8562,10 @@ snapshots:
   tinyrainbow@2.0.0: {}
 
   tinyspy@4.0.4: {}
+
+  tippy.js@6.3.7:
+    dependencies:
+      '@popperjs/core': 2.11.8
 
   tldts-core@6.1.86: {}
 
