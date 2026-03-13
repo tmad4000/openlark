@@ -1215,8 +1215,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 72,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created apps/web/src/app/app/tasks/page.tsx with full Tasks UI. Two view modes: List (sortable table with title, status, priority, assignee, due date columns; click column headers to sort) and Kanban (columns by status with @dnd-kit drag-and-drop between Todo/In Progress/Done). Task detail panel slides in from right showing all fields (editable title, status, priority, due date, description), subtasks list, and comments with add comment form. Inline create form with title, priority, and due date fields. All/My Tasks tab toggle filters by current user assignment. Typecheck passes."
     },
     {
       "id": "US-073",
