@@ -23,7 +23,9 @@ import {
   Flag,
   Link,
   Ban,
+  GanttChartSquare,
 } from "lucide-react";
+import GanttChart from "@/components/GanttChart";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
   DndContext,
@@ -39,7 +41,7 @@ import {
 } from "@dnd-kit/core";
 
 // Types
-type ViewMode = "list" | "kanban";
+type ViewMode = "list" | "kanban" | "gantt";
 type TaskTab = "all" | "my";
 type TaskStatus = "todo" | "in_progress" | "done";
 type TaskPriority = "none" | "low" | "medium" | "high" | "urgent";
@@ -1450,6 +1452,17 @@ export default function TasksPage() {
               >
                 <Kanban size={16} />
               </button>
+              <button
+                onClick={() => setViewMode("gantt")}
+                className={`p-1.5 rounded ${
+                  viewMode === "gantt"
+                    ? "bg-gray-100 text-gray-900"
+                    : "text-gray-400 hover:text-gray-600"
+                }`}
+                title="Gantt view"
+              >
+                <GanttChartSquare size={16} />
+              </button>
             </div>
           </div>
         </div>
@@ -1486,6 +1499,14 @@ export default function TasksPage() {
                 New Task
               </button>
             </div>
+          ) : viewMode === "gantt" ? (
+            /* Gantt View */
+            <GanttChart
+              tasks={sortedTasks}
+              token={token!}
+              onTaskClick={(t) => setSelectedTask(t)}
+              onTaskUpdate={handleTaskUpdate}
+            />
           ) : viewMode === "list" ? (
             /* List View */
             <div className="px-6">
