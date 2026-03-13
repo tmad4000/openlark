@@ -438,8 +438,8 @@
         "Typecheck passes"
       ],
       "priority": 27,
-      "passes": false,
-      "notes": "Typing indicators are ephemeral - not persisted to database."
+      "passes": true,
+      "notes": "Typing indicators are ephemeral - not persisted to database. Backend: typing events stored in Redis with 3s TTL, presence TTL set to 60s. Client: 30s heartbeat ping, debounced typing events from TipTap editor, TypingIndicator component below message list, green dot on sender avatars for online users. WebSocket message format aligned between server (typing:start/stop, presence:online/offline) and client."
     },
     {
       "id": "US-028",

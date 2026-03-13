@@ -19,9 +19,10 @@ type SenderMap = Map<string, { displayName: string | null; avatarUrl: string | n
 interface MessageListProps {
   chatId: string;
   onMessagesLoaded?: (messages: Message[]) => void;
+  onlineUsers?: Set<string>;
 }
 
-export function MessageList({ chatId, onMessagesLoaded }: MessageListProps) {
+export function MessageList({ chatId, onMessagesLoaded, onlineUsers }: MessageListProps) {
   const { user } = useAuth();
   const [messages, setMessages] = useState<OptimisticMessage[]>([]);
   const [senderMap, setSenderMap] = useState<SenderMap>(new Map());
@@ -242,6 +243,7 @@ export function MessageList({ chatId, onMessagesLoaded }: MessageListProps) {
                 isOwn={isOwn}
                 showSender={showSender}
                 senderName={senderInfo?.displayName}
+                isOnline={onlineUsers?.has(message.senderId) ?? false}
               />
             );
           })}
@@ -264,9 +266,10 @@ interface MessageBubbleProps {
   isOwn: boolean;
   showSender: boolean;
   senderName?: string | null;
+  isOnline?: boolean;
 }
 
-function MessageBubble({ message, isOwn, showSender, senderName }: MessageBubbleProps) {
+function MessageBubble({ message, isOwn, showSender, senderName, isOnline }: MessageBubbleProps) {
   const isRecalled = !!message.recalledAt;
   const isEdited = !!message.editedAt;
   const isPending = !!message._pending;
@@ -307,7 +310,10 @@ function MessageBubble({ message, isOwn, showSender, senderName }: MessageBubble
         )}
       >
         {showSender && (
-          <div className="text-xs font-medium mb-1 opacity-70">
+          <div className="text-xs font-medium mb-1 opacity-70 flex items-center gap-1">
+            {isOnline && (
+              <span className="inline-block w-2 h-2 bg-green-500 rounded-full flex-shrink-0" />
+            )}
             {senderName || `User ${message.senderId.slice(0, 8)}`}
           </div>
         )}

@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import { useWebSocket, type NewMessageEvent, type MessageEditedEvent, type MessageRecalledEvent } from "@/hooks/use-websocket";
+import { useWebSocket, type NewMessageEvent, type MessageEditedEvent, type MessageRecalledEvent, type TypingEvent, type PresenceEvent } from "@/hooks/use-websocket";
 import { ChatList } from "@/components/messenger/chat-list";
 import { MessageList } from "@/components/messenger/message-list";
 import { MessageInput } from "@/components/messenger/message-input";
+import { TypingIndicator } from "@/components/messenger/typing-indicator";
 import { CreateChatDialog } from "@/components/messenger/create-chat-dialog";
 import { AppShell } from "@/components/layout/app-shell";
 import { cn } from "@/lib/utils";
@@ -17,8 +18,86 @@ export default function MessengerPage() {
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
 
+  // Typing indicator state: chatId -> Map<userId, displayName>
+  const [typingUsers, setTypingUsers] = useState<Map<string, Map<string, string>>>(new Map());
+  const typingTimersRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
+
+  // Online presence state: userId -> "online" | "offline"
+  const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
+
+  // Handle typing events
+  const handleTyping = useCallback((event: TypingEvent) => {
+    // Don't show own typing indicator
+    if (event.userId === user?.id) return;
+
+    const timerKey = `${event.chatId}:${event.userId}`;
+
+    if (event.isTyping) {
+      setTypingUsers((prev) => {
+        const next = new Map(prev);
+        const chatTypers = new Map(next.get(event.chatId) || new Map());
+        // Use userId as fallback display name
+        chatTypers.set(event.userId, `User ${event.userId.slice(0, 8)}`);
+        next.set(event.chatId, chatTypers);
+        return next;
+      });
+
+      // Auto-clear after 4s (slightly longer than the 3s TTL to account for latency)
+      const existingTimer = typingTimersRef.current.get(timerKey);
+      if (existingTimer) clearTimeout(existingTimer);
+      typingTimersRef.current.set(
+        timerKey,
+        setTimeout(() => {
+          setTypingUsers((prev) => {
+            const next = new Map(prev);
+            const chatTypers = new Map(next.get(event.chatId) || new Map());
+            chatTypers.delete(event.userId);
+            if (chatTypers.size === 0) {
+              next.delete(event.chatId);
+            } else {
+              next.set(event.chatId, chatTypers);
+            }
+            return next;
+          });
+          typingTimersRef.current.delete(timerKey);
+        }, 4000)
+      );
+    } else {
+      // Immediately remove typing indicator
+      const existingTimer = typingTimersRef.current.get(timerKey);
+      if (existingTimer) {
+        clearTimeout(existingTimer);
+        typingTimersRef.current.delete(timerKey);
+      }
+      setTypingUsers((prev) => {
+        const next = new Map(prev);
+        const chatTypers = new Map(next.get(event.chatId) || new Map());
+        chatTypers.delete(event.userId);
+        if (chatTypers.size === 0) {
+          next.delete(event.chatId);
+        } else {
+          next.set(event.chatId, chatTypers);
+        }
+        return next;
+      });
+    }
+  }, [user?.id]);
+
+  // Handle presence events
+  const handlePresence = useCallback((event: PresenceEvent) => {
+    setOnlineUsers((prev) => {
+      const next = new Set(prev);
+      if (event.status === "online") {
+        next.add(event.userId);
+      } else {
+        next.delete(event.userId);
+      }
+      return next;
+    });
+  }, []);
+
   // WebSocket for real-time updates
-  const { status: wsStatus, isConnected } = useWebSocket({
+  const { status: wsStatus, isConnected, sendTyping } = useWebSocket({
     onMessage: useCallback((event: NewMessageEvent) => {
       // Add message to list if viewing this chat
       if (event.chatId === selectedChatId) {
@@ -35,7 +114,16 @@ export default function MessengerPage() {
         MessageList.removeMessage(event.messageId);
       }
     }, [selectedChatId]),
+    onTyping: handleTyping,
+    onPresence: handlePresence,
   });
+
+  // Send typing events from input
+  const handleInputTyping = useCallback((isTyping: boolean) => {
+    if (selectedChatId) {
+      sendTyping(selectedChatId, isTyping);
+    }
+  }, [selectedChatId, sendTyping]);
 
   const handleSelectChat = useCallback((chatId: string) => {
     setSelectedChatId(chatId);
@@ -50,6 +138,11 @@ export default function MessengerPage() {
     ChatList.addChat(chat);
     setSelectedChatId(chat.id);
   }, []);
+
+  // Get typing users for the currently selected chat
+  const currentChatTypingUsers = selectedChatId
+    ? typingUsers.get(selectedChatId) || new Map<string, string>()
+    : new Map<string, string>();
 
   const sidebar = (
     <ChatList
@@ -99,10 +192,13 @@ export default function MessengerPage() {
           </div>
 
           {/* Messages */}
-          <MessageList chatId={selectedChatId} />
+          <MessageList chatId={selectedChatId} onlineUsers={onlineUsers} />
+
+          {/* Typing indicator */}
+          <TypingIndicator typingUsers={currentChatTypingUsers} />
 
           {/* Input */}
-          <MessageInput chatId={selectedChatId} />
+          <MessageInput chatId={selectedChatId} onTyping={handleInputTyping} />
         </div>
       ) : (
         <div className="flex-1 flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-900">

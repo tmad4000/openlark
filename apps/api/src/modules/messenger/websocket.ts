@@ -40,9 +40,11 @@ const chatSubscribers = new Map<string, Set<string>>();
 // Track Redis channel subscriptions for cleanup
 const subscribedChannels = new Set<string>();
 
-// Constants for presence
-const PRESENCE_TTL = 30; // seconds
+// Constants for presence and typing
+const PRESENCE_TTL = 60; // seconds - expires after 60s without heartbeat
 const PRESENCE_KEY_PREFIX = "presence:";
+const TYPING_TTL = 3; // seconds - typing indicator auto-expires
+const TYPING_KEY_PREFIX = "typing:";
 
 interface WsMessage {
   type: string;
@@ -181,6 +183,14 @@ async function handleClientMessage(
       // Verify user is a member
       const isMember = await messengerService.isChatMember(chatId, userId);
       if (!isMember) return;
+
+      // Set/clear typing indicator in Redis with 3s TTL (debounced, auto-expires)
+      const typingKey = `${TYPING_KEY_PREFIX}${chatId}:${userId}`;
+      if (message.type === "typing:start") {
+        await redis.setex(typingKey, TYPING_TTL, "1");
+      } else {
+        await redis.del(typingKey);
+      }
 
       // Publish to Redis for distribution
       await redis.publish(

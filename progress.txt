@@ -14,3 +14,4 @@
 [2026-03-12 02:30] US-018 — Messenger support schemas - reactions, pins, favorites — PASS
 [2026-03-12 03:00] US-025 — Message input with rich text formatting — PASS
 [2026-03-12 03:30] US-026 — Real-time message delivery via WebSocket — PASS
+[2026-03-13 00:00] US-027 — Typing indicators and online presence — PASS

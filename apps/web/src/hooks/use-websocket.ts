@@ -4,12 +4,13 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { api, type Message } from "@/lib/api";
 
 const WS_BASE_URL = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:3001";
+const HEARTBEAT_INTERVAL = 30_000; // 30 seconds
 
 export type WebSocketStatus = "connecting" | "connected" | "disconnected" | "reconnecting" | "error";
 
 export interface WebSocketMessage {
   type: string;
-  payload?: unknown;
+  [key: string]: unknown;
 }
 
 export interface NewMessageEvent {
@@ -52,6 +53,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
   const [status, setStatus] = useState<WebSocketStatus>("disconnected");
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttempts = useRef(0);
   const maxReconnectAttempts = 5;
   const optionsRef = useRef(options);
@@ -60,6 +62,103 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
   useEffect(() => {
     optionsRef.current = options;
   }, [options]);
+
+  const startHeartbeat = useCallback(() => {
+    stopHeartbeat();
+    heartbeatIntervalRef.current = setInterval(() => {
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ type: "ping" }));
+      }
+    }, HEARTBEAT_INTERVAL);
+  }, []);
+
+  const stopHeartbeat = useCallback(() => {
+    if (heartbeatIntervalRef.current) {
+      clearInterval(heartbeatIntervalRef.current);
+      heartbeatIntervalRef.current = null;
+    }
+  }, []);
+
+  const handleMessage = useCallback((data: WebSocketMessage) => {
+    switch (data.type) {
+      case "connected":
+        break;
+
+      case "subscribed":
+        break;
+
+      case "pong":
+        break;
+
+      case "message:new": {
+        const event: NewMessageEvent = {
+          chatId: data.chatId as string,
+          message: data.message as Message,
+        };
+        optionsRef.current.onMessage?.(event);
+        break;
+      }
+
+      case "message:edited": {
+        const event: MessageEditedEvent = {
+          chatId: data.chatId as string,
+          message: data.message as Message,
+        };
+        optionsRef.current.onMessageEdited?.(event);
+        break;
+      }
+
+      case "message:recalled": {
+        const event: MessageRecalledEvent = {
+          chatId: data.chatId as string,
+          messageId: data.messageId as string,
+        };
+        optionsRef.current.onMessageRecalled?.(event);
+        break;
+      }
+
+      case "typing:start": {
+        const event: TypingEvent = {
+          chatId: data.chatId as string,
+          userId: data.userId as string,
+          isTyping: true,
+        };
+        optionsRef.current.onTyping?.(event);
+        break;
+      }
+
+      case "typing:stop": {
+        const event: TypingEvent = {
+          chatId: data.chatId as string,
+          userId: data.userId as string,
+          isTyping: false,
+        };
+        optionsRef.current.onTyping?.(event);
+        break;
+      }
+
+      case "presence:online": {
+        const event: PresenceEvent = {
+          userId: data.userId as string,
+          status: "online",
+        };
+        optionsRef.current.onPresence?.(event);
+        break;
+      }
+
+      case "presence:offline": {
+        const event: PresenceEvent = {
+          userId: data.userId as string,
+          status: "offline",
+        };
+        optionsRef.current.onPresence?.(event);
+        break;
+      }
+
+      default:
+        console.log("WebSocket: Unknown message type", data.type);
+    }
+  }, []);
 
   const connect = useCallback(() => {
     const token = api.getToken();
@@ -82,6 +181,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
       console.log("WebSocket connected");
       setStatus("connected");
       reconnectAttempts.current = 0;
+      startHeartbeat();
       optionsRef.current.onConnected?.();
     };
 
@@ -97,6 +197,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
     ws.onclose = (event) => {
       console.log("WebSocket closed", event.code, event.reason);
       setStatus("disconnected");
+      stopHeartbeat();
       optionsRef.current.onDisconnected?.();
 
       // Don't reconnect if auth failed
@@ -121,54 +222,10 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
     };
 
     wsRef.current = ws;
-  }, []);
-
-  const handleMessage = (data: WebSocketMessage) => {
-    switch (data.type) {
-      case "welcome":
-        console.log("WebSocket: Welcome received");
-        break;
-
-      case "subscribed":
-        console.log("WebSocket: Subscribed to chats");
-        break;
-
-      case "new_message": {
-        const payload = data.payload as NewMessageEvent;
-        optionsRef.current.onMessage?.(payload);
-        break;
-      }
-
-      case "message_edited": {
-        const payload = data.payload as MessageEditedEvent;
-        optionsRef.current.onMessageEdited?.(payload);
-        break;
-      }
-
-      case "message_recalled": {
-        const payload = data.payload as MessageRecalledEvent;
-        optionsRef.current.onMessageRecalled?.(payload);
-        break;
-      }
-
-      case "typing": {
-        const payload = data.payload as TypingEvent;
-        optionsRef.current.onTyping?.(payload);
-        break;
-      }
-
-      case "presence": {
-        const payload = data.payload as PresenceEvent;
-        optionsRef.current.onPresence?.(payload);
-        break;
-      }
-
-      default:
-        console.log("WebSocket: Unknown message type", data.type);
-    }
-  };
+  }, [handleMessage, startHeartbeat, stopHeartbeat]);
 
   const disconnect = useCallback(() => {
+    stopHeartbeat();
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
     }
@@ -177,14 +234,14 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
       wsRef.current = null;
     }
     setStatus("disconnected");
-  }, []);
+  }, [stopHeartbeat]);
 
   const sendTyping = useCallback((chatId: string, isTyping: boolean) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(
         JSON.stringify({
-          type: isTyping ? "typing_start" : "typing_stop",
-          payload: { chatId },
+          type: isTyping ? "typing:start" : "typing:stop",
+          chatId,
         })
       );
     }

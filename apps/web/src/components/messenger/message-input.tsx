@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { useAuth } from "@/hooks/use-auth";
@@ -32,12 +32,14 @@ import Link from "@tiptap/extension-link";
 interface MessageInputProps {
   chatId: string;
   onMessageSent?: () => void;
+  onTyping?: (isTyping: boolean) => void;
   disabled?: boolean;
 }
 
 export function MessageInput({
   chatId,
   onMessageSent,
+  onTyping,
   disabled,
 }: MessageInputProps) {
   const { user } = useAuth();
@@ -46,6 +48,37 @@ export function MessageInput({
   const [showToolbar, setShowToolbar] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isTypingRef = useRef(false);
+
+  // Notify typing with debounce (3s timeout to stop)
+  const handleTypingActivity = useCallback(() => {
+    if (!isTypingRef.current) {
+      isTypingRef.current = true;
+      onTyping?.(true);
+    }
+    // Reset the stop timer
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    typingTimeoutRef.current = setTimeout(() => {
+      isTypingRef.current = false;
+      onTyping?.(false);
+    }, 3000);
+  }, [onTyping]);
+
+  // Stop typing on unmount or chat change
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+      if (isTypingRef.current) {
+        onTyping?.(false);
+        isTypingRef.current = false;
+      }
+    };
+  }, [chatId, onTyping]);
 
   const editor = useEditor({
     extensions: [
@@ -83,6 +116,8 @@ export function MessageInput({
           handleSend();
           return true;
         }
+        // Emit typing indicator on keypress
+        handleTypingActivity();
         return false;
       },
     },
@@ -115,6 +150,15 @@ export function MessageInput({
     };
     MessageList.addMessage(optimisticMessage);
     editor.commands.clearContent();
+
+    // Stop typing indicator on send
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    if (isTypingRef.current) {
+      isTypingRef.current = false;
+      onTyping?.(false);
+    }
 
     try {
       setIsSending(true);
