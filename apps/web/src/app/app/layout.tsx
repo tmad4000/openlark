@@ -12,6 +12,7 @@ import {
   Mail,
   FileCheck,
   Target,
+  Clock,
   Settings,
   User,
   LogOut,
@@ -50,6 +51,7 @@ const NAV_ITEMS = [
   { id: "wiki", label: "Wiki", icon: BookOpen, href: "/app/wiki" },
   { id: "approvals", label: "Approvals", icon: FileCheck, href: "/app/approvals" },
   { id: "okr", label: "OKR", icon: Target, href: "/app/okr" },
+  { id: "attendance", label: "Attendance", icon: Clock, href: "/app/attendance" },
   { id: "email", label: "Email", icon: Mail, href: "/app/email" },
   { id: "admin", label: "Admin", icon: Settings, href: "/app/admin" },
 ];
