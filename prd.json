@@ -289,8 +289,8 @@
         "Typecheck passes"
       ],
       "priority": 18,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "All tables pre-existing in messenger.ts: messageReactions (unique on message_id,user_id,emoji), messageReadReceipts (unique on message_id,user_id), pins (unique on chat_id,message_id), favorites (unique on user_id,message_id), chatTabs with auto/custom enum, announcements with isPinned flag. Relations defined for all tables."
     },
     {
       "id": "US-019",
