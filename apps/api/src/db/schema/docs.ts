@@ -61,6 +61,8 @@ export const documents = pgTable(
       .references(() => organizations.id),
     title: varchar("title", { length: 500 }).notNull().default("Untitled"),
     type: documentTypeEnum("type").notNull().default("doc"),
+    // Yjs document identifier for Hocuspocus collaboration
+    yjsDocId: varchar("yjs_doc_id", { length: 255 }),
     // Yjs binary state - stored for quick loading
     yjsState: bytea("yjs_state"),
     ownerId: uuid("owner_id")
@@ -85,6 +87,7 @@ export const documents = pgTable(
     index("documents_owner_id_idx").on(table.ownerId),
     index("documents_type_idx").on(table.type),
     index("documents_created_at_idx").on(table.createdAt),
+    uniqueIndex("documents_yjs_doc_id_idx").on(table.yjsDocId),
   ]
 );
 
