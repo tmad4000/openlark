@@ -213,6 +213,11 @@ function MeetingUI({
     (t) => t.source === Track.Source.Camera
   );
 
+  // Track which participants are presenting (screen sharing)
+  const presenterIdentities = new Set(
+    screenShareTracks.map((t) => t.participant.identity)
+  );
+
   // Auto-switch to speaker view when someone shares screen
   useEffect(() => {
     if (screenShareTracks.length > 0 && viewMode === "gallery") {
@@ -264,11 +269,12 @@ function MeetingUI({
         {/* Video area */}
         <div className="flex-1 min-w-0 p-2">
           {viewMode === "gallery" ? (
-            <GalleryView tracks={cameraTracks} screenShareTracks={screenShareTracks} />
+            <GalleryView tracks={cameraTracks} screenShareTracks={screenShareTracks} presenterIdentities={presenterIdentities} />
           ) : (
             <SpeakerView
               activeTrack={activeSpeakerTrack}
               sidebarTracks={sidebarTracks}
+              presenterIdentities={presenterIdentities}
             />
           )}
         </div>
@@ -293,6 +299,7 @@ function MeetingUI({
                   key={p.identity}
                   participant={p}
                   serverInfo={serverParticipants}
+                  isPresenting={presenterIdentities.has(p.identity)}
                 />
               ))}
             </div>
@@ -400,9 +407,11 @@ function ToolbarButton({
 function GalleryView({
   tracks,
   screenShareTracks,
+  presenterIdentities,
 }: {
   tracks: TrackReferenceOrPlaceholder[];
   screenShareTracks: TrackReferenceOrPlaceholder[];
+  presenterIdentities: Set<string>;
 }) {
   const allTracks = [...screenShareTracks, ...tracks];
   const count = allTracks.length;
@@ -423,6 +432,7 @@ function GalleryView({
           key={`${trackRef.participant.identity}-${trackRef.source}`}
           trackRef={trackRef}
           isScreenShare={trackRef.source === Track.Source.ScreenShare}
+          isPresenter={trackRef.source === Track.Source.Camera && presenterIdentities.has(trackRef.participant.identity)}
         />
       ))}
       {count === 0 && (
@@ -437,9 +447,11 @@ function GalleryView({
 function SpeakerView({
   activeTrack,
   sidebarTracks,
+  presenterIdentities,
 }: {
   activeTrack: TrackReferenceOrPlaceholder | undefined;
   sidebarTracks: TrackReferenceOrPlaceholder[];
+  presenterIdentities: Set<string>;
 }) {
   return (
     <div className="h-full flex gap-2">
@@ -449,6 +461,7 @@ function SpeakerView({
           <VideoTile
             trackRef={activeTrack}
             isScreenShare={activeTrack.source === Track.Source.ScreenShare}
+            isPresenter={activeTrack.source === Track.Source.Camera && presenterIdentities.has(activeTrack.participant.identity)}
             large
           />
         ) : (
@@ -463,7 +476,10 @@ function SpeakerView({
         <div className="w-48 flex flex-col gap-2 overflow-y-auto shrink-0">
           {sidebarTracks.map((trackRef) => (
             <div key={`${trackRef.participant.identity}-${trackRef.source}`} className="h-32 shrink-0">
-              <VideoTile trackRef={trackRef} />
+              <VideoTile
+                trackRef={trackRef}
+                isPresenter={presenterIdentities.has(trackRef.participant.identity)}
+              />
             </div>
           ))}
         </div>
@@ -475,10 +491,12 @@ function SpeakerView({
 function VideoTile({
   trackRef,
   isScreenShare,
+  isPresenter,
   large,
 }: {
   trackRef: TrackReferenceOrPlaceholder;
   isScreenShare?: boolean;
+  isPresenter?: boolean;
   large?: boolean;
 }) {
   const { participant, publication } = trackRef;
@@ -512,6 +530,14 @@ function VideoTile({
         </div>
       )}
 
+      {/* Presenter indicator badge */}
+      {isPresenter && (
+        <div className="absolute top-2 left-2 flex items-center gap-1 px-2 py-0.5 rounded bg-blue-600/90 text-white text-[10px] font-medium">
+          <Monitor className="w-3 h-3" />
+          Presenting
+        </div>
+      )}
+
       {/* Name overlay */}
       <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-2">
         <div className="flex items-center gap-1.5">
@@ -534,9 +560,11 @@ function VideoTile({
 function ParticipantListItem({
   participant,
   serverInfo,
+  isPresenting,
 }: {
   participant: Participant;
   serverInfo: ParticipantInfo[];
+  isPresenting?: boolean;
 }) {
   const info = serverInfo.find((s) => s.userId === participant.identity);
 
@@ -552,9 +580,17 @@ function ParticipantListItem({
             <span className="text-gray-500 text-xs ml-1">(You)</span>
           )}
         </p>
-        {info?.role === "host" && (
-          <p className="text-blue-400 text-xs">Host</p>
-        )}
+        <div className="flex items-center gap-2">
+          {info?.role === "host" && (
+            <span className="text-blue-400 text-xs">Host</span>
+          )}
+          {isPresenting && (
+            <span className="text-green-400 text-xs flex items-center gap-0.5">
+              <Monitor className="w-3 h-3" />
+              Presenting
+            </span>
+          )}
+        </div>
       </div>
       <div className="flex items-center gap-1.5 shrink-0">
         {!participant.isMicrophoneEnabled && (

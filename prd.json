@@ -1541,8 +1541,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 91,
-      "passes": false,
-      "notes": "Uses LiveKit's built-in screen share track."
+      "passes": true,
+      "notes": "Screen share button in toolbar toggles via LiveKit setScreenShareEnabled (triggers native browser share picker). Screen share tracks display as main view in speaker mode (auto-switches from gallery). Added presenter indicator: blue 'Presenting' badge with Monitor icon on sharer's camera tile, green 'Presenting' label in participant list. Stop sharing button changes toolbar to 'Stop Share' with MonitorOff icon. Typecheck passes."
     },
     {
       "id": "US-092",
