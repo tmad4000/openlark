@@ -593,8 +593,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 36,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created ChatTabs component with built-in tabs (Messages, Docs, Files, Pins) that auto-show when content exists. Custom tabs with name+URL stored in localStorage per chat (max 20). Drag-and-drop reordering for custom tabs. Custom tabs deletable with X button. Docs/Files/Pins views with empty states. Custom tabs render in sandboxed iframe."
     },
     {
       "id": "US-037",

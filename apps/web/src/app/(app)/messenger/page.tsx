@@ -10,8 +10,9 @@ import { TypingIndicator } from "@/components/messenger/typing-indicator";
 import { CreateChatDialog } from "@/components/messenger/create-chat-dialog";
 import { ThreadPanel } from "@/components/messenger/thread-panel";
 import { AppShell } from "@/components/layout/app-shell";
+import { ChatTabs, type CustomTab } from "@/components/messenger/chat-tabs";
 import { cn } from "@/lib/utils";
-import { MessageSquare, Wifi, WifiOff, Loader2, Pin, X, Star } from "lucide-react";
+import { MessageSquare, Wifi, WifiOff, Loader2, Pin, X, Star, FileText, File } from "lucide-react";
 import { api, type Chat, type Pin as PinType, type Favorite, type Message } from "@/lib/api";
 import { ForwardDialog } from "@/components/messenger/forward-dialog";
 
@@ -20,7 +21,7 @@ export default function MessengerPage() {
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
-  const [chatTab, setChatTab] = useState<"chat" | "pins">("chat");
+  const [chatTab, setChatTab] = useState<string>("chat");
   const [pinnedMessageIds, setPinnedMessageIds] = useState<Set<string>>(new Set());
   const [pinnedMessages, setPinnedMessages] = useState<PinType[]>([]);
   const [favoritedMessageIds, setFavoritedMessageIds] = useState<Set<string>>(new Set());
@@ -28,6 +29,9 @@ export default function MessengerPage() {
   const [favorites, setFavorites] = useState<Favorite[]>([]);
   const [forwardMessages, setForwardMessages] = useState<Message[]>([]);
   const [isForwardDialogOpen, setIsForwardDialogOpen] = useState(false);
+  const [customTabs, setCustomTabs] = useState<Map<string, CustomTab[]>>(new Map());
+  const [sharedDocs, setSharedDocs] = useState<Array<{ id: string; title: string; url: string; sharedAt: string; sharedBy: string }>>([]);
+  const [sharedFiles, setSharedFiles] = useState<Array<{ id: string; name: string; url: string; size: number; sharedAt: string; sharedBy: string }>>([]);
 
   // Sender map ref for thread panel
   const senderMapRef = useRef<Map<string, { displayName: string | null; avatarUrl: string | null }>>(new Map());
@@ -124,6 +128,69 @@ export default function MessengerPage() {
     setForwardMessages([message]);
     setIsForwardDialogOpen(true);
   }, []);
+
+  // Custom tab management (per chat, stored in localStorage)
+  const getCustomTabsForChat = useCallback((chatId: string): CustomTab[] => {
+    return customTabs.get(chatId) || [];
+  }, [customTabs]);
+
+  const handleAddCustomTab = useCallback((name: string, url: string) => {
+    if (!selectedChatId) return;
+    const current = customTabs.get(selectedChatId) || [];
+    if (current.length >= 20) return;
+    const newTab: CustomTab = { id: `custom-${Date.now()}`, name, url };
+    const updated = [...current, newTab];
+    setCustomTabs((prev) => {
+      const next = new Map(prev);
+      next.set(selectedChatId, updated);
+      return next;
+    });
+    try {
+      localStorage.setItem(`chat-tabs-${selectedChatId}`, JSON.stringify(updated));
+    } catch { /* ignore */ }
+  }, [selectedChatId, customTabs]);
+
+  const handleDeleteCustomTab = useCallback((tabId: string) => {
+    if (!selectedChatId) return;
+    const current = customTabs.get(selectedChatId) || [];
+    const updated = current.filter((t) => t.id !== tabId);
+    setCustomTabs((prev) => {
+      const next = new Map(prev);
+      next.set(selectedChatId, updated);
+      return next;
+    });
+    try {
+      localStorage.setItem(`chat-tabs-${selectedChatId}`, JSON.stringify(updated));
+    } catch { /* ignore */ }
+  }, [selectedChatId, customTabs]);
+
+  const handleReorderCustomTabs = useCallback((tabs: CustomTab[]) => {
+    if (!selectedChatId) return;
+    setCustomTabs((prev) => {
+      const next = new Map(prev);
+      next.set(selectedChatId, tabs);
+      return next;
+    });
+    try {
+      localStorage.setItem(`chat-tabs-${selectedChatId}`, JSON.stringify(tabs));
+    } catch { /* ignore */ }
+  }, [selectedChatId]);
+
+  // Load custom tabs from localStorage when chat changes
+  useEffect(() => {
+    if (!selectedChatId) return;
+    try {
+      const stored = localStorage.getItem(`chat-tabs-${selectedChatId}`);
+      if (stored) {
+        const parsed = JSON.parse(stored) as CustomTab[];
+        setCustomTabs((prev) => {
+          const next = new Map(prev);
+          next.set(selectedChatId, parsed);
+          return next;
+        });
+      }
+    } catch { /* ignore */ }
+  }, [selectedChatId]);
 
   // Handle typing events
   const handleTyping = useCallback((event: TypingEvent) => {
@@ -329,39 +396,20 @@ export default function MessengerPage() {
                 </div>
               </div>
               {/* Tab bar */}
-              <div className="flex px-4 gap-4">
-                <button
-                  onClick={() => setChatTab("chat")}
-                  className={cn(
-                    "pb-2 text-sm font-medium border-b-2 transition-colors",
-                    chatTab === "chat"
-                      ? "border-blue-500 text-blue-600 dark:text-blue-400"
-                      : "border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
-                  )}
-                >
-                  Messages
-                </button>
-                <button
-                  onClick={() => setChatTab("pins")}
-                  className={cn(
-                    "pb-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-1",
-                    chatTab === "pins"
-                      ? "border-blue-500 text-blue-600 dark:text-blue-400"
-                      : "border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
-                  )}
-                >
-                  <Pin className="h-3.5 w-3.5" />
-                  Pins
-                  {pinnedMessages.length > 0 && (
-                    <span className="ml-1 text-xs bg-gray-200 dark:bg-gray-700 rounded-full px-1.5">
-                      {pinnedMessages.length}
-                    </span>
-                  )}
-                </button>
-              </div>
+              <ChatTabs
+                activeTab={chatTab}
+                onTabChange={setChatTab}
+                pinnedCount={pinnedMessages.length}
+                docsCount={sharedDocs.length}
+                filesCount={sharedFiles.length}
+                customTabs={getCustomTabsForChat(selectedChatId)}
+                onAddCustomTab={handleAddCustomTab}
+                onDeleteCustomTab={handleDeleteCustomTab}
+                onReorderCustomTabs={handleReorderCustomTabs}
+              />
             </div>
 
-            {/* Messages or Pins view */}
+            {/* Tab content */}
             {chatTab === "chat" ? (
               <MessageList
                 chatId={selectedChatId}
@@ -377,11 +425,17 @@ export default function MessengerPage() {
                 onRecallMessage={handleRecallMessage}
                 onForwardMessage={handleForwardMessage}
               />
-            ) : (
+            ) : chatTab === "pins" ? (
               <PinnedMessagesView
                 pins={pinnedMessages}
                 onUnpin={handleUnpinMessage}
               />
+            ) : chatTab === "docs" ? (
+              <SharedDocsView docs={sharedDocs} />
+            ) : chatTab === "files" ? (
+              <SharedFilesView files={sharedFiles} />
+            ) : (
+              <CustomTabView tab={getCustomTabsForChat(selectedChatId).find((t) => t.id === chatTab)} />
             )}
 
             {/* Typing indicator */}
@@ -514,6 +568,105 @@ function PinnedMessagesView({ pins, onUnpin }: { pins: PinType[]; onUnpin: (mess
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+function SharedDocsView({ docs }: { docs: Array<{ id: string; title: string; url: string; sharedAt: string; sharedBy: string }> }) {
+  if (docs.length === 0) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center text-center p-4">
+        <FileText className="h-8 w-8 text-gray-400 dark:text-gray-500 mb-2" />
+        <p className="text-sm text-gray-500 dark:text-gray-400">No docs shared yet</p>
+        <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+          Documents shared in this chat will appear here
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 overflow-y-auto px-4 py-2 space-y-2">
+      {docs.map((doc) => (
+        <a
+          key={doc.id}
+          href={doc.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-3 rounded-lg border border-gray-200 dark:border-gray-700 p-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+        >
+          <FileText className="h-5 w-5 text-blue-500 flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{doc.title}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Shared {new Date(doc.sharedAt).toLocaleDateString()} by {doc.sharedBy}
+            </p>
+          </div>
+        </a>
+      ))}
+    </div>
+  );
+}
+
+function SharedFilesView({ files }: { files: Array<{ id: string; name: string; url: string; size: number; sharedAt: string; sharedBy: string }> }) {
+  if (files.length === 0) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center text-center p-4">
+        <File className="h-8 w-8 text-gray-400 dark:text-gray-500 mb-2" />
+        <p className="text-sm text-gray-500 dark:text-gray-400">No files shared yet</p>
+        <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+          Files and attachments shared in this chat will appear here
+        </p>
+      </div>
+    );
+  }
+
+  const formatSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  return (
+    <div className="flex-1 overflow-y-auto px-4 py-2 space-y-2">
+      {files.map((file) => (
+        <a
+          key={file.id}
+          href={file.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-3 rounded-lg border border-gray-200 dark:border-gray-700 p-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+        >
+          <File className="h-5 w-5 text-gray-500 flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{file.name}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              {formatSize(file.size)} · Shared {new Date(file.sharedAt).toLocaleDateString()} by {file.sharedBy}
+            </p>
+          </div>
+        </a>
+      ))}
+    </div>
+  );
+}
+
+function CustomTabView({ tab }: { tab?: { id: string; name: string; url: string } }) {
+  if (!tab) {
+    return (
+      <div className="flex-1 flex items-center justify-center text-gray-500 dark:text-gray-400">
+        Tab not found
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 flex flex-col">
+      <iframe
+        src={tab.url}
+        title={tab.name}
+        className="flex-1 w-full border-0"
+        sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+      />
     </div>
   );
 }
