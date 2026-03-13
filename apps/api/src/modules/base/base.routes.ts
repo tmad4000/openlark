@@ -17,6 +17,82 @@ import { baseService } from "./base.service.js";
 import { ZodError } from "zod";
 
 export async function baseRoutes(app: FastifyInstance) {
+  // ============ PUBLIC FORM ROUTES (no auth) ============
+
+  // Get form definition (public)
+  app.get<{ Params: { viewId: string } }>(
+    "/forms/:viewId",
+    async (req, reply) => {
+      const view = await baseService.getViewById(req.params.viewId);
+      if (!view || view.type !== "form") {
+        return reply.status(404).send({
+          statusCode: 404,
+          error: "Not Found",
+          message: "Form not found",
+        });
+      }
+
+      const config = (view.config as Record<string, unknown>) || {};
+      if (!config.isPublic) {
+        return reply.status(403).send({
+          statusCode: 403,
+          error: "Forbidden",
+          message: "This form is not publicly accessible",
+        });
+      }
+
+      const table = await baseService.getTableById(view.tableId);
+      const fields = await baseService.getTableFields(view.tableId);
+
+      return {
+        data: {
+          tableName: table?.name || "Form",
+          fields,
+          config,
+        },
+      };
+    }
+  );
+
+  // Submit form (public)
+  app.post<{ Params: { viewId: string } }>(
+    "/forms/:viewId/submit",
+    async (req, reply) => {
+      const view = await baseService.getViewById(req.params.viewId);
+      if (!view || view.type !== "form") {
+        return reply.status(404).send({
+          statusCode: 404,
+          error: "Not Found",
+          message: "Form not found",
+        });
+      }
+
+      const config = (view.config as Record<string, unknown>) || {};
+      if (!config.isPublic) {
+        return reply.status(403).send({
+          statusCode: 403,
+          error: "Forbidden",
+          message: "This form is not publicly accessible",
+        });
+      }
+
+      try {
+        const input = createRecordSchema.parse(req.body);
+        const record = await baseService.createRecord(
+          view.tableId,
+          input,
+          "anonymous"
+        );
+        return reply.status(201).send({ data: { record } });
+      } catch (error) {
+        if (error instanceof ZodError) {
+          return reply.status(400).send(formatZodError(error));
+        }
+        throw error;
+      }
+    }
+  );
+
   app.addHook("preHandler", authenticate);
 
   // ============ BASE ROUTES ============

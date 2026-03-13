@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { AppShell } from "@/components/layout/app-shell";
 import { BaseGridView, BaseKanbanView } from "@/components/base";
+import { BaseFormView, type FormViewConfig } from "@/components/base/base-form-view";
 import type { ViewConfig } from "@/components/base/base-view-toolbar";
 import { api, type BaseInfo, type BaseTableInfo, type BaseViewInfo } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -128,6 +129,28 @@ export default function BasePage() {
         name: "Kanban View",
         type: "kanban",
         config: {},
+      });
+      setViews((prev) => [...prev, result.view]);
+      setSelectedView(result.view);
+      setAddingView(false);
+    } catch {
+      // Silently handle
+    }
+  }, [selectedTable]);
+
+  const handleAddFormView = useCallback(async () => {
+    if (!selectedTable) return;
+    try {
+      const result = await api.createView(selectedTable.id, {
+        name: "Form View",
+        type: "form",
+        config: {
+          requiredFields: [],
+          description: "",
+          submitLabel: "Submit",
+          successMessage: "Thank you! Your response has been recorded.",
+          isPublic: false,
+        },
       });
       setViews((prev) => [...prev, result.view]);
       setSelectedView(result.view);
@@ -364,6 +387,13 @@ export default function BasePage() {
                   Kanban View
                 </button>
                 <button
+                  onClick={handleAddFormView}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-800"
+                >
+                  <FileInput className="w-3.5 h-3.5" />
+                  Form View
+                </button>
+                <button
                   onClick={() => setAddingView(false)}
                   className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-gray-400"
                   disabled
@@ -378,7 +408,22 @@ export default function BasePage() {
 
         {/* View content */}
         {selectedTable ? (
-          selectedView?.type === "kanban" ? (
+          selectedView?.type === "form" ? (
+            <BaseFormView
+              tableId={selectedTable.id}
+              tableName={selectedTable.name}
+              viewId={selectedView.id}
+              viewConfig={viewConfig as FormViewConfig}
+              onViewConfigChange={(newConfig) => {
+                if (selectedView) {
+                  handleViewConfigChange(selectedView.id, {
+                    ...viewConfig,
+                    ...newConfig,
+                  });
+                }
+              }}
+            />
+          ) : selectedView?.type === "kanban" ? (
             <BaseKanbanView
               tableId={selectedTable.id}
               tableName={selectedTable.name}
