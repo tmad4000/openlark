@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
 import { useAuth } from "@/hooks/use-auth";
@@ -28,6 +28,11 @@ import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import Underline from "@tiptap/extension-underline";
 import Link from "@tiptap/extension-link";
+import Mention from "@tiptap/extension-mention";
+import {
+  createMentionSuggestion,
+  type MentionItem,
+} from "./mention-suggestion";
 
 interface MessageInputProps {
   chatId: string;
@@ -80,6 +85,26 @@ export function MessageInput({
     };
   }, [chatId, onTyping]);
 
+  // Create mention suggestion that fetches chat members
+  const mentionSuggestion = useMemo(
+    () =>
+      createMentionSuggestion(async () => {
+        try {
+          const { members } = await api.getChatMembers(chatId);
+          return members
+            .filter((m) => m.userId !== user?.id) // Exclude self
+            .map((m) => ({
+              id: m.userId,
+              label: m.user?.displayName || m.userId.slice(0, 8),
+              avatarUrl: m.user?.avatarUrl,
+            }));
+        } catch {
+          return [];
+        }
+      }),
+    [chatId, user?.id]
+  );
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -95,6 +120,13 @@ export function MessageInput({
         HTMLAttributes: {
           class: "text-blue-400 underline cursor-pointer",
         },
+      }),
+      Mention.configure({
+        HTMLAttributes: {
+          class:
+            "mention bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded px-1 py-0.5 font-medium",
+        },
+        suggestion: mentionSuggestion,
       }),
     ],
     editorProps: {
@@ -134,6 +166,28 @@ export function MessageInput({
     const text = editor.getText().trim();
     if (!text) return;
 
+    // Extract mentions from the editor JSON content
+    const mentions: Array<{ id: string; label: string }> = [];
+    const editorJson = editor.getJSON();
+    function extractMentions(node: Record<string, unknown>) {
+      if (node.type === "mention" && node.attrs) {
+        const attrs = node.attrs as { id?: string; label?: string };
+        if (attrs.id) {
+          mentions.push({ id: attrs.id, label: attrs.label || "" });
+        }
+      }
+      if (Array.isArray(node.content)) {
+        (node.content as Record<string, unknown>[]).forEach(extractMentions);
+      }
+    }
+    extractMentions(editorJson as Record<string, unknown>);
+
+    // Build content with mentions if present
+    const contentJson: Record<string, unknown> = { text };
+    if (mentions.length > 0) {
+      contentJson.mentions = mentions;
+    }
+
     // Optimistic UI: show message immediately
     const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const optimisticMessage = {
@@ -141,7 +195,7 @@ export function MessageInput({
       chatId,
       senderId: user?.id || "",
       type: "text",
-      contentJson: { text },
+      contentJson,
       threadId: null,
       replyToId: null,
       createdAt: new Date().toISOString(),
@@ -165,7 +219,9 @@ export function MessageInput({
     try {
       setIsSending(true);
       setError(null);
-      const { message } = await api.sendMessage(chatId, { content: text });
+      const { message } = await api.sendMessage(chatId, {
+        content: mentions.length > 0 ? contentJson : text,
+      });
       // Replace optimistic message with confirmed one
       MessageList.confirmMessage(tempId, message);
       onMessageSent?.();

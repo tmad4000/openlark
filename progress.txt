@@ -18,3 +18,4 @@
 [2026-03-13 01:00] US-028 — Read receipts API and UI — PASS
 [2026-03-13 02:00] US-029 — Emoji reactions on messages — PASS
 [2026-03-13 03:00] US-030 — Message threading (replies) — PASS
+[2026-03-13 06:22] US-031 — @mention autocomplete — PASS

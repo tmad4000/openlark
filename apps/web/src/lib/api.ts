@@ -150,7 +150,7 @@ class ApiClient {
     );
   }
 
-  async sendMessage(chatId: string, data: { content: string; type?: string; threadId?: string }) {
+  async sendMessage(chatId: string, data: { content: string | Record<string, unknown>; type?: string; threadId?: string }) {
     return this.request<{ message: Message }>(`/messenger/chats/${chatId}/messages`, {
       method: "POST",
       body: JSON.stringify(data),
@@ -490,7 +490,7 @@ export interface Message {
   chatId: string;
   senderId: string;
   type: string;
-  contentJson: { text?: string };
+  contentJson: { text?: string; mentions?: Array<{ id: string; label: string }> };
   threadId: string | null;
   replyToId: string | null;
   replyCount?: number;

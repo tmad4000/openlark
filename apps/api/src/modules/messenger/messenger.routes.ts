@@ -308,6 +308,26 @@ export async function messengerRoutes(app: FastifyInstance) {
           message,
         });
 
+        // Publish mention notifications for mentioned users
+        const contentJson = message.contentJson as Record<string, unknown>;
+        const mentions = contentJson?.mentions as
+          | Array<{ id: string; label: string }>
+          | undefined;
+        if (mentions && mentions.length > 0) {
+          for (const mention of mentions) {
+            if (mention.id !== req.user!.id) {
+              // Don't notify self
+              await publishMessageEvent(req.params.chatId, {
+                type: "mention:new",
+                chatId: req.params.chatId,
+                messageId: message.id,
+                mentionedUserId: mention.id,
+                senderId: req.user!.id,
+              });
+            }
+          }
+        }
+
         return reply.status(201).send({ data: { message } });
       } catch (error) {
         if (error instanceof ZodError) {

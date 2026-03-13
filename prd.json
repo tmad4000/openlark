@@ -506,8 +506,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 31,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added @tiptap/extension-mention with custom suggestion dropdown. Typing @ triggers autocomplete of chat members. Mentions stored in contentJson.mentions array. API publishes mention:new WebSocket events for mentioned users."
     },
     {
       "id": "US-032",
