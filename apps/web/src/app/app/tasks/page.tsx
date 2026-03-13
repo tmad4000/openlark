@@ -15,11 +15,14 @@ import {
   Trash2,
   X,
   ChevronRight,
+  ChevronDown,
   Send,
   GripVertical,
   ArrowUpDown,
   Clock,
   Flag,
+  Link,
+  Ban,
 } from "lucide-react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
@@ -68,6 +71,22 @@ interface TaskComment {
   userName: string | null;
 }
 
+type DepType = "fs" | "ss" | "ff" | "sf";
+
+interface TaskDependencyInfo {
+  taskId: string;
+  dependsOnTaskId: string;
+  type: DepType;
+  dependsOnTitle?: string;
+  dependsOnStatus?: TaskStatus;
+  blockedTitle?: string;
+  blockedStatus?: TaskStatus;
+}
+
+interface SubtaskNode extends TaskData {
+  children: SubtaskNode[];
+}
+
 // Constants
 const STATUS_CONFIG: Record<
   TaskStatus,
@@ -112,6 +131,13 @@ const PRIORITY_ORDER: TaskPriority[] = [
   "low",
   "none",
 ];
+
+const DEP_TYPE_LABELS: Record<DepType, string> = {
+  fs: "Finish to Start",
+  ss: "Start to Start",
+  ff: "Finish to Finish",
+  sf: "Start to Finish",
+};
 
 function getCookie(name: string): string | null {
   if (typeof document === "undefined") return null;
@@ -244,42 +270,153 @@ function KanbanCard({
   );
 }
 
+// Subtask Tree Component - renders nested subtasks with checkboxes
+function SubtaskTree({
+  subtasks,
+  depth,
+  token,
+  onToggle,
+  onSelect,
+}: {
+  subtasks: SubtaskNode[];
+  depth: number;
+  token: string;
+  onToggle: (id: string, currentStatus: TaskStatus) => void;
+  onSelect: (task: SubtaskNode) => void;
+}) {
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+
+  if (subtasks.length === 0) return null;
+
+  return (
+    <div className={depth > 0 ? "ml-5 border-l border-gray-100" : ""}>
+      {subtasks.map((st) => {
+        const hasChildren = st.children && st.children.length > 0;
+        const isCollapsed = collapsed[st.id] ?? false;
+        return (
+          <div key={st.id}>
+            <div className="flex items-center gap-1.5 py-1 pl-1 pr-1 rounded hover:bg-gray-50 group">
+              {hasChildren ? (
+                <button
+                  onClick={() =>
+                    setCollapsed((p) => ({ ...p, [st.id]: !isCollapsed }))
+                  }
+                  className="p-0.5 text-gray-400 hover:text-gray-600"
+                >
+                  {isCollapsed ? (
+                    <ChevronRight size={12} />
+                  ) : (
+                    <ChevronDown size={12} />
+                  )}
+                </button>
+              ) : (
+                <span className="w-4" />
+              )}
+              <button
+                onClick={() =>
+                  onToggle(st.id, st.status)
+                }
+                className={`flex-shrink-0 w-3.5 h-3.5 rounded border-2 flex items-center justify-center ${
+                  st.status === "done"
+                    ? "border-green-500 bg-green-500 text-white"
+                    : "border-gray-300 hover:border-blue-400"
+                }`}
+              >
+                {st.status === "done" && (
+                  <svg width="7" height="5" viewBox="0 0 8 6" fill="none">
+                    <path
+                      d="M1 3L3 5L7 1"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                )}
+              </button>
+              <span
+                onClick={() => onSelect(st)}
+                className={`text-sm cursor-pointer flex-1 truncate ${
+                  st.status === "done"
+                    ? "line-through text-gray-400"
+                    : "text-gray-700"
+                }`}
+              >
+                {st.title}
+              </span>
+            </div>
+            {hasChildren && !isCollapsed && depth < 5 && (
+              <SubtaskTree
+                subtasks={st.children}
+                depth={depth + 1}
+                token={token}
+                onToggle={onToggle}
+                onSelect={onSelect}
+              />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // Task Detail Panel Component
 function TaskDetailPanel({
   task,
   token,
+  allTasks,
   onClose,
   onUpdate,
   onDelete,
+  onTaskCreated,
 }: {
   task: TaskData;
   token: string;
+  allTasks: TaskData[];
   onClose: () => void;
   onUpdate: (updated: TaskData) => void;
   onDelete: (id: string) => void;
+  onTaskCreated: (task: TaskData) => void;
 }) {
   const [comments, setComments] = useState<TaskComment[]>([]);
-  const [subtasks, setSubtasks] = useState<TaskData[]>([]);
+  const [subtasks, setSubtasks] = useState<SubtaskNode[]>([]);
   const [newComment, setNewComment] = useState("");
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleValue, setTitleValue] = useState(task.title);
   const [descValue, setDescValue] = useState(task.description || "");
   const [editingDesc, setEditingDesc] = useState(false);
+  const [addingSubtask, setAddingSubtask] = useState(false);
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
+  const [activeTab, setActiveTab] = useState<"details" | "dependencies">("details");
+  const [blockedBy, setBlockedBy] = useState<TaskDependencyInfo[]>([]);
+  const [blocking, setBlocking] = useState<TaskDependencyInfo[]>([]);
+  const [addingDep, setAddingDep] = useState(false);
+  const [depSearchQuery, setDepSearchQuery] = useState("");
+  const [depType, setDepType] = useState<DepType>("fs");
   const titleRef = useRef<HTMLInputElement>(null);
+  const subtaskInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setTitleValue(task.title);
     setDescValue(task.description || "");
+    setAddingSubtask(false);
+    setNewSubtaskTitle("");
   }, [task]);
 
   useEffect(() => {
     fetchComments();
     fetchSubtasks();
+    fetchDependencies();
   }, [task.id]);
 
   useEffect(() => {
     if (editingTitle) titleRef.current?.focus();
   }, [editingTitle]);
+
+  useEffect(() => {
+    if (addingSubtask) subtaskInputRef.current?.focus();
+  }, [addingSubtask]);
 
   const fetchComments = async () => {
     try {
@@ -297,16 +434,27 @@ function TaskDetailPanel({
 
   const fetchSubtasks = async () => {
     try {
-      const res = await fetch(`/api/tasks?limit=50`, {
+      const res = await fetch(`/api/tasks/${task.id}/subtasks`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
         const data = await res.json();
-        setSubtasks(
-          (data.tasks || []).filter(
-            (t: TaskData) => t.parentTaskId === task.id
-          )
-        );
+        setSubtasks(data.subtasks || []);
+      }
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const fetchDependencies = async () => {
+    try {
+      const res = await fetch(`/api/tasks/${task.id}/dependencies`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setBlockedBy(data.blockedBy || []);
+        setBlocking(data.blocking || []);
       }
     } catch {
       /* ignore */
@@ -383,6 +531,112 @@ function TaskDetailPanel({
     }
   };
 
+  const handleAddSubtask = async () => {
+    if (!newSubtaskTitle.trim()) return;
+    try {
+      const res = await fetch(`/api/tasks/${task.id}/subtasks`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ title: newSubtaskTitle.trim() }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setNewSubtaskTitle("");
+        onTaskCreated(data.task);
+        fetchSubtasks();
+        subtaskInputRef.current?.focus();
+      }
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const handleToggleSubtask = async (id: string, currentStatus: TaskStatus) => {
+    const newStatus = currentStatus === "done" ? "todo" : "done";
+    try {
+      const res = await fetch(`/api/tasks/${id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        onUpdate(data.task);
+        fetchSubtasks();
+      }
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const handleAddDependency = async (dependsOnId: string) => {
+    try {
+      const res = await fetch(`/api/tasks/${task.id}/dependencies`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ depends_on_task_id: dependsOnId, type: depType }),
+      });
+      if (res.ok) {
+        setAddingDep(false);
+        setDepSearchQuery("");
+        setDepType("fs");
+        fetchDependencies();
+      }
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const handleRemoveDependency = async (dependsOnId: string) => {
+    try {
+      const res = await fetch(`/api/tasks/${task.id}/dependencies/${dependsOnId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        fetchDependencies();
+      }
+    } catch {
+      /* ignore */
+    }
+  };
+
+  // Count all subtasks recursively
+  const countSubtasks = (nodes: SubtaskNode[]): number => {
+    let count = 0;
+    for (const n of nodes) {
+      count += 1 + countSubtasks(n.children);
+    }
+    return count;
+  };
+
+  const totalSubtasks = countSubtasks(subtasks);
+
+  // Filter tasks for dependency picker (exclude self and already-depended)
+  const existingDepIds = new Set(blockedBy.map((d) => d.dependsOnTaskId));
+  const depCandidates = allTasks.filter(
+    (t) =>
+      t.id !== task.id &&
+      !existingDepIds.has(t.id) &&
+      t.title.toLowerCase().includes(depSearchQuery.toLowerCase())
+  );
+
+  // Check if blocked
+  const isBlocked = blockedBy.some((d) => d.dependsOnStatus !== "done");
+  const blockingTaskNames = blockedBy
+    .filter((d) => d.dependsOnStatus !== "done")
+    .map((d) => d.dependsOnTitle)
+    .filter(Boolean);
+
   return (
     <div className="w-[420px] border-l border-gray-200 bg-white flex flex-col h-full overflow-hidden">
       {/* Header */}
@@ -404,219 +658,438 @@ function TaskDetailPanel({
         </div>
       </div>
 
+      {/* Tabs */}
+      <div className="flex border-b border-gray-200 px-4">
+        <button
+          onClick={() => setActiveTab("details")}
+          className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px ${
+            activeTab === "details"
+              ? "border-blue-500 text-blue-600"
+              : "border-transparent text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          Details
+        </button>
+        <button
+          onClick={() => setActiveTab("dependencies")}
+          className={`px-3 py-2 text-sm font-medium border-b-2 -mb-px flex items-center gap-1.5 ${
+            activeTab === "dependencies"
+              ? "border-blue-500 text-blue-600"
+              : "border-transparent text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          <Link size={13} />
+          Dependencies
+          {blockedBy.length + blocking.length > 0 && (
+            <span className="text-xs bg-gray-100 text-gray-600 px-1.5 rounded-full">
+              {blockedBy.length + blocking.length}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* Blocked indicator */}
+      {isBlocked && (
+        <div className="mx-4 mt-3 flex items-center gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700">
+          <Ban size={13} className="flex-shrink-0" />
+          <span>
+            Blocked by{" "}
+            {blockingTaskNames.map((name, i) => (
+              <span key={i}>
+                {i > 0 && ", "}
+                <strong>{name}</strong>
+              </span>
+            ))}
+          </span>
+        </div>
+      )}
+
       {/* Body */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {/* Title */}
-        {editingTitle ? (
-          <input
-            ref={titleRef}
-            value={titleValue}
-            onChange={(e) => setTitleValue(e.target.value)}
-            onBlur={handleTitleSave}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleTitleSave();
-              if (e.key === "Escape") {
-                setTitleValue(task.title);
-                setEditingTitle(false);
-              }
-            }}
-            className="text-lg font-semibold text-gray-900 w-full border-b-2 border-blue-500 outline-none pb-1"
-          />
-        ) : (
-          <h2
-            onClick={() => setEditingTitle(true)}
-            className="text-lg font-semibold text-gray-900 cursor-pointer hover:bg-gray-50 rounded px-1 -mx-1"
-          >
-            {task.title}
-          </h2>
-        )}
-
-        {/* Status */}
-        <div className="grid grid-cols-[100px_1fr] gap-2 items-center text-sm">
-          <span className="text-gray-500">Status</span>
-          <DropdownMenu.Root>
-            <DropdownMenu.Trigger asChild>
-              <button
-                className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium ${STATUS_CONFIG[task.status].bgColor} ${STATUS_CONFIG[task.status].color}`}
+        {activeTab === "details" ? (
+          <>
+            {/* Title */}
+            {editingTitle ? (
+              <input
+                ref={titleRef}
+                value={titleValue}
+                onChange={(e) => setTitleValue(e.target.value)}
+                onBlur={handleTitleSave}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleTitleSave();
+                  if (e.key === "Escape") {
+                    setTitleValue(task.title);
+                    setEditingTitle(false);
+                  }
+                }}
+                className="text-lg font-semibold text-gray-900 w-full border-b-2 border-blue-500 outline-none pb-1"
+              />
+            ) : (
+              <h2
+                onClick={() => setEditingTitle(true)}
+                className="text-lg font-semibold text-gray-900 cursor-pointer hover:bg-gray-50 rounded px-1 -mx-1"
               >
-                <span
-                  className={`w-1.5 h-1.5 rounded-full ${STATUS_CONFIG[task.status].dotColor}`}
-                />
-                {STATUS_CONFIG[task.status].label}
-              </button>
-            </DropdownMenu.Trigger>
-            <DropdownMenu.Portal>
-              <DropdownMenu.Content className="bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[140px] z-50">
-                {STATUS_ORDER.map((s) => (
-                  <DropdownMenu.Item
-                    key={s}
-                    className="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-50 cursor-pointer outline-none"
-                    onSelect={() => updateField("status", s)}
+                {task.title}
+              </h2>
+            )}
+
+            {/* Status */}
+            <div className="grid grid-cols-[100px_1fr] gap-2 items-center text-sm">
+              <span className="text-gray-500">Status</span>
+              <DropdownMenu.Root>
+                <DropdownMenu.Trigger asChild>
+                  <button
+                    className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium ${STATUS_CONFIG[task.status].bgColor} ${STATUS_CONFIG[task.status].color}`}
                   >
                     <span
-                      className={`w-1.5 h-1.5 rounded-full ${STATUS_CONFIG[s].dotColor}`}
+                      className={`w-1.5 h-1.5 rounded-full ${STATUS_CONFIG[task.status].dotColor}`}
                     />
-                    {STATUS_CONFIG[s].label}
-                  </DropdownMenu.Item>
-                ))}
-              </DropdownMenu.Content>
-            </DropdownMenu.Portal>
-          </DropdownMenu.Root>
+                    {STATUS_CONFIG[task.status].label}
+                  </button>
+                </DropdownMenu.Trigger>
+                <DropdownMenu.Portal>
+                  <DropdownMenu.Content className="bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[140px] z-50">
+                    {STATUS_ORDER.map((s) => (
+                      <DropdownMenu.Item
+                        key={s}
+                        className="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-50 cursor-pointer outline-none"
+                        onSelect={() => updateField("status", s)}
+                      >
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full ${STATUS_CONFIG[s].dotColor}`}
+                        />
+                        {STATUS_CONFIG[s].label}
+                      </DropdownMenu.Item>
+                    ))}
+                  </DropdownMenu.Content>
+                </DropdownMenu.Portal>
+              </DropdownMenu.Root>
 
-          {/* Priority */}
-          <span className="text-gray-500">Priority</span>
-          <DropdownMenu.Root>
-            <DropdownMenu.Trigger asChild>
-              <button
-                className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${PRIORITY_CONFIG[task.priority].color} bg-gray-50 hover:bg-gray-100`}
-              >
-                {PRIORITY_CONFIG[task.priority].icon}{" "}
-                {PRIORITY_CONFIG[task.priority].label}
-              </button>
-            </DropdownMenu.Trigger>
-            <DropdownMenu.Portal>
-              <DropdownMenu.Content className="bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[140px] z-50">
-                {PRIORITY_ORDER.map((p) => (
-                  <DropdownMenu.Item
-                    key={p}
-                    className="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-50 cursor-pointer outline-none"
-                    onSelect={() => updateField("priority", p)}
+              {/* Priority */}
+              <span className="text-gray-500">Priority</span>
+              <DropdownMenu.Root>
+                <DropdownMenu.Trigger asChild>
+                  <button
+                    className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${PRIORITY_CONFIG[task.priority].color} bg-gray-50 hover:bg-gray-100`}
                   >
-                    <span className={PRIORITY_CONFIG[p].color}>
-                      {PRIORITY_CONFIG[p].icon || "—"}
-                    </span>
-                    {PRIORITY_CONFIG[p].label}
-                  </DropdownMenu.Item>
-                ))}
-              </DropdownMenu.Content>
-            </DropdownMenu.Portal>
-          </DropdownMenu.Root>
+                    {PRIORITY_CONFIG[task.priority].icon}{" "}
+                    {PRIORITY_CONFIG[task.priority].label}
+                  </button>
+                </DropdownMenu.Trigger>
+                <DropdownMenu.Portal>
+                  <DropdownMenu.Content className="bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[140px] z-50">
+                    {PRIORITY_ORDER.map((p) => (
+                      <DropdownMenu.Item
+                        key={p}
+                        className="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-50 cursor-pointer outline-none"
+                        onSelect={() => updateField("priority", p)}
+                      >
+                        <span className={PRIORITY_CONFIG[p].color}>
+                          {PRIORITY_CONFIG[p].icon || "—"}
+                        </span>
+                        {PRIORITY_CONFIG[p].label}
+                      </DropdownMenu.Item>
+                    ))}
+                  </DropdownMenu.Content>
+                </DropdownMenu.Portal>
+              </DropdownMenu.Root>
 
-          {/* Due date */}
-          <span className="text-gray-500">Due date</span>
-          <input
-            type="date"
-            value={
-              task.dueDate
-                ? new Date(task.dueDate).toISOString().split("T")[0]
-                : ""
-            }
-            onChange={(e) =>
-              updateField(
-                "due_date",
-                e.target.value ? e.target.value : null
-              )
-            }
-            className={`text-xs px-2 py-1 rounded border border-gray-200 w-fit ${
-              isOverdue(task.dueDate, task.status)
-                ? "text-red-500"
-                : "text-gray-700"
-            }`}
-          />
+              {/* Due date */}
+              <span className="text-gray-500">Due date</span>
+              <input
+                type="date"
+                value={
+                  task.dueDate
+                    ? new Date(task.dueDate).toISOString().split("T")[0]
+                    : ""
+                }
+                onChange={(e) =>
+                  updateField(
+                    "due_date",
+                    e.target.value ? e.target.value : null
+                  )
+                }
+                className={`text-xs px-2 py-1 rounded border border-gray-200 w-fit ${
+                  isOverdue(task.dueDate, task.status)
+                    ? "text-red-500"
+                    : "text-gray-700"
+                }`}
+              />
 
-          {/* Created */}
-          <span className="text-gray-500">Created</span>
-          <span className="text-xs text-gray-600">
-            {formatDate(task.createdAt)}
-          </span>
-        </div>
+              {/* Created */}
+              <span className="text-gray-500">Created</span>
+              <span className="text-xs text-gray-600">
+                {formatDate(task.createdAt)}
+              </span>
+            </div>
 
-        {/* Description */}
-        <div>
-          <span className="text-sm text-gray-500 block mb-1">Description</span>
-          {editingDesc ? (
-            <textarea
-              value={descValue}
-              onChange={(e) => setDescValue(e.target.value)}
-              onBlur={handleDescSave}
-              autoFocus
-              rows={4}
-              className="w-full text-sm border border-gray-200 rounded-lg p-2 outline-none focus:border-blue-400"
-              placeholder="Add a description..."
-            />
-          ) : (
-            <div
-              onClick={() => setEditingDesc(true)}
-              className="text-sm text-gray-700 cursor-pointer hover:bg-gray-50 rounded p-2 -mx-2 min-h-[40px]"
-            >
-              {task.description || (
-                <span className="text-gray-400">Add a description...</span>
+            {/* Description */}
+            <div>
+              <span className="text-sm text-gray-500 block mb-1">Description</span>
+              {editingDesc ? (
+                <textarea
+                  value={descValue}
+                  onChange={(e) => setDescValue(e.target.value)}
+                  onBlur={handleDescSave}
+                  autoFocus
+                  rows={4}
+                  className="w-full text-sm border border-gray-200 rounded-lg p-2 outline-none focus:border-blue-400"
+                  placeholder="Add a description..."
+                />
+              ) : (
+                <div
+                  onClick={() => setEditingDesc(true)}
+                  className="text-sm text-gray-700 cursor-pointer hover:bg-gray-50 rounded p-2 -mx-2 min-h-[40px]"
+                >
+                  {task.description || (
+                    <span className="text-gray-400">Add a description...</span>
+                  )}
+                </div>
               )}
             </div>
-          )}
-        </div>
 
-        {/* Subtasks */}
-        <div>
-          <span className="text-sm text-gray-500 block mb-1">
-            Subtasks ({subtasks.length})
-          </span>
-          {subtasks.length > 0 ? (
-            <div className="space-y-1">
-              {subtasks.map((st) => (
-                <div
-                  key={st.id}
-                  className="flex items-center gap-2 text-sm p-1.5 rounded hover:bg-gray-50"
+            {/* Subtasks */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-sm text-gray-500">
+                  Subtasks ({totalSubtasks})
+                </span>
+                <button
+                  onClick={() => setAddingSubtask(true)}
+                  className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 px-1.5 py-0.5 rounded hover:bg-blue-50"
                 >
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full ${STATUS_CONFIG[st.status].dotColor}`}
-                  />
-                  <span
-                    className={
-                      st.status === "done"
-                        ? "line-through text-gray-400"
-                        : "text-gray-700"
-                    }
-                  >
-                    {st.title}
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-xs text-gray-400">No subtasks</p>
-          )}
-        </div>
-
-        {/* Comments */}
-        <div>
-          <span className="text-sm text-gray-500 block mb-2">
-            Comments ({comments.length})
-          </span>
-          <div className="space-y-3">
-            {comments.map((c) => (
-              <div key={c.id} className="text-sm">
-                <div className="flex items-center gap-2 mb-0.5">
-                  <span className="font-medium text-gray-800">
-                    {c.userName || "User"}
-                  </span>
-                  <span className="text-xs text-gray-400">
-                    {formatDate(c.createdAt)}
-                  </span>
-                </div>
-                <p className="text-gray-600">{c.content}</p>
+                  <Plus size={12} />
+                  Add subtask
+                </button>
               </div>
-            ))}
-          </div>
-          <div className="flex items-center gap-2 mt-3">
-            <input
-              value={newComment}
-              onChange={(e) => setNewComment(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleAddComment();
-              }}
-              placeholder="Add a comment..."
-              className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-1.5 outline-none focus:border-blue-400"
-            />
-            <button
-              onClick={handleAddComment}
-              disabled={!newComment.trim()}
-              className="p-1.5 text-blue-600 hover:bg-blue-50 rounded disabled:text-gray-300"
-            >
-              <Send size={15} />
-            </button>
-          </div>
-        </div>
+              {addingSubtask && (
+                <div className="flex items-center gap-1.5 mb-2">
+                  <input
+                    ref={subtaskInputRef}
+                    value={newSubtaskTitle}
+                    onChange={(e) => setNewSubtaskTitle(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleAddSubtask();
+                      if (e.key === "Escape") {
+                        setAddingSubtask(false);
+                        setNewSubtaskTitle("");
+                      }
+                    }}
+                    placeholder="Subtask title..."
+                    className="flex-1 text-sm border border-gray-200 rounded px-2 py-1 outline-none focus:border-blue-400"
+                  />
+                  <button
+                    onClick={handleAddSubtask}
+                    disabled={!newSubtaskTitle.trim()}
+                    className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300"
+                  >
+                    Add
+                  </button>
+                  <button
+                    onClick={() => {
+                      setAddingSubtask(false);
+                      setNewSubtaskTitle("");
+                    }}
+                    className="p-1 text-gray-400 hover:text-gray-600"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              )}
+              {subtasks.length > 0 ? (
+                <SubtaskTree
+                  subtasks={subtasks}
+                  depth={0}
+                  token={token}
+                  onToggle={handleToggleSubtask}
+                  onSelect={() => {}}
+                />
+              ) : (
+                !addingSubtask && (
+                  <p className="text-xs text-gray-400">No subtasks</p>
+                )
+              )}
+            </div>
+
+            {/* Comments */}
+            <div>
+              <span className="text-sm text-gray-500 block mb-2">
+                Comments ({comments.length})
+              </span>
+              <div className="space-y-3">
+                {comments.map((c) => (
+                  <div key={c.id} className="text-sm">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="font-medium text-gray-800">
+                        {c.userName || "User"}
+                      </span>
+                      <span className="text-xs text-gray-400">
+                        {formatDate(c.createdAt)}
+                      </span>
+                    </div>
+                    <p className="text-gray-600">{c.content}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="flex items-center gap-2 mt-3">
+                <input
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleAddComment();
+                  }}
+                  placeholder="Add a comment..."
+                  className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-1.5 outline-none focus:border-blue-400"
+                />
+                <button
+                  onClick={handleAddComment}
+                  disabled={!newComment.trim()}
+                  className="p-1.5 text-blue-600 hover:bg-blue-50 rounded disabled:text-gray-300"
+                >
+                  <Send size={15} />
+                </button>
+              </div>
+            </div>
+          </>
+        ) : (
+          /* Dependencies Tab */
+          <>
+            {/* Blocked by */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-gray-700">
+                  Blocked by ({blockedBy.length})
+                </span>
+                <button
+                  onClick={() => setAddingDep(true)}
+                  className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 px-1.5 py-0.5 rounded hover:bg-blue-50"
+                >
+                  <Plus size={12} />
+                  Add dependency
+                </button>
+              </div>
+              {addingDep && (
+                <div className="mb-3 p-2 border border-gray-200 rounded-lg space-y-2">
+                  <input
+                    value={depSearchQuery}
+                    onChange={(e) => setDepSearchQuery(e.target.value)}
+                    placeholder="Search tasks..."
+                    autoFocus
+                    className="w-full text-sm border border-gray-200 rounded px-2 py-1 outline-none focus:border-blue-400"
+                  />
+                  <select
+                    value={depType}
+                    onChange={(e) => setDepType(e.target.value as DepType)}
+                    className="text-xs border border-gray-200 rounded px-2 py-1 w-full"
+                  >
+                    {(Object.keys(DEP_TYPE_LABELS) as DepType[]).map((t) => (
+                      <option key={t} value={t}>
+                        {DEP_TYPE_LABELS[t]}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="max-h-[150px] overflow-y-auto space-y-0.5">
+                    {depCandidates.slice(0, 20).map((t) => (
+                      <button
+                        key={t.id}
+                        onClick={() => handleAddDependency(t.id)}
+                        className="w-full text-left px-2 py-1.5 text-sm hover:bg-gray-50 rounded flex items-center gap-2"
+                      >
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full ${STATUS_CONFIG[t.status].dotColor}`}
+                        />
+                        <span className="truncate">{t.title}</span>
+                      </button>
+                    ))}
+                    {depCandidates.length === 0 && (
+                      <p className="text-xs text-gray-400 px-2 py-1">
+                        No matching tasks
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => {
+                      setAddingDep(false);
+                      setDepSearchQuery("");
+                    }}
+                    className="text-xs text-gray-500 hover:text-gray-700"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              )}
+              {blockedBy.length > 0 ? (
+                <div className="space-y-1">
+                  {blockedBy.map((dep) => (
+                    <div
+                      key={dep.dependsOnTaskId}
+                      className="flex items-center gap-2 text-sm p-1.5 rounded hover:bg-gray-50 group"
+                    >
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                          dep.dependsOnStatus
+                            ? STATUS_CONFIG[dep.dependsOnStatus].dotColor
+                            : "bg-gray-400"
+                        }`}
+                      />
+                      <span className="flex-1 truncate text-gray-700">
+                        {dep.dependsOnTitle}
+                      </span>
+                      <span className="text-[10px] text-gray-400 uppercase">
+                        {dep.type}
+                      </span>
+                      <button
+                        onClick={() => handleRemoveDependency(dep.dependsOnTaskId)}
+                        className="p-0.5 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                !addingDep && (
+                  <p className="text-xs text-gray-400">No dependencies</p>
+                )
+              )}
+            </div>
+
+            {/* Blocking others */}
+            <div>
+              <span className="text-sm font-medium text-gray-700 block mb-2">
+                Blocking ({blocking.length})
+              </span>
+              {blocking.length > 0 ? (
+                <div className="space-y-1">
+                  {blocking.map((dep) => (
+                    <div
+                      key={dep.taskId}
+                      className="flex items-center gap-2 text-sm p-1.5 rounded hover:bg-gray-50"
+                    >
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                          dep.blockedStatus
+                            ? STATUS_CONFIG[dep.blockedStatus].dotColor
+                            : "bg-gray-400"
+                        }`}
+                      />
+                      <span className="flex-1 truncate text-gray-700">
+                        {dep.blockedTitle}
+                      </span>
+                      <span className="text-[10px] text-gray-400 uppercase">
+                        {dep.type}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-gray-400">
+                  This task is not blocking any other tasks
+                </p>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -1211,9 +1684,11 @@ export default function TasksPage() {
         <TaskDetailPanel
           task={selectedTask}
           token={token}
+          allTasks={tasks}
           onClose={() => setSelectedTask(null)}
           onUpdate={handleTaskUpdate}
           onDelete={handleTaskDelete}
+          onTaskCreated={handleTaskCreate}
         />
       )}
     </div>

@@ -1233,8 +1233,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 73,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added API endpoints: GET/POST /tasks/:id/subtasks (nested tree up to 5 levels), GET/POST/DELETE /tasks/:id/dependencies. Enhanced TaskDetailPanel with: Add subtask button, nested SubtaskTree with inline checkboxes, Dependencies tab with add/remove, Blocked by indicator. Completing all subtasks does NOT auto-complete parent."
     },
     {
       "id": "US-074",

@@ -505,6 +505,259 @@ export async function tasksRoutes(fastify: FastifyInstance) {
     }
   );
 
+  // GET /tasks/:id/subtasks - Get subtasks (with nested children up to 5 levels)
+  fastify.get<{ Params: { id: string } }>(
+    "/tasks/:id/subtasks",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id } = request.params;
+      if (!UUID_REGEX.test(id)) {
+        return reply.status(400).send({ error: "Invalid task ID" });
+      }
+
+      const [task] = await db
+        .select({ id: tasks.id })
+        .from(tasks)
+        .where(and(eq(tasks.id, id), eq(tasks.orgId, request.user.orgId!)))
+        .limit(1);
+
+      if (!task) {
+        return reply.status(404).send({ error: "Task not found" });
+      }
+
+      // Fetch all tasks in org that have a parentTaskId, then build tree client-side
+      // For efficiency, fetch direct children and recursively up to 5 levels
+      const allOrgTasks = await db
+        .select()
+        .from(tasks)
+        .where(eq(tasks.orgId, request.user.orgId!));
+
+      const buildSubtree = (parentId: string, depth: number): any[] => {
+        if (depth > 5) return [];
+        return allOrgTasks
+          .filter((t) => t.parentTaskId === parentId)
+          .map((t) => ({
+            ...t,
+            children: buildSubtree(t.id, depth + 1),
+          }));
+      };
+
+      const subtasks = buildSubtree(id, 1);
+      return reply.send({ subtasks });
+    }
+  );
+
+  // POST /tasks/:id/subtasks - Create a subtask under a parent
+  fastify.post<{ Params: { id: string }; Body: CreateTaskBody }>(
+    "/tasks/:id/subtasks",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id } = request.params;
+      if (!UUID_REGEX.test(id)) {
+        return reply.status(400).send({ error: "Invalid task ID" });
+      }
+
+      // Verify parent exists
+      const [parent] = await db
+        .select()
+        .from(tasks)
+        .where(and(eq(tasks.id, id), eq(tasks.orgId, request.user.orgId!)))
+        .limit(1);
+
+      if (!parent) {
+        return reply.status(404).send({ error: "Parent task not found" });
+      }
+
+      // Check nesting depth (max 5 levels)
+      let depth = 1;
+      let currentParentId: string | null = parent.parentTaskId;
+      while (currentParentId && depth < 6) {
+        const [ancestor] = await db
+          .select({ parentTaskId: tasks.parentTaskId })
+          .from(tasks)
+          .where(eq(tasks.id, currentParentId))
+          .limit(1);
+        if (!ancestor) break;
+        currentParentId = ancestor.parentTaskId;
+        depth++;
+      }
+
+      if (depth >= 5) {
+        return reply.status(400).send({ error: "Maximum nesting depth (5 levels) exceeded" });
+      }
+
+      const { title, description, status, priority, assignee_ids, due_date } = request.body || {};
+
+      if (!title || typeof title !== "string" || title.trim().length === 0) {
+        return reply.status(400).send({ error: "Title is required" });
+      }
+
+      const [subtask] = await db
+        .insert(tasks)
+        .values({
+          orgId: request.user.orgId!,
+          title: title.trim(),
+          description: description || null,
+          status: status || "todo",
+          priority: priority || "none",
+          assigneeIds: assignee_ids || [],
+          creatorId: request.user.id,
+          dueDate: due_date ? new Date(due_date) : null,
+          parentTaskId: id,
+          customFields: {},
+        })
+        .returning();
+
+      return reply.status(201).send({ task: subtask });
+    }
+  );
+
+  // GET /tasks/:id/dependencies - Get dependencies for a task
+  fastify.get<{ Params: { id: string } }>(
+    "/tasks/:id/dependencies",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id } = request.params;
+      if (!UUID_REGEX.test(id)) {
+        return reply.status(400).send({ error: "Invalid task ID" });
+      }
+
+      const [task] = await db
+        .select({ id: tasks.id })
+        .from(tasks)
+        .where(and(eq(tasks.id, id), eq(tasks.orgId, request.user.orgId!)))
+        .limit(1);
+
+      if (!task) {
+        return reply.status(404).send({ error: "Task not found" });
+      }
+
+      // Get tasks this task depends on (blocking this task)
+      const blockedBy = await db
+        .select({
+          taskId: taskDependencies.taskId,
+          dependsOnTaskId: taskDependencies.dependsOnTaskId,
+          type: taskDependencies.type,
+          dependsOnTitle: tasks.title,
+          dependsOnStatus: tasks.status,
+        })
+        .from(taskDependencies)
+        .innerJoin(tasks, eq(taskDependencies.dependsOnTaskId, tasks.id))
+        .where(eq(taskDependencies.taskId, id));
+
+      // Get tasks that depend on this task (this task blocks them)
+      const blocking = await db
+        .select({
+          taskId: taskDependencies.taskId,
+          dependsOnTaskId: taskDependencies.dependsOnTaskId,
+          type: taskDependencies.type,
+          blockedTitle: tasks.title,
+          blockedStatus: tasks.status,
+        })
+        .from(taskDependencies)
+        .innerJoin(tasks, eq(taskDependencies.taskId, tasks.id))
+        .where(eq(taskDependencies.dependsOnTaskId, id));
+
+      return reply.send({ blockedBy, blocking });
+    }
+  );
+
+  // POST /tasks/:id/dependencies - Add a dependency
+  fastify.post<{
+    Params: { id: string };
+    Body: { depends_on_task_id: string; type?: (typeof VALID_DEP_TYPES)[number] };
+  }>(
+    "/tasks/:id/dependencies",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id } = request.params;
+      if (!UUID_REGEX.test(id)) {
+        return reply.status(400).send({ error: "Invalid task ID" });
+      }
+
+      const { depends_on_task_id, type } = request.body || {};
+      if (!depends_on_task_id || !UUID_REGEX.test(depends_on_task_id)) {
+        return reply.status(400).send({ error: "Valid depends_on_task_id is required" });
+      }
+      if (id === depends_on_task_id) {
+        return reply.status(400).send({ error: "A task cannot depend on itself" });
+      }
+      if (type && !VALID_DEP_TYPES.includes(type)) {
+        return reply.status(400).send({ error: "Invalid dependency type" });
+      }
+
+      // Verify both tasks exist in org
+      const taskRows = await db
+        .select({ id: tasks.id })
+        .from(tasks)
+        .where(
+          and(
+            eq(tasks.orgId, request.user.orgId!),
+            inArray(tasks.id, [id, depends_on_task_id])
+          )
+        );
+
+      if (taskRows.length < 2) {
+        return reply.status(404).send({ error: "One or both tasks not found" });
+      }
+
+      // Check for existing dependency
+      const [existing] = await db
+        .select()
+        .from(taskDependencies)
+        .where(
+          and(
+            eq(taskDependencies.taskId, id),
+            eq(taskDependencies.dependsOnTaskId, depends_on_task_id)
+          )
+        )
+        .limit(1);
+
+      if (existing) {
+        return reply.status(409).send({ error: "Dependency already exists" });
+      }
+
+      const [dep] = await db
+        .insert(taskDependencies)
+        .values({
+          taskId: id,
+          dependsOnTaskId: depends_on_task_id,
+          type: type || "fs",
+        })
+        .returning();
+
+      return reply.status(201).send({ dependency: dep });
+    }
+  );
+
+  // DELETE /tasks/:id/dependencies/:dependsOnId - Remove a dependency
+  fastify.delete<{ Params: { id: string; dependsOnId: string } }>(
+    "/tasks/:id/dependencies/:dependsOnId",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id, dependsOnId } = request.params;
+      if (!UUID_REGEX.test(id) || !UUID_REGEX.test(dependsOnId)) {
+        return reply.status(400).send({ error: "Invalid task ID" });
+      }
+
+      const deleted = await db
+        .delete(taskDependencies)
+        .where(
+          and(
+            eq(taskDependencies.taskId, id),
+            eq(taskDependencies.dependsOnTaskId, dependsOnId)
+          )
+        )
+        .returning();
+
+      if (deleted.length === 0) {
+        return reply.status(404).send({ error: "Dependency not found" });
+      }
+
+      return reply.send({ success: true });
+    }
+  );
+
   // Task Lists CRUD
   // POST /task-lists - Create a task list
   fastify.post<{ Body: { name: string; settings?: Record<string, unknown> } }>(
