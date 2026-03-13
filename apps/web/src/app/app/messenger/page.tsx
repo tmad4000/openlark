@@ -1548,6 +1548,8 @@ function ChatView({
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [scheduledMessages, setScheduledMessages] = useState<Message[]>([]);
+  const [showScheduledMessages, setShowScheduledMessages] = useState(false);
 
   // Read receipts tracking
   const [messageReadStatus, setMessageReadStatus] = useState<Record<string, { totalMembers: number; readCount: number }>>({});
@@ -2513,6 +2515,43 @@ function ChatView({
     setTranslatingMessageIds(new Set());
   }, [chat.id, loadMessages, loadPinnedMessages, loadFavorites, loadTabs, loadAnnouncements, loadTranslationPrefs]);
 
+  // Fetch scheduled messages for this chat
+  const fetchScheduledMessages = useCallback(async () => {
+    const token = getCookie("session_token");
+    if (!token) return;
+    try {
+      const res = await fetch(`/api/chats/${chat.id}/scheduled-messages`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setScheduledMessages(data);
+      }
+    } catch {
+      // ignore
+    }
+  }, [chat.id]);
+
+  useEffect(() => {
+    fetchScheduledMessages();
+  }, [fetchScheduledMessages]);
+
+  const cancelScheduledMsg = useCallback(async (messageId: string) => {
+    const token = getCookie("session_token");
+    if (!token) return;
+    try {
+      const res = await fetch(`/api/messages/${messageId}/scheduled`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        setScheduledMessages((prev) => prev.filter((m) => m.id !== messageId));
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
   // Extract shared files and docs when messages change
   useEffect(() => {
     if (messages.length > 0) {
@@ -2710,7 +2749,7 @@ function ChatView({
   }, [isLoadingMore, hasMore, nextCursor, loadMessages]);
 
   // Send message with optimistic UI
-  const handleSendMessage = useCallback(async (content: { html: string; text: string; mentions?: Array<{ id: string; displayName: string }> }) => {
+  const handleSendMessage = useCallback(async (content: { html: string; text: string; mentions?: Array<{ id: string; displayName: string }>; scheduledFor?: string }) => {
     const text = content.text.trim();
     if (!text) return;
 
@@ -2723,6 +2762,35 @@ function ChatView({
     const messageContent = hasFormatting
       ? { html: content.html, text: content.text, mentions: content.mentions }
       : { text, mentions: content.mentions };
+
+    // For scheduled messages, skip optimistic UI - just send to API
+    if (content.scheduledFor) {
+      try {
+        const res = await fetch(`/api/chats/${chat.id}/messages`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            type: messageType,
+            content: messageContent,
+            scheduled_for: content.scheduledFor,
+          }),
+        });
+
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error || "Failed to schedule message");
+        }
+
+        // Refresh scheduled messages list
+        fetchScheduledMessages();
+      } catch (err) {
+        console.error("Failed to schedule message:", err);
+      }
+      return;
+    }
 
     // Create optimistic pending message
     const tempId = `pending-${Date.now()}-${Math.random().toString(36).substring(2)}`;
@@ -2784,7 +2852,7 @@ function ChatView({
     } finally {
       setIsSending(false);
     }
-  }, [chat.id, currentUserId, scrollToBottom]);
+  }, [chat.id, currentUserId, scrollToBottom, fetchScheduledMessages]);
 
   // Combine regular messages with pending messages for display
   const allMessages = useMemo(() => {
@@ -3447,6 +3515,48 @@ function ChatView({
 
       {/* Typing Indicator - only show on chat tab */}
       {activeTab === "chat" && <TypingIndicator typingUsers={typingUsers} />}
+
+      {/* Scheduled Messages Banner */}
+      {activeTab === "chat" && scheduledMessages.length > 0 && (
+        <div className="flex-shrink-0 bg-amber-50 border-t border-amber-200 px-4 py-2">
+          <button
+            type="button"
+            onClick={() => setShowScheduledMessages(!showScheduledMessages)}
+            className="flex items-center gap-2 text-sm text-amber-700 hover:text-amber-800 font-medium"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            {scheduledMessages.length} scheduled message{scheduledMessages.length !== 1 ? "s" : ""}
+          </button>
+          {showScheduledMessages && (
+            <div className="mt-2 space-y-2">
+              {scheduledMessages.map((msg) => {
+                const msgContent = msg.content as Record<string, unknown>;
+                const preview = typeof msgContent.text === "string" ? msgContent.text : typeof msgContent.html === "string" ? (msgContent.html as string).replace(/<[^>]*>/g, "").substring(0, 80) : "Message";
+                const scheduledDate = msg.scheduledFor ? new Date(msg.scheduledFor) : null;
+                return (
+                  <div key={msg.id} className="flex items-center justify-between bg-white rounded-md border border-amber-200 px-3 py-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-gray-700 truncate">{preview}</p>
+                      {scheduledDate && (
+                        <p className="text-xs text-amber-600 mt-0.5">
+                          Scheduled for {scheduledDate.toLocaleDateString()} at {scheduledDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => cancelScheduledMsg(msg.id)}
+                      className="ml-2 px-2 py-1 text-xs text-red-600 hover:bg-red-50 rounded transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Message Input - only show on chat tab */}
       {activeTab === "chat" && (

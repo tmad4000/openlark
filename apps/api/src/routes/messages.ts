@@ -2,7 +2,7 @@ import { FastifyInstance } from "fastify";
 import { db } from "../db";
 import { messages, chatMembers, chats, users, messageReadReceipts, messageReactions, favorites, buzzNotifications, documents, documentPermissions } from "../db/schema";
 import { randomUUID } from "crypto";
-import { eq, and, desc, lt, gt, gte, inArray, sql } from "drizzle-orm";
+import { eq, and, desc, lt, gt, gte, inArray, sql, isNotNull } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
 import { publish, getChatChannel, getUserPresenceChannel } from "../lib/redis";
 import {
@@ -12,6 +12,7 @@ import {
   createBuzzNotification,
 } from "../lib/notifications";
 import { dispatchWebhookEvent } from "../lib/webhook-worker";
+import { queueScheduledMessage, cancelScheduledMessage } from "../lib/scheduled-messages-worker";
 
 // UUID validation regex
 const UUID_REGEX =
@@ -22,6 +23,7 @@ interface SendMessageBody {
   content: Record<string, unknown>;
   thread_id?: string;
   reply_to_id?: string;
+  scheduled_for?: string;
 }
 
 interface GetMessagesQuery {
@@ -83,7 +85,7 @@ export async function messagesRoutes(fastify: FastifyInstance) {
     { preHandler: authMiddleware },
     async (request, reply) => {
       const { id: chatId } = request.params;
-      const { type, content, thread_id, reply_to_id } = request.body;
+      const { type, content, thread_id, reply_to_id, scheduled_for } = request.body;
 
       // Validate chatId format
       if (!UUID_REGEX.test(chatId)) {
@@ -184,6 +186,22 @@ export async function messagesRoutes(fastify: FastifyInstance) {
         }
       }
 
+      // Validate scheduled_for if provided
+      let scheduledForDate: Date | null = null;
+      if (scheduled_for) {
+        scheduledForDate = new Date(scheduled_for);
+        if (isNaN(scheduledForDate.getTime())) {
+          return reply.status(400).send({
+            error: "Invalid scheduled_for date format",
+          });
+        }
+        if (scheduledForDate.getTime() <= Date.now()) {
+          return reply.status(400).send({
+            error: "scheduled_for must be in the future",
+          });
+        }
+      }
+
       // Create the message
       const [newMessage] = await db
         .insert(messages)
@@ -194,8 +212,22 @@ export async function messagesRoutes(fastify: FastifyInstance) {
           content,
           threadId: thread_id || null,
           replyToId: reply_to_id || null,
+          scheduledFor: scheduledForDate,
         })
         .returning();
+
+      // If this is a scheduled message, queue it for later delivery and return
+      if (scheduledForDate) {
+        await queueScheduledMessage(newMessage.id, scheduledForDate);
+        return reply.status(201).send({
+          ...newMessage,
+          sender: {
+            id: request.user.id,
+            displayName: request.user.displayName,
+            avatarUrl: request.user.avatarUrl,
+          },
+        });
+      }
 
       // Update sender's last_read_message_id
       await db
@@ -2448,6 +2480,179 @@ export async function messagesRoutes(fastify: FastifyInstance) {
           content: docHtml,
         },
       });
+    }
+  );
+
+  /**
+   * GET /chats/:id/scheduled-messages - Get scheduled messages for a chat
+   */
+  fastify.get<{
+    Params: { id: string };
+  }>(
+    "/chats/:id/scheduled-messages",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id: chatId } = request.params;
+      const currentUserId = request.user.id;
+
+      if (!UUID_REGEX.test(chatId)) {
+        return reply.status(400).send({ error: "Invalid chat ID format" });
+      }
+
+      // Check user is a member
+      const isMember = await isChatMember(chatId, currentUserId);
+      if (!isMember) {
+        return reply.status(403).send({ error: "You are not a member of this chat" });
+      }
+
+      // Get scheduled messages for this user in this chat
+      const scheduled = await db
+        .select()
+        .from(messages)
+        .where(
+          and(
+            eq(messages.chatId, chatId),
+            eq(messages.senderId, currentUserId),
+            isNotNull(messages.scheduledFor)
+          )
+        )
+        .orderBy(messages.scheduledFor);
+
+      const sender = {
+        id: request.user.id,
+        displayName: request.user.displayName,
+        avatarUrl: request.user.avatarUrl,
+      };
+
+      return reply.send(
+        scheduled.map((m) => ({ ...m, sender }))
+      );
+    }
+  );
+
+  /**
+   * PUT /messages/:id/scheduled - Update a scheduled message (content or time)
+   */
+  fastify.put<{
+    Params: { id: string };
+    Body: {
+      content?: Record<string, unknown>;
+      scheduled_for?: string;
+    };
+  }>(
+    "/messages/:id/scheduled",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id: messageId } = request.params;
+      const { content, scheduled_for } = request.body;
+      const currentUserId = request.user.id;
+
+      if (!UUID_REGEX.test(messageId)) {
+        return reply.status(400).send({ error: "Invalid message ID format" });
+      }
+
+      // Fetch the message
+      const [msg] = await db
+        .select()
+        .from(messages)
+        .where(eq(messages.id, messageId))
+        .limit(1);
+
+      if (!msg) {
+        return reply.status(404).send({ error: "Message not found" });
+      }
+
+      if (msg.senderId !== currentUserId) {
+        return reply.status(403).send({ error: "You can only edit your own scheduled messages" });
+      }
+
+      if (!msg.scheduledFor) {
+        return reply.status(400).send({ error: "Message is not scheduled" });
+      }
+
+      const updates: Record<string, unknown> = {};
+
+      if (content && typeof content === "object") {
+        updates.content = content;
+      }
+
+      if (scheduled_for) {
+        const newDate = new Date(scheduled_for);
+        if (isNaN(newDate.getTime())) {
+          return reply.status(400).send({ error: "Invalid scheduled_for date format" });
+        }
+        if (newDate.getTime() <= Date.now()) {
+          return reply.status(400).send({ error: "scheduled_for must be in the future" });
+        }
+        updates.scheduledFor = newDate;
+
+        // Cancel old job and queue new one
+        await cancelScheduledMessage(messageId);
+        await queueScheduledMessage(messageId, newDate);
+      }
+
+      if (Object.keys(updates).length === 0) {
+        return reply.status(400).send({ error: "No updates provided" });
+      }
+
+      const [updated] = await db
+        .update(messages)
+        .set(updates)
+        .where(eq(messages.id, messageId))
+        .returning();
+
+      return reply.send({
+        ...updated,
+        sender: {
+          id: request.user.id,
+          displayName: request.user.displayName,
+          avatarUrl: request.user.avatarUrl,
+        },
+      });
+    }
+  );
+
+  /**
+   * DELETE /messages/:id/scheduled - Cancel a scheduled message
+   */
+  fastify.delete<{
+    Params: { id: string };
+  }>(
+    "/messages/:id/scheduled",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id: messageId } = request.params;
+      const currentUserId = request.user.id;
+
+      if (!UUID_REGEX.test(messageId)) {
+        return reply.status(400).send({ error: "Invalid message ID format" });
+      }
+
+      const [msg] = await db
+        .select()
+        .from(messages)
+        .where(eq(messages.id, messageId))
+        .limit(1);
+
+      if (!msg) {
+        return reply.status(404).send({ error: "Message not found" });
+      }
+
+      if (msg.senderId !== currentUserId) {
+        return reply.status(403).send({ error: "You can only cancel your own scheduled messages" });
+      }
+
+      if (!msg.scheduledFor) {
+        return reply.status(400).send({ error: "Message is not scheduled" });
+      }
+
+      // Cancel the BullMQ job
+      await cancelScheduledMessage(messageId);
+
+      // Delete the message record
+      await db.delete(messages).where(eq(messages.id, messageId));
+
+      return reply.send({ success: true });
     }
   );
 }

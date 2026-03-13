@@ -28,6 +28,8 @@ import {
   ChevronUp,
   ChevronDown,
   X,
+  Clock,
+  ChevronRight,
 } from "lucide-react";
 import data from "@emoji-mart/data";
 import Picker from "@emoji-mart/react";
@@ -43,7 +45,7 @@ export interface MentionUser {
 }
 
 interface MessageInputProps {
-  onSend: (content: { html: string; text: string; mentions?: Array<{ id: string; displayName: string }> }) => void;
+  onSend: (content: { html: string; text: string; mentions?: Array<{ id: string; displayName: string }>; scheduledFor?: string }) => void;
   onTypingStart?: () => void;
   onTypingStop?: () => void;
   isSending?: boolean;
@@ -329,8 +331,13 @@ export default function MessageInput({
   const [showToolbar, setShowToolbar] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showLinkDialog, setShowLinkDialog] = useState(false);
+  const [showScheduleMenu, setShowScheduleMenu] = useState(false);
+  const [showSchedulePicker, setShowSchedulePicker] = useState(false);
+  const [scheduleDate, setScheduleDate] = useState("");
+  const [scheduleTime, setScheduleTime] = useState("");
   const emojiPickerRef = useRef<HTMLDivElement>(null);
   const emojiButtonRef = useRef<HTMLButtonElement>(null);
+  const scheduleMenuRef = useRef<HTMLDivElement>(null);
 
   // Track typing state for debounced events
   const isTypingRef = useRef(false);
@@ -511,7 +518,7 @@ export default function MessageInput({
     return mentions;
   }, [editor]);
 
-  const handleSend = useCallback(() => {
+  const handleSend = useCallback((scheduledFor?: string) => {
     if (!editor || isSending) return;
 
     const html = editor.getHTML();
@@ -532,9 +539,35 @@ export default function MessageInput({
     // Extract mentions from the content
     const mentions = extractMentions();
 
-    onSend({ html, text, mentions: mentions.length > 0 ? mentions : undefined });
+    onSend({ html, text, mentions: mentions.length > 0 ? mentions : undefined, scheduledFor });
     editor.commands.clearContent();
+    setShowScheduleMenu(false);
+    setShowSchedulePicker(false);
   }, [editor, isSending, onSend, onTypingStop, extractMentions]);
+
+  const handleScheduleSubmit = useCallback(() => {
+    if (!scheduleDate || !scheduleTime) return;
+    const scheduledFor = new Date(`${scheduleDate}T${scheduleTime}`).toISOString();
+    handleSend(scheduledFor);
+    setScheduleDate("");
+    setScheduleTime("");
+  }, [scheduleDate, scheduleTime, handleSend]);
+
+  // Close schedule menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        (showScheduleMenu || showSchedulePicker) &&
+        scheduleMenuRef.current &&
+        !scheduleMenuRef.current.contains(event.target as Node)
+      ) {
+        setShowScheduleMenu(false);
+        setShowSchedulePicker(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showScheduleMenu, showSchedulePicker]);
 
   const handleEmojiSelect = useCallback(
     (emoji: EmojiData) => {
@@ -744,16 +777,133 @@ export default function MessageInput({
             </button>
           </div>
 
-          {/* Send Button */}
-          <button
-            type="button"
-            onClick={handleSend}
-            disabled={isEmpty || isSending}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            <Send className="w-4 h-4" />
-            <span>{submitLabel}</span>
-          </button>
+          {/* Send Button with Schedule Dropdown */}
+          <div className="relative flex items-center" ref={scheduleMenuRef}>
+            <button
+              type="button"
+              onClick={() => handleSend()}
+              disabled={isEmpty || isSending}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-l-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <Send className="w-4 h-4" />
+              <span>{submitLabel}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setShowScheduleMenu(!showScheduleMenu);
+                setShowSchedulePicker(false);
+              }}
+              disabled={isEmpty || isSending}
+              className="flex items-center px-1.5 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-r-md border-l border-blue-500 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronRight className="w-3 h-3 rotate-90" />
+            </button>
+
+            {/* Schedule Menu Dropdown */}
+            {showScheduleMenu && (
+              <div className="absolute bottom-full right-0 mb-2 bg-white border border-gray-200 rounded-lg shadow-lg z-30 min-w-[220px]">
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Schedule for 1 hour from now
+                    const d = new Date(Date.now() + 60 * 60 * 1000);
+                    handleSend(d.toISOString());
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  <Clock className="w-4 h-4 text-gray-400" />
+                  <span>In 1 hour</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Schedule for tomorrow 9am
+                    const d = new Date();
+                    d.setDate(d.getDate() + 1);
+                    d.setHours(9, 0, 0, 0);
+                    handleSend(d.toISOString());
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  <Clock className="w-4 h-4 text-gray-400" />
+                  <span>Tomorrow at 9:00 AM</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Schedule for next Monday 9am
+                    const d = new Date();
+                    const day = d.getDay();
+                    const daysUntilMonday = day === 0 ? 1 : 8 - day;
+                    d.setDate(d.getDate() + daysUntilMonday);
+                    d.setHours(9, 0, 0, 0);
+                    handleSend(d.toISOString());
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  <Clock className="w-4 h-4 text-gray-400" />
+                  <span>Next Monday at 9:00 AM</span>
+                </button>
+                <div className="border-t border-gray-100" />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowScheduleMenu(false);
+                    setShowSchedulePicker(true);
+                    // Pre-fill with tomorrow
+                    const tomorrow = new Date();
+                    tomorrow.setDate(tomorrow.getDate() + 1);
+                    setScheduleDate(tomorrow.toISOString().split("T")[0]);
+                    setScheduleTime("09:00");
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  <Clock className="w-4 h-4 text-gray-400" />
+                  <span>Choose date and time...</span>
+                </button>
+              </div>
+            )}
+
+            {/* Custom Date/Time Picker */}
+            {showSchedulePicker && (
+              <div className="absolute bottom-full right-0 mb-2 bg-white border border-gray-200 rounded-lg shadow-lg z-30 p-3 min-w-[260px]">
+                <div className="text-sm font-medium text-gray-700 mb-2">Schedule message</div>
+                <div className="flex flex-col gap-2">
+                  <input
+                    type="date"
+                    value={scheduleDate}
+                    onChange={(e) => setScheduleDate(e.target.value)}
+                    min={new Date().toISOString().split("T")[0]}
+                    className="px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <input
+                    type="time"
+                    value={scheduleTime}
+                    onChange={(e) => setScheduleTime(e.target.value)}
+                    className="px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <div className="flex items-center gap-2 mt-1">
+                    <button
+                      type="button"
+                      onClick={() => setShowSchedulePicker(false)}
+                      className="flex-1 px-3 py-1.5 text-sm text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleScheduleSubmit}
+                      disabled={!scheduleDate || !scheduleTime}
+                      className="flex-1 px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Schedule
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Helper Text */}

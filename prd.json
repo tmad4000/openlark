@@ -1760,7 +1760,7 @@
       ],
       "priority": 104,
       "passes": true,
-      "notes": "Created apps/api/src/routes/bot-messaging.ts. POST /auth/app_access_token for client_credentials grant (app_id + app_secret → app_access_token, 2h TTL). POST /api/v1/messages/send with Bearer app_access_token auth, supports msg_type: text, rich_text, interactive (card JSON with header, elements: text/image/divider/action blocks, action buttons with action_id and value). POST /api/v1/messages/update to update previously sent card messages. POST /api/v1/card/action for card action callbacks — dispatches signed payload to app's webhook_url with HMAC-SHA256 signature. Bot messages use deterministic sender ID derived from app ID. Typecheck passes."
+      "notes": "Created apps/api/src/routes/bot-messaging.ts. POST /auth/app_access_token for client_credentials grant (app_id + app_secret \u2192 app_access_token, 2h TTL). POST /api/v1/messages/send with Bearer app_access_token auth, supports msg_type: text, rich_text, interactive (card JSON with header, elements: text/image/divider/action blocks, action buttons with action_id and value). POST /api/v1/messages/update to update previously sent card messages. POST /api/v1/card/action for card action callbacks \u2014 dispatches signed payload to app's webhook_url with HMAC-SHA256 signature. Bot messages use deterministic sender ID derived from app ID. Typecheck passes."
     },
     {
       "id": "US-105",
@@ -1883,7 +1883,7 @@
       ],
       "priority": 111,
       "passes": true,
-      "notes": "Created docker-compose.prod.yml with all 9 services: web, api, worker, collab, livekit, redis, postgres, minio, nginx. Multi-stage Dockerfiles for web (standalone Next.js), api (tsc build), and collab (tsc build) — all use node:20-alpine with non-root user. Root .env.example documents all required vars (POSTGRES_PASSWORD, JWT_SECRET, REDIS_PASSWORD, S3, LiveKit, optional SMTP/AI/translation). Health checks on all services: postgres (pg_isready), redis (redis-cli ping), minio (mc ready), livekit (wget), api (/health), worker (/health), collab (separate health port 1235), web (wget /), nginx (/nginx-health). Nginx reverse proxy routes: / → web, /api/ → api, /collab/ → collab, /livekit/ → livekit. Updated next.config.js with standalone output mode and configurable API URL. Added HTTP health server to collab alongside Hocuspocus WebSocket server. Typecheck passes."
+      "notes": "Created docker-compose.prod.yml with all 9 services: web, api, worker, collab, livekit, redis, postgres, minio, nginx. Multi-stage Dockerfiles for web (standalone Next.js), api (tsc build), and collab (tsc build) \u2014 all use node:20-alpine with non-root user. Root .env.example documents all required vars (POSTGRES_PASSWORD, JWT_SECRET, REDIS_PASSWORD, S3, LiveKit, optional SMTP/AI/translation). Health checks on all services: postgres (pg_isready), redis (redis-cli ping), minio (mc ready), livekit (wget), api (/health), worker (/health), collab (separate health port 1235), web (wget /), nginx (/nginx-health). Nginx reverse proxy routes: / \u2192 web, /api/ \u2192 api, /collab/ \u2192 collab, /livekit/ \u2192 livekit. Updated next.config.js with standalone output mode and configurable API URL. Added HTTP health server to collab alongside Hocuspocus WebSocket server. Typecheck passes."
     },
     {
       "id": "US-112",
@@ -1900,7 +1900,7 @@
       ],
       "priority": 112,
       "passes": true,
-      "notes": "Created sso_configs table (id, org_id, provider enum, metadata_url, entity_id, sso_url, certificate, enabled, timestamps) with org_id index. Admin CRUD API: GET/POST /admin/sso, PUT/DELETE /admin/sso/:configId — all require admin role. SP-initiated flow: GET /auth/saml/login?org_id builds SAML AuthnRequest and redirects to IdP SSO URL via HTTP-Redirect binding. IdP callback: POST /auth/saml/callback decodes base64 SAML response, extracts email from NameID or attributes, matches org via RelayState or issuer entity ID, auto-creates user (no password) or links existing user to org, creates session, redirects to /auth/sso-callback with token. Admin console SSO tab with full SAML config form (metadata URL, entity ID, SSO URL, certificate, enable toggle), config list with enable/disable/edit/delete, SP info display. SSO callback page stores token in cookie and redirects to app. Lightweight XML parsing — no external SAML library dependency. Typecheck passes."
+      "notes": "Created sso_configs table (id, org_id, provider enum, metadata_url, entity_id, sso_url, certificate, enabled, timestamps) with org_id index. Admin CRUD API: GET/POST /admin/sso, PUT/DELETE /admin/sso/:configId \u2014 all require admin role. SP-initiated flow: GET /auth/saml/login?org_id builds SAML AuthnRequest and redirects to IdP SSO URL via HTTP-Redirect binding. IdP callback: POST /auth/saml/callback decodes base64 SAML response, extracts email from NameID or attributes, matches org via RelayState or issuer entity ID, auto-creates user (no password) or links existing user to org, creates session, redirects to /auth/sso-callback with token. Admin console SSO tab with full SAML config form (metadata URL, entity ID, SSO URL, certificate, enable toggle), config list with enable/disable/edit/delete, SP info display. SSO callback page stores token in cookie and redirects to app. Lightweight XML parsing \u2014 no external SAML library dependency. Typecheck passes."
     },
     {
       "id": "US-113",
@@ -1965,8 +1965,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 116,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created scheduled-messages-worker.ts with BullMQ delayed jobs for message delivery at scheduled time. Modified POST /chats/:id/messages to accept scheduled_for parameter, storing message with scheduledFor timestamp and queueing a delayed BullMQ job. Added GET /chats/:id/scheduled-messages, PUT /messages/:id/scheduled (edit content/time), DELETE /messages/:id/scheduled (cancel) endpoints. Worker handles full message delivery flow: clears scheduledFor, publishes to Redis for real-time delivery, sends notifications and webhook events. Updated MessageInput with send button dropdown offering quick schedule options (1 hour, tomorrow 9am, next Monday 9am) and custom date/time picker. Added scheduled messages banner in chat view showing pending scheduled messages with cancel option. Registered worker in index.ts startup/shutdown. All typechecks pass."
     },
     {
       "id": "US-117",

@@ -116,3 +116,4 @@
 [2026-03-14 04:45] US-113 — Base - Calendar and Gantt views — PASS
 [2026-03-13 12:00] US-114 — Base - Gallery view — PASS
 [2026-03-14 05:30] US-115 — Export messages to document — PASS
+[2026-03-14 06:15] US-116 — Scheduled messages — PASS
