@@ -9,7 +9,7 @@ import { MessageInput } from "@/components/messenger/message-input";
 import { CreateChatDialog } from "@/components/messenger/create-chat-dialog";
 import { AppShell } from "@/components/layout/app-shell";
 import { cn } from "@/lib/utils";
-import { MessageSquare, Wifi, WifiOff } from "lucide-react";
+import { MessageSquare, Wifi, WifiOff, Loader2 } from "lucide-react";
 import type { Chat } from "@/lib/api";
 
 export default function MessengerPage() {
@@ -76,12 +76,21 @@ export default function MessengerPage() {
               <div
                 className={cn(
                   "flex items-center gap-1 text-xs",
-                  isConnected ? "text-green-600 dark:text-green-400" : "text-gray-400 dark:text-gray-500"
+                  isConnected
+                    ? "text-green-600 dark:text-green-400"
+                    : wsStatus === "reconnecting"
+                      ? "text-yellow-500 dark:text-yellow-400"
+                      : "text-gray-400 dark:text-gray-500"
                 )}
                 title={isConnected ? "Connected" : `Status: ${wsStatus}`}
               >
                 {isConnected ? (
                   <Wifi className="h-3 w-3" />
+                ) : wsStatus === "reconnecting" ? (
+                  <>
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    <span>Reconnecting</span>
+                  </>
                 ) : (
                   <WifiOff className="h-3 w-3" />
                 )}
@@ -115,13 +124,22 @@ export default function MessengerPage() {
             <div
               className={cn(
                 "mt-4 flex items-center justify-center gap-2 text-xs",
-                isConnected ? "text-green-600 dark:text-green-400" : "text-gray-400 dark:text-gray-500"
+                isConnected
+                  ? "text-green-600 dark:text-green-400"
+                  : wsStatus === "reconnecting"
+                    ? "text-yellow-500 dark:text-yellow-400"
+                    : "text-gray-400 dark:text-gray-500"
               )}
             >
               {isConnected ? (
                 <>
                   <Wifi className="h-3 w-3" />
                   <span>Real-time connected</span>
+                </>
+              ) : wsStatus === "reconnecting" ? (
+                <>
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  <span>Reconnecting...</span>
                 </>
               ) : (
                 <>

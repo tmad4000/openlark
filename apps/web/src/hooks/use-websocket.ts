@@ -5,7 +5,7 @@ import { api, type Message } from "@/lib/api";
 
 const WS_BASE_URL = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:3001";
 
-export type WebSocketStatus = "connecting" | "connected" | "disconnected" | "error";
+export type WebSocketStatus = "connecting" | "connected" | "disconnected" | "reconnecting" | "error";
 
 export interface WebSocketMessage {
   type: string;
@@ -73,7 +73,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
       wsRef.current.close();
     }
 
-    setStatus("connecting");
+    setStatus(reconnectAttempts.current > 0 ? "reconnecting" : "connecting");
 
     const wsUrl = `${WS_BASE_URL}/api/v1/messenger/ws?token=${encodeURIComponent(token)}`;
     const ws = new WebSocket(wsUrl);

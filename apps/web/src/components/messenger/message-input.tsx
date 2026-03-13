@@ -3,6 +3,8 @@
 import { useState, useCallback, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { api } from "@/lib/api";
+import { useAuth } from "@/hooks/use-auth";
+import { MessageList } from "./message-list";
 import {
   Send,
   Loader2,
@@ -38,6 +40,7 @@ export function MessageInput({
   onMessageSent,
   disabled,
 }: MessageInputProps) {
+  const { user } = useAuth();
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showToolbar, setShowToolbar] = useState(false);
@@ -96,13 +99,33 @@ export function MessageInput({
     const text = editor.getText().trim();
     if (!text) return;
 
+    // Optimistic UI: show message immediately
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const optimisticMessage = {
+      id: tempId,
+      chatId,
+      senderId: user?.id || "",
+      type: "text",
+      contentJson: { text },
+      createdAt: new Date().toISOString(),
+      editedAt: null,
+      recalledAt: null,
+      _tempId: tempId,
+      _pending: true,
+    };
+    MessageList.addMessage(optimisticMessage);
+    editor.commands.clearContent();
+
     try {
       setIsSending(true);
       setError(null);
-      await api.sendMessage(chatId, { content: text });
-      editor.commands.clearContent();
+      const { message } = await api.sendMessage(chatId, { content: text });
+      // Replace optimistic message with confirmed one
+      MessageList.confirmMessage(tempId, message);
       onMessageSent?.();
     } catch (err) {
+      // Mark the optimistic message as failed
+      MessageList.failMessage(tempId);
       setError(err instanceof Error ? err.message : "Failed to send message");
     } finally {
       setIsSending(false);

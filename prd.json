@@ -422,8 +422,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 26,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "WebSocket hook connects on mount with auth token and exponential backoff reconnection (max 5 attempts, 30s cap). Real-time message delivery via Redis pub/sub. Optimistic UI: messages appear instantly with pending indicator, confirmed on API ACK, marked failed on error. Connection status indicator shows connected (green), reconnecting (yellow spinner), or disconnected states. Added reconnecting status to WebSocketStatus type."
     },
     {
       "id": "US-027",

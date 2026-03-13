@@ -4,7 +4,14 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import { api, type Message } from "@/lib/api";
 import { useAuth } from "@/hooks/use-auth";
-import { Loader2 } from "lucide-react";
+import { Loader2, Clock, AlertCircle } from "lucide-react";
+
+// Extended message type for optimistic updates
+export interface OptimisticMessage extends Message {
+  _tempId?: string;
+  _pending?: boolean;
+  _failed?: boolean;
+}
 
 // Map of userId to display name for sender lookup
 type SenderMap = Map<string, { displayName: string | null; avatarUrl: string | null }>;
@@ -16,7 +23,7 @@ interface MessageListProps {
 
 export function MessageList({ chatId, onMessagesLoaded }: MessageListProps) {
   const { user } = useAuth();
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<OptimisticMessage[]>([]);
   const [senderMap, setSenderMap] = useState<SenderMap>(new Map());
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -114,10 +121,24 @@ export function MessageList({ chatId, onMessagesLoaded }: MessageListProps) {
   }, [hasMore, isLoadingMore, loadMoreMessages]);
 
   // Add a new message (called from parent/WebSocket)
-  const addMessage = useCallback((message: Message) => {
+  const addMessage = useCallback((message: OptimisticMessage) => {
     setMessages((prev) => {
-      // Avoid duplicates
+      // Avoid duplicates by real ID
       if (prev.some((m) => m.id === message.id)) return prev;
+
+      // If this is a real message from WS, check if there's a pending optimistic
+      // message from the same sender that should be replaced
+      if (!message._tempId) {
+        const pendingIdx = prev.findIndex(
+          (m) => m._pending && m.senderId === message.senderId
+        );
+        if (pendingIdx !== -1) {
+          const updated = [...prev];
+          updated[pendingIdx] = message;
+          return updated;
+        }
+      }
+
       return [...prev, message];
     });
   }, []);
@@ -134,10 +155,34 @@ export function MessageList({ chatId, onMessagesLoaded }: MessageListProps) {
     setMessages((prev) => prev.filter((m) => m.id !== messageId));
   }, []);
 
+  // Replace an optimistic message with the confirmed one from API
+  const confirmMessage = useCallback((tempId: string, realMessage: Message) => {
+    setMessages((prev) =>
+      prev.map((m) => (m._tempId === tempId ? realMessage : m))
+    );
+  }, []);
+
+  // Mark an optimistic message as failed
+  const failMessage = useCallback((tempId: string) => {
+    setMessages((prev) =>
+      prev.map((m) =>
+        m._tempId === tempId ? { ...m, _pending: false, _failed: true } : m
+      )
+    );
+  }, []);
+
+  // Remove an optimistic message (e.g. after retry sends a new one)
+  const removeOptimisticMessage = useCallback((tempId: string) => {
+    setMessages((prev) => prev.filter((m) => m._tempId !== tempId));
+  }, []);
+
   // Expose methods for parent components
   MessageList.addMessage = addMessage;
   MessageList.updateMessage = updateMessage;
   MessageList.removeMessage = removeMessage;
+  MessageList.confirmMessage = confirmMessage;
+  MessageList.failMessage = failMessage;
+  MessageList.removeOptimisticMessage = removeOptimisticMessage;
 
   if (isLoading) {
     return (
@@ -207,12 +252,15 @@ export function MessageList({ chatId, onMessagesLoaded }: MessageListProps) {
 }
 
 // Static methods for external updates
-MessageList.addMessage = (_message: Message) => {};
+MessageList.addMessage = (_message: OptimisticMessage) => {};
 MessageList.updateMessage = (_message: Message) => {};
 MessageList.removeMessage = (_messageId: string) => {};
+MessageList.confirmMessage = (_tempId: string, _realMessage: Message) => {};
+MessageList.failMessage = (_tempId: string) => {};
+MessageList.removeOptimisticMessage = (_tempId: string) => {};
 
 interface MessageBubbleProps {
-  message: Message;
+  message: OptimisticMessage;
   isOwn: boolean;
   showSender: boolean;
   senderName?: string | null;
@@ -221,6 +269,8 @@ interface MessageBubbleProps {
 function MessageBubble({ message, isOwn, showSender, senderName }: MessageBubbleProps) {
   const isRecalled = !!message.recalledAt;
   const isEdited = !!message.editedAt;
+  const isPending = !!message._pending;
+  const isFailed = !!message._failed;
 
   const getMessageContent = () => {
     if (isRecalled) {
@@ -251,7 +301,9 @@ function MessageBubble({ message, isOwn, showSender, senderName }: MessageBubble
           isOwn
             ? "bg-blue-600 text-white"
             : "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100",
-          isRecalled && "opacity-50"
+          isRecalled && "opacity-50",
+          isPending && "opacity-70",
+          isFailed && "border-2 border-red-400"
         )}
       >
         {showSender && (
@@ -268,9 +320,18 @@ function MessageBubble({ message, isOwn, showSender, senderName }: MessageBubble
             isOwn ? "text-blue-100" : "text-gray-500 dark:text-gray-400"
           )}
         >
-          <span>{formatTime(message.createdAt)}</span>
-          {isEdited && !isRecalled && (
+          {isPending ? (
+            <Clock className="h-3 w-3 animate-pulse" />
+          ) : isFailed ? (
+            <AlertCircle className="h-3 w-3 text-red-400" />
+          ) : (
+            <span>{formatTime(message.createdAt)}</span>
+          )}
+          {isEdited && !isRecalled && !isPending && !isFailed && (
             <span className="italic">(edited)</span>
+          )}
+          {isFailed && (
+            <span className="text-red-400 text-xs">Failed to send</span>
           )}
         </div>
       </div>
