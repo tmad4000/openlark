@@ -32,9 +32,11 @@ import {
   Settings,
   CheckCircle,
   Zap,
+  BarChart3,
 } from "lucide-react";
 import { ViewToolbar } from "@/components/base/ViewToolbar";
 import { AutomationsPanel } from "@/components/base/AutomationsPanel";
+import { DashboardPanel } from "@/components/base/DashboardPanel";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import * as Dialog from "@radix-ui/react-dialog";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -1572,6 +1574,7 @@ export default function BasePage() {
   const [newViewName, setNewViewName] = useState("");
   const [newViewType, setNewViewType] = useState<"grid" | "kanban" | "form">("grid");
   const [showAutomations, setShowAutomations] = useState(false);
+  const [showDashboard, setShowDashboard] = useState(false);
 
   const getToken = () => getCookie("session_token");
 
@@ -2011,9 +2014,10 @@ export default function BasePage() {
                   setActiveViewId(view.id);
                   setSelectedRecord(null);
                   setShowAutomations(false);
+                  setShowDashboard(false);
                 }}
                 className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium border-b-2 -mb-px ${
-                  activeViewId === view.id && !showAutomations
+                  activeViewId === view.id && !showAutomations && !showDashboard
                     ? "border-blue-600 text-blue-600"
                     : "border-transparent text-gray-600 hover:text-gray-900"
                 }`}
@@ -2035,11 +2039,27 @@ export default function BasePage() {
           >
             <Plus className="w-4 h-4" />
           </button>
-          {/* Automations tab - right-aligned */}
+          {/* Right-aligned tabs */}
           <div className="flex-1" />
           <button
             onClick={() => {
+              setShowDashboard(true);
+              setShowAutomations(false);
+              setSelectedRecord(null);
+            }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium border-b-2 -mb-px ${
+              showDashboard
+                ? "border-blue-500 text-blue-600"
+                : "border-transparent text-gray-600 hover:text-gray-900"
+            }`}
+          >
+            <BarChart3 className="w-4 h-4" />
+            Dashboard
+          </button>
+          <button
+            onClick={() => {
               setShowAutomations(true);
+              setShowDashboard(false);
               setSelectedRecord(null);
             }}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium border-b-2 -mb-px ${
@@ -2055,7 +2075,7 @@ export default function BasePage() {
       )}
 
       {/* View toolbar with filter/sort/group - hidden when showing automations */}
-      {activeTable && activeView && !showAutomations && (
+      {activeTable && activeView && !showAutomations && !showDashboard && (
         <ViewToolbar
           fields={activeTable.fields}
           filters={activeView.config?.filters || []}
@@ -2070,6 +2090,19 @@ export default function BasePage() {
 
       {/* Main content area with optional detail panel */}
       <div className="flex-1 flex overflow-hidden">
+        {/* Dashboard panel */}
+        {showDashboard && base && (
+          <DashboardPanel
+            baseId={baseId}
+            tables={base.tables.map((t) => ({
+              id: t.id,
+              name: t.name,
+              fields: activeTable?.id === t.id ? activeTable.fields : [],
+            }))}
+            token={getToken() || ""}
+          />
+        )}
+
         {/* Automations panel */}
         {showAutomations && base && (
           <AutomationsPanel
@@ -2084,7 +2117,7 @@ export default function BasePage() {
         )}
 
         {/* View content - hidden when showing automations */}
-        {activeTable && !showAutomations && (
+        {activeTable && !showAutomations && !showDashboard && (
           <>
             {activeView?.type === "kanban" ? (
               <KanbanView
@@ -2126,7 +2159,7 @@ export default function BasePage() {
         )}
 
         {/* Record detail panel (not shown for form view or automations) */}
-        {selectedRecord && activeTable && activeView?.type !== "form" && !showAutomations && (
+        {selectedRecord && activeTable && activeView?.type !== "form" && !showAutomations && !showDashboard && (
           <RecordDetailPanel
             record={selectedRecord}
             fields={activeTable.fields}

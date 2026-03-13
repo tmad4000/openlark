@@ -187,3 +187,43 @@ export const baseViews = pgTable(
 
 export type BaseView = typeof baseViews.$inferSelect;
 export type InsertBaseView = typeof baseViews.$inferInsert;
+
+// Base dashboards - chart dashboards for data visualization
+export const baseDashboards = pgTable(
+  "base_dashboards",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    baseId: uuid("base_id")
+      .notNull()
+      .references(() => bases.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 255 }).notNull(),
+    layout: jsonb("layout")
+      .$type<
+        Array<{
+          i: string; // block id
+          x: number;
+          y: number;
+          w: number;
+          h: number;
+          type: "bar" | "column" | "line" | "pie" | "metric";
+          config: {
+            tableId: string;
+            xFieldId?: string;
+            yFieldId?: string;
+            aggregation: "count" | "sum" | "avg" | "min" | "max";
+            groupByFieldId?: string;
+            title?: string;
+            color?: string;
+          };
+        }>
+      >()
+      .default([]),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [index("base_dashboards_base_id_idx").on(table.baseId)]
+);
+
+export type BaseDashboard = typeof baseDashboards.$inferSelect;
+export type InsertBaseDashboard = typeof baseDashboards.$inferInsert;

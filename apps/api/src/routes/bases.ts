@@ -1,6 +1,6 @@
 import { FastifyInstance } from "fastify";
 import { db } from "../db";
-import { bases, baseTables, baseFields, baseRecords, baseViews, users } from "../db/schema";
+import { bases, baseTables, baseFields, baseRecords, baseViews, baseDashboards, users } from "../db/schema";
 import { eq, and, desc, asc, sql, gt, lt, ilike, inArray } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
 import { triggerRecordAutomations, triggerButtonAutomation } from "../lib/automation-worker";
@@ -1869,6 +1869,328 @@ export async function basesRoutes(fastify: FastifyInstance) {
         success: true,
         triggered: true,
       });
+    }
+  );
+
+  // ==================== Dashboard endpoints ====================
+
+  // List dashboards for a base
+  fastify.get(
+    "/bases/:id/dashboards",
+    { preHandler: [authMiddleware] },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+
+      if (!UUID_REGEX.test(id)) {
+        return reply.status(400).send({ error: "Invalid base ID" });
+      }
+
+      if (!request.user.orgId) {
+        return reply.status(400).send({ error: "User must belong to an organization" });
+      }
+
+      // Verify base access
+      const [base] = await db
+        .select()
+        .from(bases)
+        .where(and(eq(bases.id, id), eq(bases.orgId, request.user.orgId)))
+        .limit(1);
+
+      if (!base) {
+        return reply.status(404).send({ error: "Base not found" });
+      }
+
+      const dashboards = await db
+        .select()
+        .from(baseDashboards)
+        .where(eq(baseDashboards.baseId, id))
+        .orderBy(desc(baseDashboards.createdAt));
+
+      return reply.status(200).send({ dashboards });
+    }
+  );
+
+  // Create dashboard
+  fastify.post(
+    "/bases/:id/dashboards",
+    { preHandler: [authMiddleware] },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const { name, layout } = request.body as {
+        name: string;
+        layout?: Array<Record<string, unknown>>;
+      };
+
+      if (!UUID_REGEX.test(id)) {
+        return reply.status(400).send({ error: "Invalid base ID" });
+      }
+
+      if (!name || typeof name !== "string" || name.trim().length === 0) {
+        return reply.status(400).send({ error: "Name is required" });
+      }
+
+      if (!request.user.orgId) {
+        return reply.status(400).send({ error: "User must belong to an organization" });
+      }
+
+      const [base] = await db
+        .select()
+        .from(bases)
+        .where(and(eq(bases.id, id), eq(bases.orgId, request.user.orgId)))
+        .limit(1);
+
+      if (!base) {
+        return reply.status(404).send({ error: "Base not found" });
+      }
+
+      const [dashboard] = await db
+        .insert(baseDashboards)
+        .values({
+          baseId: id,
+          name: name.trim(),
+          layout: (layout ?? []) as typeof baseDashboards.$inferInsert.layout,
+        })
+        .returning();
+
+      return reply.status(201).send(dashboard);
+    }
+  );
+
+  // Get dashboard by ID
+  fastify.get(
+    "/base-dashboards/:id",
+    { preHandler: [authMiddleware] },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+
+      if (!UUID_REGEX.test(id)) {
+        return reply.status(400).send({ error: "Invalid dashboard ID" });
+      }
+
+      if (!request.user.orgId) {
+        return reply.status(400).send({ error: "User must belong to an organization" });
+      }
+
+      const [dashboard] = await db
+        .select({
+          id: baseDashboards.id,
+          baseId: baseDashboards.baseId,
+          name: baseDashboards.name,
+          layout: baseDashboards.layout,
+          createdAt: baseDashboards.createdAt,
+          baseOrgId: bases.orgId,
+        })
+        .from(baseDashboards)
+        .innerJoin(bases, eq(baseDashboards.baseId, bases.id))
+        .where(eq(baseDashboards.id, id))
+        .limit(1);
+
+      if (!dashboard) {
+        return reply.status(404).send({ error: "Dashboard not found" });
+      }
+
+      if (dashboard.baseOrgId !== request.user.orgId) {
+        return reply.status(403).send({ error: "Access denied" });
+      }
+
+      return reply.status(200).send({
+        id: dashboard.id,
+        baseId: dashboard.baseId,
+        name: dashboard.name,
+        layout: dashboard.layout,
+        createdAt: dashboard.createdAt,
+      });
+    }
+  );
+
+  // Update dashboard
+  fastify.patch(
+    "/base-dashboards/:id",
+    { preHandler: [authMiddleware] },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const { name, layout } = request.body as {
+        name?: string;
+        layout?: Array<Record<string, unknown>>;
+      };
+
+      if (!UUID_REGEX.test(id)) {
+        return reply.status(400).send({ error: "Invalid dashboard ID" });
+      }
+
+      if (!request.user.orgId) {
+        return reply.status(400).send({ error: "User must belong to an organization" });
+      }
+
+      const [existing] = await db
+        .select({
+          id: baseDashboards.id,
+          baseOrgId: bases.orgId,
+        })
+        .from(baseDashboards)
+        .innerJoin(bases, eq(baseDashboards.baseId, bases.id))
+        .where(eq(baseDashboards.id, id))
+        .limit(1);
+
+      if (!existing) {
+        return reply.status(404).send({ error: "Dashboard not found" });
+      }
+
+      if (existing.baseOrgId !== request.user.orgId) {
+        return reply.status(403).send({ error: "Access denied" });
+      }
+
+      const updates: Record<string, unknown> = {};
+      if (name !== undefined) updates.name = name.trim();
+      if (layout !== undefined) updates.layout = layout;
+
+      if (Object.keys(updates).length === 0) {
+        return reply.status(400).send({ error: "No fields to update" });
+      }
+
+      const [updated] = await db
+        .update(baseDashboards)
+        .set(updates)
+        .where(eq(baseDashboards.id, id))
+        .returning();
+
+      return reply.status(200).send(updated);
+    }
+  );
+
+  // Delete dashboard
+  fastify.delete(
+    "/base-dashboards/:id",
+    { preHandler: [authMiddleware] },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+
+      if (!UUID_REGEX.test(id)) {
+        return reply.status(400).send({ error: "Invalid dashboard ID" });
+      }
+
+      if (!request.user.orgId) {
+        return reply.status(400).send({ error: "User must belong to an organization" });
+      }
+
+      const [existing] = await db
+        .select({
+          id: baseDashboards.id,
+          baseOrgId: bases.orgId,
+        })
+        .from(baseDashboards)
+        .innerJoin(bases, eq(baseDashboards.baseId, bases.id))
+        .where(eq(baseDashboards.id, id))
+        .limit(1);
+
+      if (!existing) {
+        return reply.status(404).send({ error: "Dashboard not found" });
+      }
+
+      if (existing.baseOrgId !== request.user.orgId) {
+        return reply.status(403).send({ error: "Access denied" });
+      }
+
+      await db.delete(baseDashboards).where(eq(baseDashboards.id, id));
+
+      return reply.status(200).send({ success: true });
+    }
+  );
+
+  // Dashboard data endpoint - aggregates records for charts
+  fastify.post(
+    "/base-dashboards/aggregate",
+    { preHandler: [authMiddleware] },
+    async (request, reply) => {
+      const { tableId, xFieldId, yFieldId, aggregation, groupByFieldId } =
+        request.body as {
+          tableId: string;
+          xFieldId?: string;
+          yFieldId?: string;
+          aggregation: "count" | "sum" | "avg" | "min" | "max";
+          groupByFieldId?: string;
+        };
+
+      if (!tableId || !UUID_REGEX.test(tableId)) {
+        return reply.status(400).send({ error: "Invalid table ID" });
+      }
+
+      if (!request.user.orgId) {
+        return reply.status(400).send({ error: "User must belong to an organization" });
+      }
+
+      // Verify table access
+      const [table] = await db
+        .select({
+          id: baseTables.id,
+          baseId: baseTables.baseId,
+          baseOrgId: bases.orgId,
+        })
+        .from(baseTables)
+        .innerJoin(bases, eq(baseTables.baseId, bases.id))
+        .where(eq(baseTables.id, tableId))
+        .limit(1);
+
+      if (!table) {
+        return reply.status(404).send({ error: "Table not found" });
+      }
+
+      if (table.baseOrgId !== request.user.orgId) {
+        return reply.status(403).send({ error: "Access denied" });
+      }
+
+      // Get all records for this table
+      const records = await db
+        .select({ data: baseRecords.data })
+        .from(baseRecords)
+        .where(eq(baseRecords.tableId, tableId));
+
+      // Perform client-side aggregation on JSONB data
+      const groupField = groupByFieldId || xFieldId;
+      const valueField = yFieldId;
+
+      const groups = new Map<string, number[]>();
+
+      for (const record of records) {
+        const data = (record.data ?? {}) as Record<string, unknown>;
+        const groupKey = groupField
+          ? String(data[groupField] ?? "Uncategorized")
+          : "All";
+        const value = valueField ? Number(data[valueField]) || 0 : 1;
+
+        if (!groups.has(groupKey)) {
+          groups.set(groupKey, []);
+        }
+        groups.get(groupKey)!.push(value);
+      }
+
+      const result = Array.from(groups.entries()).map(([name, values]) => {
+        let value: number;
+        switch (aggregation) {
+          case "count":
+            value = values.length;
+            break;
+          case "sum":
+            value = values.reduce((a, b) => a + b, 0);
+            break;
+          case "avg":
+            value = values.length > 0
+              ? values.reduce((a, b) => a + b, 0) / values.length
+              : 0;
+            break;
+          case "min":
+            value = values.length > 0 ? Math.min(...values) : 0;
+            break;
+          case "max":
+            value = values.length > 0 ? Math.max(...values) : 0;
+            break;
+          default:
+            value = values.length;
+        }
+        return { name, value: Math.round(value * 100) / 100 };
+      });
+
+      return reply.status(200).send({ data: result, total: records.length });
     }
   );
 }

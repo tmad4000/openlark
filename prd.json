@@ -1179,8 +1179,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 70,
-      "passes": false,
-      "notes": "Use Recharts or Chart.js for chart rendering."
+      "passes": true,
+      "notes": "Created base_dashboards table (id, base_id, name, layout jsonb, created_at) with base_id index. Added dashboard CRUD API routes (list, create, get, update, delete) plus aggregate endpoint for chart data computation. Built DashboardPanel component using Recharts with 5 chart types: bar (horizontal), column (vertical), line, pie, and metric (single number). Charts configured with data source table, x-axis field, y-axis aggregation (count/sum/avg/min/max), and grouping. Dashboard builder with add/edit/remove chart dialogs, drag-corner resize for chart blocks, 2-column CSS grid layout, real-time data refresh (10s interval). Integrated as Dashboard tab in base detail page alongside Automations. Web typecheck passes."
     },
     {
       "id": "US-071",
