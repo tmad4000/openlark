@@ -127,6 +127,123 @@ const COMMANDS: CommandItem[] = [
       editor.chain().focus().deleteRange(range).toggleCodeBlock().run();
     },
   },
+  {
+    title: "Table",
+    description: "Insert a table",
+    icon: "\u25A6",
+    command: ({ editor, range }) => {
+      editor
+        .chain()
+        .focus()
+        .deleteRange(range)
+        .insertTable({ rows: 3, cols: 3, withHeaderRow: true })
+        .run();
+    },
+  },
+  {
+    title: "Callout - Info",
+    description: "Information callout block",
+    icon: "\u2139\uFE0F",
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).setCallout({ type: "info" }).run();
+    },
+  },
+  {
+    title: "Callout - Warning",
+    description: "Warning callout block",
+    icon: "\u26A0\uFE0F",
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).setCallout({ type: "warning" }).run();
+    },
+  },
+  {
+    title: "Callout - Success",
+    description: "Success callout block",
+    icon: "\u2705",
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).setCallout({ type: "success" }).run();
+    },
+  },
+  {
+    title: "Callout - Error",
+    description: "Error/danger callout block",
+    icon: "\u274C",
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).setCallout({ type: "error" }).run();
+    },
+  },
+  {
+    title: "Image",
+    description: "Upload or embed an image",
+    icon: "\uD83D\uDDBC",
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).run();
+      // Open file picker for image upload
+      const input = window.document.createElement("input");
+      input.type = "file";
+      input.accept = "image/*";
+      input.onchange = () => {
+        const file = input.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          editor
+            .chain()
+            .focus()
+            .setImage({ src: reader.result as string, alt: file.name })
+            .run();
+        };
+        reader.readAsDataURL(file);
+      };
+      input.click();
+    },
+  },
+  {
+    title: "File Attachment",
+    description: "Attach a file",
+    icon: "\uD83D\uDCCE",
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).run();
+      const input = window.document.createElement("input");
+      input.type = "file";
+      input.onchange = () => {
+        const file = input.files?.[0];
+        if (!file) return;
+        // In production this would upload to S3; for now use data URL
+        const reader = new FileReader();
+        reader.onload = () => {
+          editor
+            .chain()
+            .focus()
+            .setFileAttachment({
+              src: reader.result as string,
+              fileName: file.name,
+              fileSize: file.size,
+              fileType: file.type,
+            })
+            .run();
+        };
+        reader.readAsDataURL(file);
+      };
+      input.click();
+    },
+  },
+  {
+    title: "Divider",
+    description: "Horizontal divider line",
+    icon: "\u2500",
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).setHorizontalRule().run();
+    },
+  },
+  {
+    title: "Toggle",
+    description: "Collapsible content block",
+    icon: "\u25B6",
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).setToggleBlock().run();
+    },
+  },
 ];
 
 function fuzzyMatch(query: string, text: string): boolean {

@@ -902,8 +902,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 54,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Custom TipTap extensions for callout (4 types with colored sidebar + icon), toggle/collapsible (details/summary), file attachment. Image via @tiptap/extension-image with drag-drop and paste support (base64 for now, S3 in production). All blocks in slash menu. Table already existed from US-053."
     },
     {
       "id": "US-055",

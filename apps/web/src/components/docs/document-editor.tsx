@@ -14,6 +14,7 @@ import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
 import Collaboration from "@tiptap/extension-collaboration";
 import Underline from "@tiptap/extension-underline";
 import Link from "@tiptap/extension-link";
+import Image from "@tiptap/extension-image";
 import { all, createLowlight } from "lowlight";
 import * as Y from "yjs";
 import { WebsocketProvider } from "y-websocket";
@@ -21,6 +22,9 @@ import { api, type Document } from "@/lib/api";
 import { SlashCommand } from "./slash-command-menu";
 import { FloatingToolbar } from "./floating-toolbar";
 import { DragHandle } from "./drag-handle";
+import { Callout } from "./extensions/callout";
+import { ToggleBlock } from "./extensions/toggle";
+import { FileAttachment } from "./extensions/file-attachment";
 
 // Create lowlight instance with all languages
 const lowlight = createLowlight(all);
@@ -138,6 +142,15 @@ export function DocumentEditor({ document, readOnly = false }: DocumentEditorPro
           class: "text-blue-600 dark:text-blue-400 underline cursor-pointer",
         },
       }),
+      Image.configure({
+        allowBase64: true,
+        HTMLAttributes: {
+          class: "max-w-full h-auto rounded-lg my-2",
+        },
+      }),
+      Callout,
+      ToggleBlock,
+      FileAttachment,
       SlashCommand,
     ],
     editable: !readOnly,
@@ -145,6 +158,49 @@ export function DocumentEditor({ document, readOnly = false }: DocumentEditorPro
       attributes: {
         class:
           "prose prose-sm sm:prose lg:prose-lg dark:prose-invert max-w-none focus:outline-none min-h-[500px] p-8",
+      },
+      handleDrop: (view, event) => {
+        const files = event.dataTransfer?.files;
+        if (!files?.length) return false;
+        const file = files[0];
+        if (file.type.startsWith("image/")) {
+          event.preventDefault();
+          const reader = new FileReader();
+          reader.onload = () => {
+            const src = reader.result as string;
+            view.dispatch(
+              view.state.tr.replaceSelectionWith(
+                view.state.schema.nodes.image.create({ src, alt: file.name })
+              )
+            );
+          };
+          reader.readAsDataURL(file);
+          return true;
+        }
+        return false;
+      },
+      handlePaste: (view, event) => {
+        const items = event.clipboardData?.items;
+        if (!items) return false;
+        for (const item of Array.from(items)) {
+          if (item.type.startsWith("image/")) {
+            event.preventDefault();
+            const file = item.getAsFile();
+            if (!file) return false;
+            const reader = new FileReader();
+            reader.onload = () => {
+              const src = reader.result as string;
+              view.dispatch(
+                view.state.tr.replaceSelectionWith(
+                  view.state.schema.nodes.image.create({ src, alt: file.name })
+                )
+              );
+            };
+            reader.readAsDataURL(file);
+            return true;
+          }
+        }
+        return false;
       },
     },
   });

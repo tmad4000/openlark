@@ -108,3 +108,57 @@
   color: inherit;
   font-size: inherit;
 }
+
+/* Callout blocks */
+.ProseMirror .callout {
+  border-radius: 0 0.5rem 0.5rem 0;
+  padding: 1rem;
+  margin: 0.5rem 0;
+}
+
+.ProseMirror .callout-content > *:first-child {
+  margin-top: 0;
+}
+
+.ProseMirror .callout-content > *:last-child {
+  margin-bottom: 0;
+}
+
+/* Toggle/collapsible blocks */
+.ProseMirror details[data-type="toggle"] {
+  margin: 0.5rem 0;
+}
+
+.ProseMirror details[data-type="toggle"] summary {
+  list-style: none;
+}
+
+.ProseMirror details[data-type="toggle"] summary::before {
+  content: "\25B6";
+  display: inline-block;
+  margin-right: 0.5rem;
+  transition: transform 0.15s;
+  font-size: 0.75rem;
+}
+
+.ProseMirror details[data-type="toggle"][open] summary::before {
+  transform: rotate(90deg);
+}
+
+/* File attachment */
+.ProseMirror .file-attachment {
+  transition: background-color 0.15s;
+}
+
+/* Image blocks */
+.ProseMirror img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+  margin: 0.5rem 0;
+}
+
+.ProseMirror img.ProseMirror-selectednode {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
