@@ -27,6 +27,7 @@ import { searchRoutes } from "./routes/search";
 import { translationRoutes } from "./routes/translations";
 import { meetingsRoutes } from "./routes/meetings";
 import { formsRoutes } from "./routes/forms";
+import { adminRoutes } from "./routes/admin";
 import { wsRoutes } from "./routes/ws";
 import { closeRedis } from "./lib/redis";
 import { startAutomationWorker, stopAutomationWorker } from "./lib/automation-worker";
@@ -71,6 +72,7 @@ await fastify.register(searchRoutes);
 await fastify.register(translationRoutes);
 await fastify.register(meetingsRoutes);
 await fastify.register(formsRoutes);
+await fastify.register(adminRoutes);
 await fastify.register(wsRoutes);
 
 fastify.get("/", async () => {

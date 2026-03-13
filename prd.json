@@ -1657,8 +1657,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 98,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added userRoleEnum (owner/admin/member) to users schema. Created roles table for custom admin roles with scoped permissions per module. Admin API routes: GET/PATCH /admin/org, GET /admin/members with search, PATCH /admin/members/:userId/role, POST /admin/members/:userId/deactivate, POST /admin/members/invite, full department CRUD with member assignment, full custom roles CRUD with permission checkboxes. Admin console UI at /app/admin with 4 tabs: Organization (edit name/domain/industry/logo), Members (search/invite/role badges/change role/deactivate), Departments (visual tree with expand/collapse, add/rename/delete, assign members), Roles (create with module permission checkboxes, edit/delete). Access restricted to owner/admin roles. Typecheck passes."
     },
     {
       "id": "US-099",

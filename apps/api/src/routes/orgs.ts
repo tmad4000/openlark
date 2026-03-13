@@ -158,8 +158,8 @@ export async function orgsRoutes(fastify: FastifyInstance) {
         });
       }
 
-      // Check authorization: must be org member with manage scope via API key
-      const isPrimaryAdmin = false; // TODO: implement admin role check
+      // Check authorization: must be org admin/owner or have manage scope
+      const isPrimaryAdmin = request.user.role === "owner" || request.user.role === "admin";
 
       // Check if user has org.manage scope
       let hasManageScope = false;

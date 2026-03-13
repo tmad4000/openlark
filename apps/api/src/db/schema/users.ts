@@ -18,6 +18,9 @@ export const userStatusEnum = pgEnum("user_status", [
   "offline",
 ]);
 
+// User role enum - organization-level role
+export const userRoleEnum = pgEnum("user_role", ["owner", "admin", "member"]);
+
 // Users table
 export const users = pgTable(
   "users",
@@ -33,6 +36,7 @@ export const users = pgTable(
     status: userStatusEnum("status").default("offline"),
     workingHoursStart: time("working_hours_start"),
     workingHoursEnd: time("working_hours_end"),
+    role: userRoleEnum("role").notNull().default("member"),
     orgId: uuid("org_id").references(() => organizations.id),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
