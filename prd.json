@@ -1710,8 +1710,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 101,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Workplace dashboard at /app with 4 data widgets (Recent Chats, Upcoming Events, My Tasks, Recent Docs), app launcher grid with all 12 modules, and quick actions (New Chat, New Doc, New Event, New Task). Dashboard API at GET /dashboard returns aggregated data. Admin widget config via GET/PUT /dashboard/config stored in org settings jsonb per department. Typecheck passes."
     },
     {
       "id": "US-102",

@@ -28,6 +28,7 @@ import { translationRoutes } from "./routes/translations";
 import { meetingsRoutes } from "./routes/meetings";
 import { formsRoutes } from "./routes/forms";
 import { adminRoutes } from "./routes/admin";
+import { dashboardRoutes } from "./routes/dashboard";
 import { wsRoutes } from "./routes/ws";
 import { auditLogPlugin } from "./middleware/audit";
 import { closeRedis } from "./lib/redis";
@@ -77,6 +78,7 @@ await fastify.register(translationRoutes);
 await fastify.register(meetingsRoutes);
 await fastify.register(formsRoutes);
 await fastify.register(adminRoutes);
+await fastify.register(dashboardRoutes);
 await fastify.register(wsRoutes);
 
 fastify.get("/", async () => {
