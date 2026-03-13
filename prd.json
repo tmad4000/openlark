@@ -780,8 +780,8 @@
         "Typecheck passes"
       ],
       "priority": 47,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "RSVP endpoint (POST /events/:id/rsvp) already existed from US-046. Added GET /availability?user_ids=&start=&end= returning per-user free/busy slots. Availability filters by RSVP yes/pending only. Working hours from user profile respected - outside-hours slots marked unavailable. Refactored findAvailability to share busy-slot and working-hours logic."
     },
     {
       "id": "US-048",

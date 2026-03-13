@@ -987,7 +987,82 @@ export class CalendarService {
     const endDate = new Date(input.endDate);
     const durationMs = input.duration * 60 * 1000;
 
-    // Get all events for the users in the date range
+    const busySlots = await this.getUserBusySlots(input.userIds, startDate, endDate);
+    const userWorkingHours = await this.getUserWorkingHours(input.userIds);
+
+    // Build unavailable times: busy slots + outside working hours
+    const allBusy = [
+      ...busySlots,
+      ...this.getOutsideWorkingHoursSlots(userWorkingHours, startDate, endDate),
+    ];
+
+    const mergedBusy = this.mergeBusyTimes(allBusy);
+
+    // Find gaps
+    const slots: { start: Date; end: Date }[] = [];
+    let current = startDate;
+    for (const busy of mergedBusy) {
+      if (busy.start.getTime() - current.getTime() >= durationMs) {
+        slots.push({
+          start: current,
+          end: new Date(Math.min(busy.start.getTime(), endDate.getTime())),
+        });
+      }
+      current = busy.end;
+    }
+
+    if (endDate.getTime() - current.getTime() >= durationMs) {
+      slots.push({ start: current, end: endDate });
+    }
+
+    return slots;
+  }
+
+  /**
+   * Get free/busy slots for multiple users (US-047)
+   * Returns per-slot free/busy information
+   */
+  async getAvailability(
+    userIds: string[],
+    start: Date,
+    end: Date
+  ): Promise<{ userId: string; busy: { start: Date; end: Date }[]; workingHours: { start: string; end: string } }[]> {
+    const userWorkingHours = await this.getUserWorkingHours(userIds);
+
+    // Get busy slots per user
+    const result: { userId: string; busy: { start: Date; end: Date }[]; workingHours: { start: string; end: string } }[] = [];
+
+    for (const uid of userIds) {
+      const busySlots = await this.getUserBusySlots([uid], start, end);
+      const outsideHours = this.getOutsideWorkingHoursSlots(
+        userWorkingHours.filter((u) => u.userId === uid),
+        start,
+        end
+      );
+      const allBusy = this.mergeBusyTimes([...busySlots, ...outsideHours]);
+      const wh = userWorkingHours.find((u) => u.userId === uid);
+
+      result.push({
+        userId: uid,
+        busy: allBusy,
+        workingHours: {
+          start: wh?.workingHoursStart ?? "09:00",
+          end: wh?.workingHoursEnd ?? "17:00",
+        },
+      });
+    }
+
+    return result;
+  }
+
+  /**
+   * Get busy time slots for users from events where RSVP is yes or pending (US-047)
+   */
+  private async getUserBusySlots(
+    userIds: string[],
+    startDate: Date,
+    endDate: Date
+  ): Promise<{ start: Date; end: Date }[]> {
     const userEvents = await db
       .select({
         startTime: calendarEvents.startTime,
@@ -1001,60 +1076,132 @@ export class CalendarService {
       )
       .where(
         and(
-          inArray(eventAttendees.userId, input.userIds),
+          inArray(eventAttendees.userId, userIds),
+          // Only count events where user RSVP'd yes or pending (US-047)
+          inArray(eventAttendees.rsvp, ["yes", "pending"]),
           isNull(calendarEvents.deletedAt),
           eq(calendarEvents.isCancelled, false),
-          // Event overlaps with search range
           lt(calendarEvents.startTime, endDate),
           gte(calendarEvents.endTime, startDate)
         )
       );
 
-    // Build a simple algorithm to find gaps
-    // This is a simplified version - production would need working hours, etc.
-    const slots: { start: Date; end: Date }[] = [];
-
-    // Merge all busy times
-    const busyTimes = userEvents.map((e) => ({
+    return userEvents.map((e) => ({
       start: e.startTime,
       end: e.endTime,
     }));
+  }
 
-    // Sort by start time
-    busyTimes.sort((a, b) => a.start.getTime() - b.start.getTime());
+  /**
+   * Get working hours for users (US-047)
+   */
+  private async getUserWorkingHours(
+    userIds: string[]
+  ): Promise<{ userId: string; workingHoursStart: string; workingHoursEnd: string }[]> {
+    const userRows = await db
+      .select({
+        id: users.id,
+        workingHoursStart: users.workingHoursStart,
+        workingHoursEnd: users.workingHoursEnd,
+      })
+      .from(users)
+      .where(inArray(users.id, userIds));
 
-    // Merge overlapping busy times
-    const mergedBusy: { start: Date; end: Date }[] = [];
-    for (const busy of busyTimes) {
+    return userRows.map((u) => ({
+      userId: u.id,
+      workingHoursStart: u.workingHoursStart ?? "09:00",
+      workingHoursEnd: u.workingHoursEnd ?? "17:00",
+    }));
+  }
+
+  /**
+   * Generate "busy" slots for time outside working hours (US-047)
+   * For each day in the range, marks before working hours start and after working hours end as unavailable
+   */
+  private getOutsideWorkingHoursSlots(
+    userWorkingHours: { userId: string; workingHoursStart: string; workingHoursEnd: string }[],
+    startDate: Date,
+    endDate: Date
+  ): { start: Date; end: Date }[] {
+    const slots: { start: Date; end: Date }[] = [];
+
+    // Find the most restrictive working hours (intersection)
+    let latestStart = "00:00";
+    let earliestEnd = "23:59";
+
+    if (userWorkingHours.length > 0) {
+      latestStart = userWorkingHours.reduce((max, u) =>
+        u.workingHoursStart > max ? u.workingHoursStart : max, "00:00");
+      earliestEnd = userWorkingHours.reduce((min, u) =>
+        u.workingHoursEnd < min ? u.workingHoursEnd : min, "23:59");
+    }
+
+    // Iterate day by day
+    const current = new Date(startDate);
+    current.setUTCHours(0, 0, 0, 0);
+
+    while (current < endDate) {
+      const dayStart = new Date(current);
+      const dayEnd = new Date(current);
+      dayEnd.setUTCHours(23, 59, 59, 999);
+
+      // Parse working hours
+      const [startH, startM] = latestStart.split(":").map(Number);
+      const [endH, endM] = earliestEnd.split(":").map(Number);
+
+      const workStart = new Date(current);
+      workStart.setUTCHours(startH!, startM!, 0, 0);
+
+      const workEnd = new Date(current);
+      workEnd.setUTCHours(endH!, endM!, 0, 0);
+
+      // Before working hours
+      if (dayStart < workStart) {
+        slots.push({
+          start: new Date(Math.max(dayStart.getTime(), startDate.getTime())),
+          end: new Date(Math.min(workStart.getTime(), endDate.getTime())),
+        });
+      }
+
+      // After working hours
+      if (workEnd < dayEnd) {
+        slots.push({
+          start: new Date(Math.max(workEnd.getTime(), startDate.getTime())),
+          end: new Date(Math.min(dayEnd.getTime(), endDate.getTime())),
+        });
+      }
+
+      // Next day
+      current.setUTCDate(current.getUTCDate() + 1);
+    }
+
+    return slots;
+  }
+
+  /**
+   * Merge overlapping busy time slots
+   */
+  private mergeBusyTimes(
+    busyTimes: { start: Date; end: Date }[]
+  ): { start: Date; end: Date }[] {
+    if (busyTimes.length === 0) return [];
+
+    const sorted = [...busyTimes].sort((a, b) => a.start.getTime() - b.start.getTime());
+    const merged: { start: Date; end: Date }[] = [];
+
+    for (const busy of sorted) {
       if (
-        mergedBusy.length === 0 ||
-        busy.start > mergedBusy[mergedBusy.length - 1]!.end
+        merged.length === 0 ||
+        busy.start > merged[merged.length - 1]!.end
       ) {
-        mergedBusy.push({ start: busy.start, end: busy.end });
+        merged.push({ start: busy.start, end: busy.end });
       } else {
-        const last = mergedBusy[mergedBusy.length - 1]!;
+        const last = merged[merged.length - 1]!;
         last.end = new Date(Math.max(last.end.getTime(), busy.end.getTime()));
       }
     }
 
-    // Find gaps
-    let current = startDate;
-    for (const busy of mergedBusy) {
-      if (busy.start.getTime() - current.getTime() >= durationMs) {
-        slots.push({
-          start: current,
-          end: new Date(Math.min(busy.start.getTime(), endDate.getTime())),
-        });
-      }
-      current = busy.end;
-    }
-
-    // Check remaining time after last busy period
-    if (endDate.getTime() - current.getTime() >= durationMs) {
-      slots.push({ start: current, end: endDate });
-    }
-
-    return slots;
+    return merged;
   }
 
   // ============ NOTIFICATION HELPERS ============

@@ -15,6 +15,7 @@ import {
   eventsQuerySchema,
   roomSearchSchema,
   availabilitySearchSchema,
+  availabilityQuerySchema,
 } from "./calendar.schemas.js";
 import { authenticate, requireAdmin } from "../auth/middleware.js";
 import { formatZodError } from "../../utils/validation.js";
@@ -590,9 +591,31 @@ export async function calendarRoutes(app: FastifyInstance) {
     }
   );
 
-  // ============ AVAILABILITY ENDPOINT ============
+  // ============ AVAILABILITY ENDPOINTS ============
 
-  // POST /calendar/availability - Find available time slots
+  // GET /calendar/availability - Get free/busy slots for users (US-047)
+  app.get("/availability", async (req, reply) => {
+    try {
+      const input = availabilityQuerySchema.parse(req.query);
+      const userIds = input.user_ids.split(",").map((id) => id.trim());
+      const start = new Date(input.start);
+      const end = new Date(input.end);
+
+      const availability = await calendarService.getAvailability(
+        userIds,
+        start,
+        end
+      );
+      return reply.send({ data: { availability } });
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return reply.status(400).send(formatZodError(error));
+      }
+      throw error;
+    }
+  });
+
+  // POST /calendar/availability - Find available time slots (legacy)
   app.post("/availability", async (req, reply) => {
     try {
       const input = availabilitySearchSchema.parse(req.body);

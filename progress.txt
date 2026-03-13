@@ -34,3 +34,4 @@
 [2026-03-13 19:00] US-044 — Topic groups - subscribe, close, reopen — PASS
 [2026-03-13 20:00] US-045 — Calendar event schema — PASS
 [2026-03-13 21:00] US-046 — Calendar events CRUD API — PASS
+[2026-03-13 22:00] US-047 — Calendar RSVP and availability API — PASS

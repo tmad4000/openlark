@@ -171,6 +171,13 @@ export const availabilitySearchSchema = z.object({
   duration: z.coerce.number().int().min(15).max(480), // Duration in minutes
 });
 
+// GET /availability query params - US-047
+export const availabilityQuerySchema = z.object({
+  user_ids: z.string().min(1), // Comma-separated UUIDs
+  start: z.string().datetime(),
+  end: z.string().datetime(),
+});
+
 // ============ TYPE EXPORTS ============
 
 export type CreateCalendarInput = z.infer<typeof createCalendarSchema>;
@@ -186,3 +193,4 @@ export type UpdateSubscriptionInput = z.infer<typeof updateSubscriptionSchema>;
 export type EventsQueryInput = z.infer<typeof eventsQuerySchema>;
 export type RoomSearchInput = z.infer<typeof roomSearchSchema>;
 export type AvailabilitySearchInput = z.infer<typeof availabilitySearchSchema>;
+export type AvailabilityQueryInput = z.infer<typeof availabilityQuerySchema>;
