@@ -17,6 +17,8 @@ import {
   updateAnnouncementSchema,
   markChatReadSchema,
   forwardMessageSchema,
+  createTopicSchema,
+  updateTopicSchema,
 } from "./messenger.schemas.js";
 import { authenticate } from "../auth/middleware.js";
 import { formatZodError } from "../../utils/validation.js";
@@ -1132,6 +1134,132 @@ export async function messengerRoutes(app: FastifyInstance) {
       }
 
       return reply.send({ data: { success: true } });
+    }
+  );
+
+  // ============ TOPIC ENDPOINTS ============
+
+  // POST /messenger/chats/:chatId/topics - Create a topic
+  app.post<{ Params: { chatId: string } }>(
+    "/chats/:chatId/topics",
+    async (req, reply) => {
+      try {
+        const input = createTopicSchema.parse(req.body);
+        const result = await messengerService.createTopic(
+          req.params.chatId,
+          input,
+          req.user!.id
+        );
+
+        if (!result) {
+          return reply.status(403).send({
+            code: "FORBIDDEN",
+            message: "Cannot create topic in this chat",
+          });
+        }
+
+        // Publish real-time event for the initial message
+        await publishMessageEvent(req.params.chatId, {
+          type: "message:new",
+          chatId: req.params.chatId,
+          message: result.message,
+        });
+
+        return reply.status(201).send({ data: result });
+      } catch (error) {
+        if (error instanceof ZodError) {
+          return reply.status(400).send(formatZodError(error));
+        }
+        throw error;
+      }
+    }
+  );
+
+  // GET /messenger/chats/:chatId/topics - Get topics
+  app.get<{ Params: { chatId: string } }>(
+    "/chats/:chatId/topics",
+    async (req, reply) => {
+      const isMember = await messengerService.isChatMember(
+        req.params.chatId,
+        req.user!.id
+      );
+      if (!isMember) {
+        return reply.status(403).send({
+          code: "NOT_A_MEMBER",
+          message: "You are not a member of this chat",
+        });
+      }
+
+      const topics = await messengerService.getTopics(req.params.chatId);
+      return reply.send({ data: { topics } });
+    }
+  );
+
+  // GET /messenger/topics/:topicId/messages - Get messages for a topic
+  app.get<{ Params: { topicId: string }; Querystring: Record<string, unknown> }>(
+    "/topics/:topicId/messages",
+    async (req, reply) => {
+      const topic = await messengerService.getTopicById(req.params.topicId);
+      if (!topic) {
+        return reply.status(404).send({
+          code: "TOPIC_NOT_FOUND",
+          message: "Topic not found",
+        });
+      }
+
+      const isMember = await messengerService.isChatMember(
+        topic.chatId,
+        req.user!.id
+      );
+      if (!isMember) {
+        return reply.status(403).send({
+          code: "NOT_A_MEMBER",
+          message: "You are not a member of this chat",
+        });
+      }
+
+      try {
+        const pagination = paginationSchema.parse(req.query);
+        const messages = await messengerService.getTopicMessages(
+          req.params.topicId,
+          pagination
+        );
+        return reply.send({ data: { messages } });
+      } catch (error) {
+        if (error instanceof ZodError) {
+          return reply.status(400).send(formatZodError(error));
+        }
+        throw error;
+      }
+    }
+  );
+
+  // PATCH /messenger/topics/:topicId - Update topic (close/reopen)
+  app.patch<{ Params: { topicId: string } }>(
+    "/topics/:topicId",
+    async (req, reply) => {
+      try {
+        const input = updateTopicSchema.parse(req.body);
+        const topic = await messengerService.updateTopic(
+          req.params.topicId,
+          input,
+          req.user!.id
+        );
+
+        if (!topic) {
+          return reply.status(403).send({
+            code: "FORBIDDEN",
+            message: "You cannot update this topic",
+          });
+        }
+
+        return reply.send({ data: { topic } });
+      } catch (error) {
+        if (error instanceof ZodError) {
+          return reply.status(400).send(formatZodError(error));
+        }
+        throw error;
+      }
     }
   );
 

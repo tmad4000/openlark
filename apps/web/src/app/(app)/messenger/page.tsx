@@ -19,6 +19,7 @@ import { BuzzDialog } from "@/components/messenger/buzz-dialog";
 import { BuzzOverlay } from "@/components/messenger/buzz-overlay";
 import { GroupSettingsPanel } from "@/components/messenger/group-settings-panel";
 import { AnnouncementsView } from "@/components/messenger/announcements-view";
+import { TopicView } from "@/components/messenger/topic-view";
 
 export default function MessengerPage() {
   const { user, organization } = useAuth();
@@ -513,22 +514,30 @@ export default function MessengerPage() {
 
             {/* Tab content */}
             {chatTab === "chat" ? (
-              <MessageList
-                chatId={selectedChatId}
-                onlineUsers={onlineUsers}
-                onOpenThread={setActiveThreadId}
-                pinnedMessageIds={pinnedMessageIds}
-                favoritedMessageIds={favoritedMessageIds}
-                onPinMessage={handlePinMessage}
-                onUnpinMessage={handleUnpinMessage}
-                onFavoriteMessage={handleFavoriteMessage}
-                onUnfavoriteMessage={handleUnfavoriteMessage}
-                onEditMessage={handleEditMessage}
-                onRecallMessage={handleRecallMessage}
-                onForwardMessage={handleForwardMessage}
-                onBuzzMessage={handleBuzzMessage}
-                buzzedMessageIds={buzzedMessageIds}
-              />
+              selectedChatType === "topic_group" ? (
+                <TopicView
+                  chatId={selectedChatId}
+                  currentUserId={user?.id || ""}
+                  chatMembers={chatMembers}
+                />
+              ) : (
+                <MessageList
+                  chatId={selectedChatId}
+                  onlineUsers={onlineUsers}
+                  onOpenThread={setActiveThreadId}
+                  pinnedMessageIds={pinnedMessageIds}
+                  favoritedMessageIds={favoritedMessageIds}
+                  onPinMessage={handlePinMessage}
+                  onUnpinMessage={handleUnpinMessage}
+                  onFavoriteMessage={handleFavoriteMessage}
+                  onUnfavoriteMessage={handleUnfavoriteMessage}
+                  onEditMessage={handleEditMessage}
+                  onRecallMessage={handleRecallMessage}
+                  onForwardMessage={handleForwardMessage}
+                  onBuzzMessage={handleBuzzMessage}
+                  buzzedMessageIds={buzzedMessageIds}
+                />
+              )
             ) : chatTab === "pins" ? (
               <PinnedMessagesView
                 pins={pinnedMessages}
@@ -557,8 +566,10 @@ export default function MessengerPage() {
             {/* Typing indicator */}
             <TypingIndicator typingUsers={currentChatTypingUsers} />
 
-            {/* Input */}
-            <MessageInput chatId={selectedChatId} onTyping={handleInputTyping} />
+            {/* Input (hidden for topic_group chats — topics have their own input) */}
+            {selectedChatType !== "topic_group" && (
+              <MessageInput chatId={selectedChatId} onTyping={handleInputTyping} />
+            )}
           </div>
 
           {/* Thread panel */}

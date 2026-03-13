@@ -120,6 +120,7 @@ export const messages = pgTable(
     type: messageTypeEnum("type").notNull().default("text"),
     contentJson: jsonb("content_json").notNull().default({}),
     threadId: uuid("thread_id"),
+    topicId: uuid("topic_id"),
     replyToId: uuid("reply_to_id"),
     editedAt: timestamp("edited_at", { withTimezone: true }),
     editCount: integer("edit_count").notNull().default(0),
@@ -133,6 +134,7 @@ export const messages = pgTable(
     index("messages_chat_id_idx").on(table.chatId),
     index("messages_sender_id_idx").on(table.senderId),
     index("messages_thread_id_idx").on(table.threadId),
+    index("messages_topic_id_idx").on(table.topicId),
     index("messages_created_at_idx").on(table.createdAt),
     // Composite index for chat timeline queries
     index("messages_chat_created_idx").on(table.chatId, table.createdAt),
@@ -281,6 +283,49 @@ export const announcements = pgTable(
   ]
 );
 
+// Topics for topic_group chats
+export const topics = pgTable(
+  "topics",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    chatId: uuid("chat_id")
+      .notNull()
+      .references(() => chats.id, { onDelete: "cascade" }),
+    title: varchar("title", { length: 255 }).notNull(),
+    creatorId: uuid("creator_id")
+      .notNull()
+      .references(() => users.id),
+    status: topicStatusEnum("status").notNull().default("open"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("topics_chat_id_idx").on(table.chatId),
+    index("topics_status_idx").on(table.chatId, table.status),
+  ]
+);
+
+// Topic subscriptions (users following a topic)
+export const topicSubscriptions = pgTable(
+  "topic_subscriptions",
+  {
+    topicId: uuid("topic_id")
+      .notNull()
+      .references(() => topics.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id),
+  },
+  (table) => [
+    uniqueIndex("topic_subscriptions_unique_idx").on(
+      table.topicId,
+      table.userId
+    ),
+    index("topic_subscriptions_topic_id_idx").on(table.topicId),
+  ]
+);
+
 // Relations
 export const chatsRelations = relations(chats, ({ one, many }) => ({
   organization: one(organizations, {
@@ -296,6 +341,7 @@ export const chatsRelations = relations(chats, ({ one, many }) => ({
   pins: many(pins),
   tabs: many(chatTabs),
   announcements: many(announcements),
+  topics: many(topics),
 }));
 
 export const chatMembersRelations = relations(chatMembers, ({ one }) => ({
@@ -317,6 +363,10 @@ export const messagesRelations = relations(messages, ({ one, many }) => ({
   sender: one(users, {
     fields: [messages.senderId],
     references: [users.id],
+  }),
+  topic: one(topics, {
+    fields: [messages.topicId],
+    references: [topics.id],
   }),
   thread: one(messages, {
     fields: [messages.threadId],
@@ -413,6 +463,33 @@ export const announcementsRelations = relations(announcements, ({ one }) => ({
   }),
 }));
 
+export const topicsRelations = relations(topics, ({ one, many }) => ({
+  chat: one(chats, {
+    fields: [topics.chatId],
+    references: [chats.id],
+  }),
+  creator: one(users, {
+    fields: [topics.creatorId],
+    references: [users.id],
+  }),
+  subscriptions: many(topicSubscriptions),
+  messages: many(messages),
+}));
+
+export const topicSubscriptionsRelations = relations(
+  topicSubscriptions,
+  ({ one }) => ({
+    topic: one(topics, {
+      fields: [topicSubscriptions.topicId],
+      references: [topics.id],
+    }),
+    user: one(users, {
+      fields: [topicSubscriptions.userId],
+      references: [users.id],
+    }),
+  })
+);
+
 // Type exports
 export type Chat = typeof chats.$inferSelect;
 export type NewChat = typeof chats.$inferInsert;
@@ -427,3 +504,6 @@ export type ChatTab = typeof chatTabs.$inferSelect;
 export type NewChatTab = typeof chatTabs.$inferInsert;
 export type Announcement = typeof announcements.$inferSelect;
 export type NewAnnouncement = typeof announcements.$inferInsert;
+export type Topic = typeof topics.$inferSelect;
+export type NewTopic = typeof topics.$inferInsert;
+export type TopicSubscription = typeof topicSubscriptions.$inferSelect;

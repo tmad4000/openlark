@@ -62,6 +62,25 @@ export const updateMemberSchema = z.object({
 
 export type UpdateMemberInput = z.infer<typeof updateMemberSchema>;
 
+// Topic status types
+export const topicStatuses = ["open", "closed"] as const;
+export type TopicStatus = (typeof topicStatuses)[number];
+
+// Create topic schema
+export const createTopicSchema = z.object({
+  title: z.string().min(1).max(255),
+  initialMessage: z.string().min(1).max(10000),
+});
+
+export type CreateTopicInput = z.infer<typeof createTopicSchema>;
+
+// Update topic schema
+export const updateTopicSchema = z.object({
+  status: z.enum(topicStatuses).optional(),
+});
+
+export type UpdateTopicInput = z.infer<typeof updateTopicSchema>;
+
 // Send message schema
 export const sendMessageSchema = z.object({
   type: z.enum(messageTypes).default("text"),
@@ -70,6 +89,7 @@ export const sendMessageSchema = z.object({
     z.object({}).passthrough(), // Rich content JSON
   ]),
   threadId: z.string().uuid().optional(),
+  topicId: z.string().uuid().optional(),
   replyToId: z.string().uuid().optional(),
   scheduledFor: z.string().datetime().optional(),
 });

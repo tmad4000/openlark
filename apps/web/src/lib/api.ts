@@ -150,7 +150,7 @@ class ApiClient {
     );
   }
 
-  async sendMessage(chatId: string, data: { content: string | Record<string, unknown>; type?: string; threadId?: string }) {
+  async sendMessage(chatId: string, data: { content: string | Record<string, unknown>; type?: string; threadId?: string; topicId?: string }) {
     return this.request<{ message: Message }>(`/messenger/chats/${chatId}/messages`, {
       method: "POST",
       body: JSON.stringify(data),
@@ -376,6 +376,43 @@ class ApiClient {
     return this.request<{ success: boolean }>(
       `/messenger/announcements/${announcementId}`,
       { method: "DELETE" }
+    );
+  }
+
+  // Topic endpoints
+  async getTopics(chatId: string) {
+    return this.request<{ topics: Topic[] }>(
+      `/messenger/chats/${chatId}/topics`
+    );
+  }
+
+  async createTopic(chatId: string, title: string, initialMessage: string) {
+    return this.request<{ topic: Topic; message: Message }>(
+      `/messenger/chats/${chatId}/topics`,
+      {
+        method: "POST",
+        body: JSON.stringify({ title, initialMessage }),
+      }
+    );
+  }
+
+  async getTopicMessages(topicId: string, params?: { before?: string; limit?: number }) {
+    const searchParams = new URLSearchParams();
+    if (params?.before) searchParams.set("before", params.before);
+    if (params?.limit) searchParams.set("limit", params.limit.toString());
+    const query = searchParams.toString();
+    return this.request<{ messages: Message[] }>(
+      `/messenger/topics/${topicId}/messages${query ? `?${query}` : ""}`
+    );
+  }
+
+  async updateTopic(topicId: string, data: { status?: "open" | "closed" }) {
+    return this.request<{ topic: Topic }>(
+      `/messenger/topics/${topicId}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      }
     );
   }
 
@@ -723,6 +760,7 @@ export interface Message {
     forwarded?: ForwardedInfo;
   };
   threadId: string | null;
+  topicId: string | null;
   replyToId: string | null;
   replyCount?: number;
   createdAt: string;
@@ -874,6 +912,17 @@ export interface AppNotification {
   entityId: string | null;
   readAt: string | null;
   createdAt: string;
+}
+
+// Topic types
+export interface Topic {
+  id: string;
+  chatId: string;
+  title: string;
+  creatorId: string;
+  status: "open" | "closed";
+  createdAt: string;
+  messageCount: number;
 }
 
 // Buzz types

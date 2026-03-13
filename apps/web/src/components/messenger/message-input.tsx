@@ -220,6 +220,7 @@ export function MessageInput({
       type: "text",
       contentJson,
       threadId: null,
+      topicId: null,
       replyToId: null,
       createdAt: new Date().toISOString(),
       editedAt: null,

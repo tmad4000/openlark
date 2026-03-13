@@ -9,12 +9,15 @@ import {
   favorites,
   chatTabs,
   announcements,
+  topics,
+  topicSubscriptions,
   users,
   type Chat,
   type Message,
   type ChatMember,
   type ChatTab,
   type Announcement,
+  type Topic,
 } from "../../db/schema/index.js";
 // Users table is imported via relations in messenger schema
 import { eq, and, isNull, desc, lt, gt, inArray, sql } from "drizzle-orm";
@@ -30,6 +33,8 @@ import type {
   UpdateChatTabInput,
   CreateAnnouncementInput,
   UpdateAnnouncementInput,
+  CreateTopicInput,
+  UpdateTopicInput,
 } from "./messenger.schemas.js";
 
 // Constants
@@ -473,6 +478,7 @@ export class MessengerService {
         type: input.type,
         contentJson,
         threadId: input.threadId,
+        topicId: input.topicId,
         replyToId: input.replyToId,
         scheduledFor: input.scheduledFor
           ? new Date(input.scheduledFor)
@@ -1375,6 +1381,180 @@ export class MessengerService {
       .returning();
 
     return result.length > 0;
+  }
+  // ============ TOPIC OPERATIONS ============
+
+  /**
+   * Create a topic in a topic_group chat
+   */
+  async createTopic(
+    chatId: string,
+    input: CreateTopicInput,
+    userId: string
+  ): Promise<{ topic: Topic; message: Message } | null> {
+    // Verify user is a member
+    const isMember = await this.isChatMember(chatId, userId);
+    if (!isMember) return null;
+
+    // Verify chat is a topic_group
+    const chat = await this.getChatById(chatId);
+    if (!chat || chat.type !== "topic_group") return null;
+
+    // Create the topic
+    const [topic] = await db
+      .insert(topics)
+      .values({
+        chatId,
+        title: input.title,
+        creatorId: userId,
+      })
+      .returning();
+
+    if (!topic) throw new Error("Failed to create topic");
+
+    // Subscribe the creator
+    await db.insert(topicSubscriptions).values({
+      topicId: topic.id,
+      userId,
+    });
+
+    // Create the initial message in this topic
+    const [message] = await db
+      .insert(messages)
+      .values({
+        chatId,
+        senderId: userId,
+        type: "text",
+        contentJson: { text: input.initialMessage },
+        topicId: topic.id,
+      })
+      .returning();
+
+    if (!message) throw new Error("Failed to create initial message");
+
+    // Update chat's updatedAt
+    await db
+      .update(chats)
+      .set({ updatedAt: new Date() })
+      .where(eq(chats.id, chatId));
+
+    return { topic, message };
+  }
+
+  /**
+   * Get topics for a topic_group chat (open first, then closed)
+   */
+  async getTopics(
+    chatId: string
+  ): Promise<(Topic & { messageCount: number })[]> {
+    const allTopics = await db
+      .select()
+      .from(topics)
+      .where(eq(topics.chatId, chatId))
+      .orderBy(
+        sql`CASE WHEN ${topics.status} = 'open' THEN 0 ELSE 1 END`,
+        desc(topics.createdAt)
+      );
+
+    if (allTopics.length === 0) return [];
+
+    // Get message counts for each topic
+    const topicIds = allTopics.map((t) => t.id);
+    const counts = await db
+      .select({
+        topicId: messages.topicId,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(messages)
+      .where(inArray(messages.topicId, topicIds))
+      .groupBy(messages.topicId);
+
+    const countMap = new Map<string, number>();
+    for (const c of counts) {
+      if (c.topicId) countMap.set(c.topicId, c.count);
+    }
+
+    return allTopics.map((t) => ({
+      ...t,
+      messageCount: countMap.get(t.id) || 0,
+    }));
+  }
+
+  /**
+   * Get messages for a specific topic
+   */
+  async getTopicMessages(
+    topicId: string,
+    pagination: PaginationInput
+  ): Promise<Message[]> {
+    const conditions = [eq(messages.topicId, topicId)];
+
+    if (pagination.before) {
+      const beforeMsg = await this.getMessageById(pagination.before);
+      if (beforeMsg) {
+        conditions.push(lt(messages.createdAt, beforeMsg.createdAt));
+      }
+    }
+
+    if (pagination.after) {
+      const afterMsg = await this.getMessageById(pagination.after);
+      if (afterMsg) {
+        conditions.push(gt(messages.createdAt, afterMsg.createdAt));
+      }
+    }
+
+    return db
+      .select()
+      .from(messages)
+      .where(and(...conditions))
+      .orderBy(desc(messages.createdAt))
+      .limit(pagination.limit);
+  }
+
+  /**
+   * Update a topic (close/reopen)
+   */
+  async updateTopic(
+    topicId: string,
+    input: UpdateTopicInput,
+    userId: string
+  ): Promise<Topic | null> {
+    const [topic] = await db
+      .select()
+      .from(topics)
+      .where(eq(topics.id, topicId))
+      .limit(1);
+
+    if (!topic) return null;
+
+    // Check permission: creator, owner, or admin
+    const member = await this.getChatMember(topic.chatId, userId);
+    if (!member) return null;
+
+    const isCreator = topic.creatorId === userId;
+    const isPrivileged = member.role === "owner" || member.role === "admin";
+    if (!isCreator && !isPrivileged) return null;
+
+    const [updated] = await db
+      .update(topics)
+      .set(input)
+      .where(eq(topics.id, topicId))
+      .returning();
+
+    return updated ?? null;
+  }
+
+  /**
+   * Get a single topic by ID
+   */
+  async getTopicById(topicId: string): Promise<Topic | null> {
+    const [topic] = await db
+      .select()
+      .from(topics)
+      .where(eq(topics.id, topicId))
+      .limit(1);
+
+    return topic ?? null;
   }
 }
 
