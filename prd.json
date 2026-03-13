@@ -1982,8 +1982,8 @@
         "Typecheck passes"
       ],
       "priority": 117,
-      "passes": false,
-      "notes": "Used by: message attachments, document images, avatars, email attachments, form file uploads."
+      "passes": true,
+      "notes": "Created files schema (db/schema/files.ts) with id, org_id, uploader_id, filename, s3_key, size, content_type, created_at. POST /files/upload accepts multipart, stores with org_id/year/month/uuid.ext key format, returns {id, url, filename, size, contentType}. GET /files/:id returns signed download URL scoped to org. Max 100MB configurable via MAX_FILE_SIZE_MB env var. Content type validation for images, docs, archives, audio/video. Added MinIO + minio-setup (auto-creates bucket) to docker-compose.yml. Typecheck passes."
     },
     {
       "id": "US-118",

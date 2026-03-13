@@ -34,6 +34,7 @@ import { botMessagingRoutes } from "./routes/bot-messaging";
 import { notificationBotRoutes } from "./routes/notification-bots";
 import { aiRoutes } from "./routes/ai";
 import { samlRoutes } from "./routes/saml";
+import { filesRoutes } from "./routes/files";
 import { wsRoutes } from "./routes/ws";
 import { auditLogPlugin } from "./middleware/audit";
 import { closeRedis } from "./lib/redis";
@@ -91,6 +92,7 @@ await fastify.register(botMessagingRoutes);
 await fastify.register(notificationBotRoutes);
 await fastify.register(aiRoutes);
 await fastify.register(samlRoutes);
+await fastify.register(filesRoutes);
 await fastify.register(wsRoutes);
 
 fastify.get("/", async () => {
