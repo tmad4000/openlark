@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { ThemeProviderWrapper } from "./ThemeProviderWrapper";
 
 export const metadata: Metadata = {
   title: "OpenLark",
@@ -12,8 +13,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body>{children}</body>
+    <html lang="en" suppressHydrationWarning>
+      <body>
+        <ThemeProviderWrapper>{children}</ThemeProviderWrapper>
+      </body>
     </html>
   );
 }

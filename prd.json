@@ -2016,8 +2016,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 119,
-      "passes": false,
-      "notes": "Use Tailwind CSS dark mode with class strategy."
+      "passes": true,
+      "notes": "Added theme system with Light/Dark/System toggle. Created ThemeProvider context with CSS custom properties for all theme colors. Added user_theme enum and theme column to users table. Theme toggle on profile settings page with instant preview. Org admin can set custom accent color (stored in org settings JSONB). CSS variables: --bg-page, --bg-surface, --bg-nav, --text-primary, --text-secondary, --border-default, --accent, etc. System mode auto-detects OS preference via prefers-color-scheme media query. Theme persisted both in localStorage and user DB record. Migration 0021_user_theme.sql. Typecheck passes."
     },
     {
       "id": "US-120",

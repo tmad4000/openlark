@@ -39,6 +39,7 @@ interface UpdateOrgBody {
   logo_url?: string;
   domain?: string;
   industry?: string;
+  accent_color?: string | null;
 }
 
 interface MembersQuery {
@@ -126,7 +127,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
     async (request, reply) => {
       if (!(await requireAdmin(request, reply))) return;
 
-      const { name, logo_url, domain, industry } = request.body;
+      const { name, logo_url, domain, industry, accent_color } = request.body;
 
       const updates: Record<string, any> = { updatedAt: new Date() };
 
@@ -161,6 +162,25 @@ export async function adminRoutes(fastify: FastifyInstance) {
         } else {
           updates.domain = null;
         }
+      }
+
+      // Handle accent_color — stored in settings JSONB
+      if (accent_color !== undefined) {
+        if (accent_color && !/^#[0-9a-fA-F]{6}$/.test(accent_color)) {
+          return reply.status(400).send({ error: "Invalid accent_color. Must be a hex color like #1a73e8" });
+        }
+        const [currentOrg] = await db
+          .select({ settings: organizations.settings })
+          .from(organizations)
+          .where(eq(organizations.id, request.user.orgId!))
+          .limit(1);
+        const currentSettings = (currentOrg?.settings || {}) as Record<string, unknown>;
+        if (accent_color) {
+          currentSettings.accentColor = accent_color;
+        } else {
+          delete currentSettings.accentColor;
+        }
+        updates.settings = currentSettings;
       }
 
       const [updatedOrg] = await db

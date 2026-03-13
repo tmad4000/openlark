@@ -326,8 +326,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-gray-500">Loading...</div>
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "var(--bg-page)" }}>
+        <div style={{ color: "var(--text-secondary)" }}>Loading...</div>
       </div>
     );
   }
@@ -339,9 +339,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const hasOwnSidebar = modulesWithOwnSidebar.includes(activeModule);
 
   return (
-    <div className="h-screen flex overflow-hidden bg-gray-100">
+    <div className="h-screen flex overflow-hidden" style={{ background: "var(--bg-page)" }}>
       {/* Navigation Rail - 56px fixed width */}
-      <nav className="w-14 bg-gray-900 flex flex-col items-center py-3 flex-shrink-0">
+      <nav className="w-14 flex flex-col items-center py-3 flex-shrink-0" style={{ background: "var(--bg-nav)" }}>
         {/* Logo */}
         <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center mb-4">
           <span className="text-white font-bold text-lg">O</span>
@@ -438,13 +438,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
             <DropdownMenu.Portal>
               <DropdownMenu.Content
-                className="min-w-[240px] bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50"
+                className="min-w-[240px] rounded-lg shadow-lg py-1 z-50"
+                style={{ background: "var(--bg-surface)", borderColor: "var(--border-default)", border: "1px solid var(--border-default)" }}
                 sideOffset={8}
                 side="right"
                 align="end"
               >
-                <div className="px-3 py-2 border-b border-gray-100">
-                  <p className="text-sm font-medium text-gray-900">
+                <div className="px-3 py-2" style={{ borderBottom: "1px solid var(--border-light)" }}>
+                  <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
                     {user?.displayName || "User"}
                   </p>
                   <p className="text-xs text-gray-500 truncate">{user?.email}</p>
@@ -537,10 +538,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* Notification Panel - slides in from left */}
       {notificationPanelOpen && (
-        <aside className="w-80 bg-white border-r border-gray-200 flex flex-col flex-shrink-0 shadow-lg">
+        <aside className="w-80 flex flex-col flex-shrink-0 shadow-lg" style={{ background: "var(--bg-surface)", borderRight: "1px solid var(--border-default)" }}>
           {/* Header */}
-          <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-            <h2 className="font-semibold text-gray-900">Notifications</h2>
+          <div className="p-4 flex items-center justify-between" style={{ borderBottom: "1px solid var(--border-default)" }}>
+            <h2 className="font-semibold" style={{ color: "var(--text-primary)" }}>Notifications</h2>
             <div className="flex items-center gap-2">
               {unreadCount > 0 && (
                 <button
@@ -606,11 +607,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {/* Resizable Sidebar Panel - hidden for modules with their own sidebar */}
       {!hasOwnSidebar && !isSidebarCollapsed && (
         <aside
-          className="bg-white border-r border-gray-200 flex flex-col relative"
-          style={{ width: sidebarWidth }}
+          className="flex flex-col relative"
+          style={{ width: sidebarWidth, background: "var(--bg-surface)", borderRight: "1px solid var(--border-default)" }}
         >
-          <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-            <h2 className="font-semibold text-gray-900 capitalize">
+          <div className="p-4 flex items-center justify-between" style={{ borderBottom: "1px solid var(--border-default)" }}>
+            <h2 className="font-semibold capitalize" style={{ color: "var(--text-primary)" }}>
               {activeModule || "Dashboard"}
             </h2>
             <button
@@ -638,14 +639,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {!hasOwnSidebar && isSidebarCollapsed && (
         <button
           onClick={() => setIsSidebarCollapsed(false)}
-          className="w-6 bg-white border-r border-gray-200 flex items-center justify-center hover:bg-gray-50"
+          className="w-6 flex items-center justify-center"
+          style={{ background: "var(--bg-surface)", borderRight: "1px solid var(--border-default)" }}
         >
           <ChevronRight className="w-4 h-4 text-gray-400" />
         </button>
       )}
 
       {/* Main Content Area */}
-      <main className={`flex-1 overflow-hidden ${hasOwnSidebar ? "" : "bg-gray-50"}`}>{children}</main>
+      <main className="flex-1 overflow-hidden" style={hasOwnSidebar ? {} : { background: "var(--bg-page)" }}>{children}</main>
 
       {/* Global Search Dialog */}
       <GlobalSearchDialog open={searchOpen} onOpenChange={setSearchOpen} />
@@ -654,8 +656,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {statusMenuOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50" onClick={() => setStatusMenuOpen(false)} />
-          <div className="relative bg-white rounded-lg shadow-xl w-[400px] p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Set Custom Status</h3>
+          <div className="relative rounded-lg shadow-xl w-[400px] p-6" style={{ background: "var(--bg-surface)" }}>
+            <h3 className="text-lg font-semibold mb-4" style={{ color: "var(--text-primary)" }}>Set Custom Status</h3>
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Emoji</label>

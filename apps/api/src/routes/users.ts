@@ -20,6 +20,7 @@ interface UpdateProfileBody {
   status?: "active" | "away" | "busy" | "offline";
   status_text?: string | null;
   status_emoji?: string | null;
+  theme?: "light" | "dark" | "system";
 }
 
 interface WorkingHoursCheckBody {
@@ -87,6 +88,7 @@ export async function usersRoutes(fastify: FastifyInstance) {
         status,
         status_text,
         status_emoji,
+        theme,
       } = request.body;
 
       // Build update object
@@ -101,6 +103,7 @@ export async function usersRoutes(fastify: FastifyInstance) {
         status: "active" | "away" | "busy" | "offline";
         statusText: string | null;
         statusEmoji: string | null;
+        theme: "light" | "dark" | "system";
         updatedAt: Date;
       }> = {
         updatedAt: new Date(),
@@ -192,6 +195,17 @@ export async function usersRoutes(fastify: FastifyInstance) {
         updates.statusEmoji = status_emoji || null;
       }
 
+      // Validate and set theme
+      if (theme !== undefined) {
+        const validThemes = ["light", "dark", "system"] as const;
+        if (!validThemes.includes(theme)) {
+          return reply.status(400).send({
+            error: "Invalid theme. Must be one of: light, dark, system",
+          });
+        }
+        updates.theme = theme;
+      }
+
       // Update user
       const [updatedUser] = await db
         .update(users)
@@ -208,6 +222,7 @@ export async function usersRoutes(fastify: FastifyInstance) {
           status: users.status,
           statusText: users.statusText,
           statusEmoji: users.statusEmoji,
+          theme: users.theme,
           workingHoursStart: users.workingHoursStart,
           workingHoursEnd: users.workingHoursEnd,
           orgId: users.orgId,

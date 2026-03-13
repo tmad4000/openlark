@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { User, Clock, Globe, Save } from "lucide-react";
+import { User, Clock, Globe, Save, Sun, Moon, Monitor } from "lucide-react";
+import { useTheme } from "../../../components/ThemeProvider";
 
 type UserStatus = "active" | "away" | "busy" | "offline";
 
@@ -53,12 +54,16 @@ const COMMON_TIMEZONES = [
   "Pacific/Auckland",
 ];
 
+type ThemePreference = "light" | "dark" | "system";
+
 export default function ProfilePage() {
   const router = useRouter();
+  const { theme: currentTheme, setTheme } = useTheme();
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
+  const [themePreference, setThemePreference] = useState<ThemePreference>("system");
 
   // Form state
   const [displayName, setDisplayName] = useState("");
@@ -89,6 +94,7 @@ export default function ProfilePage() {
         setTimezone(u.timezone || "UTC");
         setWorkingHoursStart(u.workingHoursStart || "09:00");
         setWorkingHoursEnd(u.workingHoursEnd || "17:00");
+        setThemePreference(u.theme || "system");
         setIsLoading(false);
       })
       .catch(() => {
@@ -116,6 +122,7 @@ export default function ProfilePage() {
           timezone,
           working_hours_start: workingHoursStart,
           working_hours_end: workingHoursEnd,
+          theme: themePreference,
         }),
       });
 
@@ -145,11 +152,11 @@ export default function ProfilePage() {
 
   return (
     <div className="max-w-2xl mx-auto p-8">
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">Profile Settings</h1>
+      <h1 className="text-2xl font-bold mb-6" style={{ color: "var(--text-primary)" }}>Profile Settings</h1>
 
       {/* Current Status Display */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+      <div className="rounded-lg p-6 mb-6" style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)" }}>
+        <h2 className="text-lg font-semibold mb-4 flex items-center gap-2" style={{ color: "var(--text-primary)" }}>
           <User className="w-5 h-5" />
           Current Status
         </h2>
@@ -173,8 +180,8 @@ export default function ProfilePage() {
       </div>
 
       {/* Profile Form */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Personal Information</h2>
+      <div className="rounded-lg p-6 mb-6" style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)" }}>
+        <h2 className="text-lg font-semibold mb-4" style={{ color: "var(--text-primary)" }}>Personal Information</h2>
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Display Name</label>
@@ -207,9 +214,48 @@ export default function ProfilePage() {
         </div>
       </div>
 
+      {/* Theme Settings */}
+      <div className="rounded-lg p-6 mb-6" style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)" }}>
+        <h2 className="text-lg font-semibold mb-4 flex items-center gap-2" style={{ color: "var(--text-primary)" }}>
+          <Sun className="w-5 h-5" />
+          Appearance
+        </h2>
+        <p className="text-sm mb-4" style={{ color: "var(--text-secondary)" }}>
+          Choose how OpenLark looks to you. Select a theme or let it follow your system settings.
+        </p>
+        <div className="grid grid-cols-3 gap-3">
+          {([
+            { value: "light" as ThemePreference, label: "Light", icon: Sun },
+            { value: "dark" as ThemePreference, label: "Dark", icon: Moon },
+            { value: "system" as ThemePreference, label: "System", icon: Monitor },
+          ]).map(({ value, label, icon: Icon }) => (
+            <button
+              key={value}
+              onClick={() => {
+                setThemePreference(value);
+                setTheme(value);
+              }}
+              className={`flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-colors ${
+                themePreference === value
+                  ? "border-blue-500"
+                  : ""
+              }`}
+              style={{
+                borderColor: themePreference === value ? "var(--accent)" : "var(--border-default)",
+                background: themePreference === value ? "var(--bg-surface-hover)" : "var(--bg-surface)",
+                color: "var(--text-primary)",
+              }}
+            >
+              <Icon className="w-6 h-6" />
+              <span className="text-sm font-medium">{label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Working Hours */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+      <div className="rounded-lg p-6 mb-6" style={{ background: "var(--bg-surface)", border: "1px solid var(--border-default)" }}>
+        <h2 className="text-lg font-semibold mb-4 flex items-center gap-2" style={{ color: "var(--text-primary)" }}>
           <Clock className="w-5 h-5" />
           Working Hours
         </h2>

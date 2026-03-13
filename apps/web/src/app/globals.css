@@ -11,6 +11,76 @@
   --color-error-bg: #fef2f2;
 }
 
+/* ── Theme CSS Custom Properties ────────────────────────────────── */
+
+:root {
+  /* Backgrounds */
+  --bg-page: #f9fafb;        /* gray-50 */
+  --bg-surface: #ffffff;
+  --bg-surface-hover: #f3f4f6; /* gray-100 */
+  --bg-nav: #111827;          /* gray-900 */
+  --bg-input: #ffffff;
+  --bg-input-disabled: #f9fafb;
+  --bg-overlay: rgba(0, 0, 0, 0.5);
+
+  /* Text */
+  --text-primary: #111827;    /* gray-900 */
+  --text-secondary: #6b7280;  /* gray-500 */
+  --text-tertiary: #9ca3af;   /* gray-400 */
+  --text-inverse: #ffffff;
+  --text-link: #1a73e8;
+
+  /* Borders */
+  --border-default: #e5e7eb;  /* gray-200 */
+  --border-light: #f3f4f6;    /* gray-100 */
+  --border-input: #d1d5db;    /* gray-300 */
+  --border-focus: #1a73e8;
+
+  /* Accent (overridable by org) */
+  --accent: var(--org-accent, #1a73e8);
+  --accent-hover: var(--org-accent-hover, #1557b0);
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="dark"] {
+  /* Backgrounds */
+  --bg-page: #0f172a;         /* slate-900 */
+  --bg-surface: #1e293b;      /* slate-800 */
+  --bg-surface-hover: #334155; /* slate-700 */
+  --bg-nav: #020617;          /* slate-950 */
+  --bg-input: #1e293b;
+  --bg-input-disabled: #0f172a;
+  --bg-overlay: rgba(0, 0, 0, 0.7);
+
+  /* Text */
+  --text-primary: #f1f5f9;    /* slate-100 */
+  --text-secondary: #94a3b8;  /* slate-400 */
+  --text-tertiary: #64748b;   /* slate-500 */
+  --text-inverse: #0f172a;
+  --text-link: #60a5fa;       /* blue-400 */
+
+  /* Borders */
+  --border-default: #334155;  /* slate-700 */
+  --border-light: #1e293b;    /* slate-800 */
+  --border-input: #475569;    /* slate-600 */
+  --border-focus: #60a5fa;
+
+  /* Accent */
+  --accent: var(--org-accent, #60a5fa);
+  --accent-hover: var(--org-accent-hover, #3b82f6);
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+
+  color-scheme: dark;
+}
+
 /* Code block styles in TipTap editor */
 .ProseMirror pre {
   background: #0d1117;

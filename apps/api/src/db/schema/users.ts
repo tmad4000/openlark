@@ -18,6 +18,9 @@ export const userStatusEnum = pgEnum("user_status", [
   "offline",
 ]);
 
+// User theme preference enum
+export const userThemeEnum = pgEnum("user_theme", ["light", "dark", "system"]);
+
 // User role enum - organization-level role
 export const userRoleEnum = pgEnum("user_role", ["owner", "admin", "member"]);
 
@@ -38,6 +41,7 @@ export const users = pgTable(
     statusEmoji: varchar("status_emoji", { length: 32 }),
     workingHoursStart: time("working_hours_start"),
     workingHoursEnd: time("working_hours_end"),
+    theme: userThemeEnum("theme").notNull().default("system"),
     role: userRoleEnum("role").notNull().default("member"),
     orgId: uuid("org_id").references(() => organizations.id),
     createdAt: timestamp("created_at", { withTimezone: true })
