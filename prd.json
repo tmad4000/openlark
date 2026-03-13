@@ -1507,8 +1507,8 @@
         "Typecheck passes"
       ],
       "priority": 89,
-      "passes": false,
-      "notes": "Use @livekit/components-react for the meeting UI components."
+      "passes": true,
+      "notes": "Added LiveKit server to docker-compose.yml (ports 7880/7881/7882). Created meetings table with uuid pk, org_id, title, host_id, type enum (instant/scheduled/recurring), status enum (waiting/active/ended), room_id, settings jsonb, started_at, ended_at, timestamps. Created meeting_participants table with composite pk (meeting_id, user_id), role enum (host/co_host/participant), joined_at, left_at. POST /meetings creates meeting and LiveKit room, returns join token. GET /meetings/:id/join generates LiveKit access token for current user with participant list. POST /meetings/:id/end for host to end meeting. Meeting page at /app/meeting/[id] uses @livekit/components-react VideoConference component with LiveKitRoom wrapper. Added livekit-server-sdk to API and @livekit/components-react + livekit-client to web. Typecheck passes."
     },
     {
       "id": "US-090",

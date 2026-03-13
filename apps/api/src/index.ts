@@ -25,6 +25,7 @@ import { leaveRoutes } from "./routes/leave";
 import { emailRoutes } from "./routes/emails";
 import { searchRoutes } from "./routes/search";
 import { translationRoutes } from "./routes/translations";
+import { meetingsRoutes } from "./routes/meetings";
 import { wsRoutes } from "./routes/ws";
 import { closeRedis } from "./lib/redis";
 import { startAutomationWorker, stopAutomationWorker } from "./lib/automation-worker";
@@ -66,6 +67,7 @@ await fastify.register(leaveRoutes);
 await fastify.register(emailRoutes);
 await fastify.register(searchRoutes);
 await fastify.register(translationRoutes);
+await fastify.register(meetingsRoutes);
 await fastify.register(wsRoutes);
 
 fastify.get("/", async () => {
