@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { Search, Plus, MessageCircle, Users, Bell, BellOff, AtSign, Info, Wifi, WifiOff, Loader2, Check, CheckCheck, Circle, MoreHorizontal, Reply, X, MessageSquare, Pin, Star, Pencil, Trash2, Forward, Square, CheckSquare, Tag, FileText, File, FolderOpen, ExternalLink, GripVertical, Shield, Crown, UserPlus, UserMinus, Settings, Globe, Lock, ChevronDown, ChevronRight, LogOut, Megaphone, Zap } from "lucide-react";
+import { Search, Plus, MessageCircle, Users, Bell, BellOff, AtSign, Info, Wifi, WifiOff, Loader2, Check, CheckCheck, Circle, MoreHorizontal, Reply, X, MessageSquare, Pin, Star, Pencil, Trash2, Forward, Square, CheckSquare, Tag, FileText, File, FolderOpen, ExternalLink, GripVertical, Shield, Crown, UserPlus, UserMinus, Settings, Globe, Lock, ChevronDown, ChevronRight, LogOut, Megaphone, Zap, ListTodo, Calendar } from "lucide-react";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as ContextMenu from "@radix-ui/react-context-menu";
 import MessageInput, { MentionUser } from "@/components/MessageInput";
@@ -434,12 +434,14 @@ function QuickReactionPicker({
   onEdit,
   onRecall,
   onBuzz,
+  onCreateTask,
   isPinned,
   isFavorited,
   canEdit,
   canRecall,
   canForward,
   canBuzz,
+  canCreateTask,
 }: {
   onSelect: (emoji: string) => void;
   onOpenFull: () => void;
@@ -450,12 +452,14 @@ function QuickReactionPicker({
   onEdit?: () => void;
   onRecall?: () => void;
   onBuzz?: () => void;
+  onCreateTask?: () => void;
   isPinned?: boolean;
   isFavorited?: boolean;
   canEdit?: boolean;
   canRecall?: boolean;
   canForward?: boolean;
   canBuzz?: boolean;
+  canCreateTask?: boolean;
 }) {
   return (
     <div className="flex items-center gap-0.5 bg-white border border-gray-200 rounded-full shadow-lg px-1.5 py-0.5">
@@ -531,6 +535,15 @@ function QuickReactionPicker({
           title="Recall message"
         >
           <Trash2 className="w-4 h-4" />
+        </button>
+      )}
+      {canCreateTask && onCreateTask && (
+        <button
+          onClick={onCreateTask}
+          className="w-7 h-7 flex items-center justify-center hover:bg-blue-50 rounded-full transition-colors text-gray-500 hover:text-blue-600"
+          title="Create Task"
+        >
+          <ListTodo className="w-4 h-4" />
         </button>
       )}
       {canBuzz && onBuzz && (
@@ -787,6 +800,7 @@ function MessageBubble({
   onRecall,
   onForward,
   onBuzz,
+  onCreateTask,
   isPinned,
   isFavorited,
   isBuzzed,
@@ -806,6 +820,7 @@ function MessageBubble({
   onRecall?: (messageId: string) => void;
   onForward?: (messageId: string) => void;
   onBuzz?: (messageId: string) => void;
+  onCreateTask?: (messageId: string) => void;
   isPinned?: boolean;
   isFavorited?: boolean;
   isBuzzed?: boolean;
@@ -987,12 +1002,17 @@ function MessageBubble({
                   setShowReactionPicker(false);
                   onBuzz(message.id);
                 } : undefined}
+                onCreateTask={onCreateTask ? () => {
+                  setShowReactionPicker(false);
+                  onCreateTask(message.id);
+                } : undefined}
                 isPinned={isPinned}
                 isFavorited={isFavorited}
                 canEdit={isCurrentUser && !message.recalledAt && (message.type === "text" || message.type === "rich_text")}
                 canRecall={isCurrentUser && !message.recalledAt}
                 canForward={!message.recalledAt && message.type !== "system"}
                 canBuzz={isCurrentUser && !message.recalledAt && message.type !== "system"}
+                canCreateTask={!message.recalledAt && message.type !== "system"}
               />
             </div>
           )}
@@ -1852,6 +1872,22 @@ function ChatView({
   // Handle buzz sent - mark message as buzzed
   const handleBuzzSent = useCallback((messageId: string) => {
     setBuzzedMessageIds((prev) => new Set(prev).add(messageId));
+  }, []);
+
+  // Create task from message state
+  const [showCreateTaskDialog, setShowCreateTaskDialog] = useState(false);
+  const [createTaskMessage, setCreateTaskMessage] = useState<Message | null>(null);
+
+  const openCreateTaskDialog = useCallback((messageId: string) => {
+    const message = messages.find(m => m.id === messageId);
+    if (!message) return;
+    setCreateTaskMessage(message);
+    setShowCreateTaskDialog(true);
+  }, [messages]);
+
+  const closeCreateTaskDialog = useCallback(() => {
+    setShowCreateTaskDialog(false);
+    setCreateTaskMessage(null);
   }, []);
 
   // Multi-select mode for combining and forwarding multiple messages
@@ -2923,6 +2959,7 @@ function ChatView({
                         onRecall={recallMessage}
                         onForward={openForwardModal}
                         onBuzz={openBuzzDialog}
+                        onCreateTask={openCreateTaskDialog}
                         isPinned={pinnedMessageIds.has(message.id)}
                         isFavorited={favoritedMessageIds.has(message.id)}
                         isBuzzed={buzzedMessageIds.has(message.id)}
@@ -3202,6 +3239,17 @@ function ChatView({
         />
       )}
 
+      {/* Create Task from Message Dialog */}
+      {showCreateTaskDialog && createTaskMessage && (
+        <CreateTaskFromMessageDialog
+          message={createTaskMessage}
+          onClose={closeCreateTaskDialog}
+          onTaskCreated={(task) => {
+            closeCreateTaskDialog();
+          }}
+        />
+      )}
+
       {/* Buzz Message Dialog */}
       {showBuzzDialog && buzzingMessage && currentUserId && (
         <BuzzMessageDialog
@@ -3437,6 +3485,156 @@ function ForwardMessageModal({
 }
 
 // Buzz Message Dialog Component - send urgent notification for a message
+function CreateTaskFromMessageDialog({
+  message,
+  onClose,
+  onTaskCreated,
+}: {
+  message: Message;
+  onClose: () => void;
+  onTaskCreated: (task: { id: string; title: string }) => void;
+}) {
+  const messageText = (message.content as Record<string, unknown>).text as string || "";
+  const [title, setTitle] = useState(messageText.slice(0, 500));
+  const [priority, setPriority] = useState<string>("none");
+  const [dueDate, setDueDate] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async () => {
+    if (!title.trim()) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const token = getCookie("session_token");
+      const res = await fetch("/api/tasks/from-message", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          message_id: message.id,
+          title: title.trim(),
+          priority: priority !== "none" ? priority : undefined,
+          due_date: dueDate || undefined,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to create task");
+      }
+      const data = await res.json();
+      onTaskCreated(data.task);
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create task");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Dialog.Root open onOpenChange={(open) => !open && onClose()}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 bg-black/50 z-50" />
+        <Dialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white rounded-xl shadow-2xl w-[480px] max-h-[90vh] overflow-y-auto z-50 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <Dialog.Title className="text-lg font-semibold flex items-center gap-2">
+              <ListTodo className="w-5 h-5 text-blue-600" />
+              Create Task from Message
+            </Dialog.Title>
+            <Dialog.Close asChild>
+              <button className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 rounded-full">
+                <X className="w-4 h-4" />
+              </button>
+            </Dialog.Close>
+          </div>
+
+          {/* Source message preview */}
+          <div className="bg-gray-50 rounded-lg p-3 mb-4 border-l-4 border-blue-400">
+            <p className="text-xs text-gray-500 mb-1">From message by {message.sender?.displayName || "Unknown"}</p>
+            <p className="text-sm text-gray-700 line-clamp-3">{messageText || "(no text content)"}</p>
+          </div>
+
+          <div className="space-y-4">
+            {/* Title */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Task Title</label>
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                placeholder="Enter task title"
+                autoFocus
+                maxLength={500}
+              />
+            </div>
+
+            {/* Priority */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
+              <select
+                value={priority}
+                onChange={(e) => setPriority(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+              >
+                <option value="none">None</option>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="urgent">Urgent</option>
+              </select>
+            </div>
+
+            {/* Due Date */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Due Date</label>
+              <div className="relative">
+                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="date"
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                  className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+            </div>
+
+            {error && (
+              <p className="text-sm text-red-600">{error}</p>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-2 mt-6">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSubmit}
+              disabled={!title.trim() || submitting}
+              className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+            >
+              {submitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                "Create Task"
+              )}
+            </button>
+          </div>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
+
 function BuzzMessageDialog({
   messageId,
   message,

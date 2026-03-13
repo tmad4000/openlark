@@ -1269,8 +1269,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 75,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added Create Task button to message hover menu (QuickReactionPicker) with ListTodo icon. Created CreateTaskFromMessageDialog component with title (pre-filled from message text), priority selector, and due date picker. Dialog calls POST /api/tasks/from-message endpoint (already implemented in US-071). Wired up state management in main messenger component (openCreateTaskDialog, closeCreateTaskDialog). Typecheck passes."
     },
     {
       "id": "US-076",

@@ -75,3 +75,4 @@
 [2026-03-12 13:00] US-072 — Tasks UI - list and kanban views — PASS
 [2026-03-12 13:30] US-073 — Tasks - subtasks and dependencies — PASS
 [2026-03-12 14:00] US-074 — Tasks - Gantt chart view — PASS
+[2026-03-13 00:15] US-075 — Task creation from chat message — PASS
