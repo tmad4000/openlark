@@ -22,6 +22,7 @@ import {
   Bell,
   X,
   Search,
+  ClipboardList,
 } from "lucide-react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { GlobalSearchDialog } from "../../components/GlobalSearchDialog";
@@ -57,6 +58,7 @@ const NAV_ITEMS = [
   { id: "attendance", label: "Attendance", icon: Clock, href: "/app/attendance" },
   { id: "leave", label: "Leave", icon: Palmtree, href: "/app/leave" },
   { id: "email", label: "Email", icon: Mail, href: "/app/email" },
+  { id: "forms", label: "Forms", icon: ClipboardList, href: "/app/forms" },
   { id: "admin", label: "Admin", icon: Settings, href: "/app/admin" },
 ];
 

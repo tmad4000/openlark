@@ -1640,8 +1640,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 97,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Form builder page at /app/forms/:id/edit with drag-and-drop question ordering, type picker for 10 question types, inline question config (title, description, required toggle, options for select types), conditional display based on previous question answers. Preview mode renders form as respondent sees it with conditional logic. Share dialog with copy link and QR code placeholder. Responses tab with table of all responses and expandable rows for full response detail. Added Forms nav item to app layout. Added PUT /forms/:id and DELETE /forms/:id API endpoints. Forms list page at /app/forms with create/delete/share actions. Auto-save with 1s debounce. Typecheck passes."
     },
     {
       "id": "US-098",

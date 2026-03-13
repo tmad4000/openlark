@@ -173,6 +173,142 @@ export async function formsRoutes(fastify: FastifyInstance) {
     }
   );
 
+  // PUT /forms/:id - Update a form and its questions
+  fastify.put<{
+    Params: { id: string };
+    Body: {
+      title?: string;
+      description?: string | null;
+      settings?: Record<string, unknown>;
+      theme?: Record<string, unknown>;
+      questions?: Array<{
+        id?: string;
+        type: (typeof VALID_QUESTION_TYPES)[number];
+        config?: Record<string, unknown>;
+        position?: number;
+        required?: boolean;
+        display_condition?: Record<string, unknown> | null;
+      }>;
+    };
+  }>(
+    "/forms/:id",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id } = request.params;
+      const user = request.user;
+
+      if (!UUID_REGEX.test(id)) {
+        return reply.status(400).send({ error: "Invalid form ID" });
+      }
+
+      const [existing] = await db
+        .select()
+        .from(forms)
+        .where(and(eq(forms.id, id), eq(forms.orgId, user.orgId!)))
+        .limit(1);
+
+      if (!existing) {
+        return reply.status(404).send({ error: "Form not found" });
+      }
+
+      const { title, description, settings, theme, questions } =
+        request.body || {};
+
+      // Update form metadata
+      const updates: Record<string, unknown> = {};
+      if (title !== undefined) updates.title = title.trim();
+      if (description !== undefined) updates.description = description;
+      if (settings !== undefined) updates.settings = settings;
+      if (theme !== undefined) updates.theme = theme;
+
+      let updatedForm = existing;
+      if (Object.keys(updates).length > 0) {
+        const [result] = await db
+          .update(forms)
+          .set(updates)
+          .where(eq(forms.id, id))
+          .returning();
+        updatedForm = result;
+      }
+
+      // Replace questions if provided
+      let updatedQuestions: typeof formQuestions.$inferSelect[] = [];
+      if (questions !== undefined) {
+        // Validate question types
+        for (const q of questions) {
+          if (
+            !VALID_QUESTION_TYPES.includes(
+              q.type as (typeof VALID_QUESTION_TYPES)[number]
+            )
+          ) {
+            return reply
+              .status(400)
+              .send({ error: `Invalid question type: ${q.type}` });
+          }
+        }
+
+        // Delete existing questions and re-insert
+        await db
+          .delete(formQuestions)
+          .where(eq(formQuestions.formId, id));
+
+        if (questions.length > 0) {
+          const questionValues = questions.map((q, index) => ({
+            formId: id,
+            type: q.type as (typeof VALID_QUESTION_TYPES)[number],
+            config: q.config || {},
+            position: q.position ?? index,
+            required: q.required ?? false,
+            displayCondition: q.display_condition ?? null,
+          }));
+
+          updatedQuestions = await db
+            .insert(formQuestions)
+            .values(questionValues)
+            .returning();
+        }
+      } else {
+        updatedQuestions = await db
+          .select()
+          .from(formQuestions)
+          .where(eq(formQuestions.formId, id))
+          .orderBy(formQuestions.position);
+      }
+
+      return reply.send({
+        form: { ...updatedForm, questions: updatedQuestions },
+      });
+    }
+  );
+
+  // DELETE /forms/:id - Delete a form
+  fastify.delete<{ Params: { id: string } }>(
+    "/forms/:id",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { id } = request.params;
+      const user = request.user;
+
+      if (!UUID_REGEX.test(id)) {
+        return reply.status(400).send({ error: "Invalid form ID" });
+      }
+
+      const [existing] = await db
+        .select()
+        .from(forms)
+        .where(and(eq(forms.id, id), eq(forms.orgId, user.orgId!)))
+        .limit(1);
+
+      if (!existing) {
+        return reply.status(404).send({ error: "Form not found" });
+      }
+
+      await db.delete(forms).where(eq(forms.id, id));
+
+      return reply.status(204).send();
+    }
+  );
+
   // POST /forms/:id/responses - Submit a form response
   fastify.post<{ Params: { id: string }; Body: SubmitResponseBody }>(
     "/forms/:id/responses",
