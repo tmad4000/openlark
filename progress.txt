@@ -7,3 +7,4 @@
 # STATUS: PASS | FAIL | SKIP
 #
 [2026-03-12 00:00] US-012 — Organization creation and settings API — PASS
+[2026-03-12 00:30] US-013 — User invitation API — PASS

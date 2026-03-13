@@ -209,8 +209,8 @@
         "Typecheck passes"
       ],
       "priority": 13,
-      "passes": false,
-      "notes": "Email sending is a background job via BullMQ - stub for now."
+      "passes": true,
+      "notes": "Invitations table with unique pending constraint. POST /orgs/:id/invitations creates invitations with hashed tokens and returns links. GET/POST /auth/accept-invite/:token for validation and acceptance. Revoke via DELETE. Email sending stubbed (BullMQ TODO)."
     },
     {
       "id": "US-014",

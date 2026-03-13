@@ -190,6 +190,36 @@ export const apiKeys = pgTable(
   ]
 );
 
+// Invitations table
+export const invitations = pgTable(
+  "invitations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id),
+    email: varchar("email", { length: 255 }).notNull(),
+    role: orgRoleEnum("role").notNull().default("member"),
+    tokenHash: text("token_hash").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("invitations_org_id_idx").on(table.orgId),
+    index("invitations_email_idx").on(table.email),
+    uniqueIndex("invitations_org_email_pending_idx")
+      .on(table.orgId, table.email)
+      .where(sql`${table.acceptedAt} IS NULL AND ${table.revokedAt} IS NULL`),
+  ]
+);
+
 // Magic Links table (for passwordless login)
 export const magicLinks = pgTable(
   "magic_links",
@@ -213,6 +243,7 @@ export const organizationsRelations = relations(organizations, ({ many }) => ({
   users: many(users),
   departments: many(departments),
   apiKeys: many(apiKeys),
+  invitations: many(invitations),
 }));
 
 export const usersRelations = relations(users, ({ one, many }) => ({
@@ -272,6 +303,17 @@ export const apiKeysRelations = relations(apiKeys, ({ one }) => ({
   }),
 }));
 
+export const invitationsRelations = relations(invitations, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [invitations.orgId],
+    references: [organizations.id],
+  }),
+  invitedBy: one(users, {
+    fields: [invitations.createdBy],
+    references: [users.id],
+  }),
+}));
+
 export const magicLinksRelations = relations(magicLinks, ({ one }) => ({
   user: one(users, {
     fields: [magicLinks.userId],
@@ -290,3 +332,5 @@ export type Session = typeof sessions.$inferSelect;
 export type NewSession = typeof sessions.$inferInsert;
 export type ApiKey = typeof apiKeys.$inferSelect;
 export type NewApiKey = typeof apiKeys.$inferInsert;
+export type Invitation = typeof invitations.$inferSelect;
+export type NewInvitation = typeof invitations.$inferInsert;

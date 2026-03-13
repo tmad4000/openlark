@@ -1,7 +1,12 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { db } from "../../db/index.js";
-import { users, organizations, sessions } from "../../db/schema/index.js";
+import {
+  users,
+  organizations,
+  sessions,
+  invitations,
+} from "../../db/schema/index.js";
 import { config } from "../../config.js";
 import { eq, and, isNull, gt, ilike } from "drizzle-orm";
 import type { User, Organization } from "../../db/schema/auth.js";
@@ -421,6 +426,236 @@ export class AuthService {
       .where(eq(sessions.id, sessionId));
 
     return true;
+  }
+  /**
+   * Create invitations for one or more emails
+   */
+  async createInvitations(
+    orgId: string,
+    emails: string[],
+    createdBy: string
+  ) {
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+    const results: Array<{
+      email: string;
+      token: string;
+      id: string;
+    }> = [];
+
+    for (const rawEmail of emails) {
+      const email = rawEmail.toLowerCase();
+      const token = crypto.randomBytes(32).toString("hex");
+      const tokenHash = crypto
+        .createHash("sha256")
+        .update(token)
+        .digest("hex");
+
+      try {
+        const [invitation] = await db
+          .insert(invitations)
+          .values({
+            orgId,
+            email,
+            tokenHash,
+            expiresAt,
+            createdBy,
+          })
+          .returning();
+
+        if (invitation) {
+          results.push({ email, token, id: invitation.id });
+        }
+      } catch (error) {
+        // Skip duplicates (unique constraint on pending invitations)
+        if (
+          error instanceof Error &&
+          error.message.includes("unique constraint")
+        ) {
+          continue;
+        }
+        throw error;
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Get pending invitations for an organization
+   */
+  async getOrgInvitations(orgId: string) {
+    return db
+      .select({
+        id: invitations.id,
+        email: invitations.email,
+        role: invitations.role,
+        createdAt: invitations.createdAt,
+        expiresAt: invitations.expiresAt,
+        createdBy: invitations.createdBy,
+      })
+      .from(invitations)
+      .where(
+        and(
+          eq(invitations.orgId, orgId),
+          isNull(invitations.acceptedAt),
+          isNull(invitations.revokedAt)
+        )
+      )
+      .orderBy(invitations.createdAt);
+  }
+
+  /**
+   * Find a valid invitation by token
+   */
+  async getInvitationByToken(token: string) {
+    const tokenHash = crypto
+      .createHash("sha256")
+      .update(token)
+      .digest("hex");
+
+    const [invitation] = await db
+      .select()
+      .from(invitations)
+      .where(
+        and(
+          eq(invitations.tokenHash, tokenHash),
+          isNull(invitations.acceptedAt),
+          isNull(invitations.revokedAt)
+        )
+      )
+      .limit(1);
+
+    if (!invitation) return null;
+
+    // Check expiration
+    if (invitation.expiresAt < new Date()) {
+      return null;
+    }
+
+    return invitation;
+  }
+
+  /**
+   * Accept an invitation: create user in org (or add existing user to org)
+   */
+  async acceptInvitation(
+    token: string,
+    input: { password: string; displayName?: string }
+  ): Promise<AuthResult | null> {
+    const invitation = await this.getInvitationByToken(token);
+    if (!invitation) return null;
+
+    // Get the organization
+    const org = await this.getOrganizationById(invitation.orgId);
+    if (!org) return null;
+
+    // Check if user already exists in this org
+    const [existingUser] = await db
+      .select()
+      .from(users)
+      .where(
+        and(
+          eq(users.email, invitation.email),
+          eq(users.orgId, invitation.orgId),
+          isNull(users.deletedAt)
+        )
+      )
+      .limit(1);
+
+    if (existingUser) {
+      // User already in org, just mark invitation as accepted
+      await db
+        .update(invitations)
+        .set({ acceptedAt: new Date() })
+        .where(eq(invitations.id, invitation.id));
+
+      const sessionResult = await this.createSession(
+        existingUser.id,
+        existingUser.orgId
+      );
+      const authToken = this.generateToken({
+        sub: existingUser.id,
+        orgId: org.id,
+        sessionId: sessionResult.id,
+        email: existingUser.email,
+        role: existingUser.role,
+      });
+      const { passwordHash: _, totpSecret: __, ...safeUser } = existingUser;
+      return {
+        user: safeUser,
+        organization: org,
+        token: authToken,
+        session: { id: sessionResult.id, expiresAt: sessionResult.expiresAt },
+      };
+    }
+
+    // Create new user in the org
+    const passwordHash = await this.hashPassword(input.password);
+    const [user] = await db
+      .insert(users)
+      .values({
+        orgId: invitation.orgId,
+        email: invitation.email,
+        passwordHash,
+        displayName:
+          input.displayName || invitation.email.split("@")[0],
+        status: "active",
+        role: invitation.role,
+        emailVerifiedAt: new Date(),
+      })
+      .returning();
+
+    if (!user) {
+      throw new Error("Failed to create user");
+    }
+
+    // Mark invitation as accepted
+    await db
+      .update(invitations)
+      .set({ acceptedAt: new Date() })
+      .where(eq(invitations.id, invitation.id));
+
+    // Create session
+    const sessionResult = await this.createSession(user.id, user.orgId);
+    const authToken = this.generateToken({
+      sub: user.id,
+      orgId: org.id,
+      sessionId: sessionResult.id,
+      email: user.email,
+      role: user.role,
+    });
+
+    const { passwordHash: _pw, totpSecret: _totp, ...safeUser } = user;
+
+    return {
+      user: safeUser,
+      organization: org,
+      token: authToken,
+      session: { id: sessionResult.id, expiresAt: sessionResult.expiresAt },
+    };
+  }
+
+  /**
+   * Revoke an invitation
+   */
+  async revokeInvitation(
+    invitationId: string,
+    orgId: string
+  ): Promise<boolean> {
+    const [inv] = await db
+      .update(invitations)
+      .set({ revokedAt: new Date() })
+      .where(
+        and(
+          eq(invitations.id, invitationId),
+          eq(invitations.orgId, orgId),
+          isNull(invitations.acceptedAt),
+          isNull(invitations.revokedAt)
+        )
+      )
+      .returning();
+
+    return !!inv;
   }
 }
 

@@ -34,7 +34,26 @@ export const updateOrgSchema = z.object({
   settings: z.record(z.unknown()).optional(),
 });
 
+export const createInvitationsSchema = z.object({
+  emails: z
+    .array(z.string().email("Invalid email format"))
+    .min(1, "At least one email is required")
+    .max(50, "Cannot invite more than 50 users at once"),
+});
+
+export const acceptInvitationSchema = z.object({
+  password: z
+    .string()
+    .min(8, "Password must be at least 8 characters")
+    .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
+    .regex(/[a-z]/, "Password must contain at least one lowercase letter")
+    .regex(/[0-9]/, "Password must contain at least one number"),
+  displayName: z.string().min(1).max(255).optional(),
+});
+
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type CreateOrgInput = z.infer<typeof createOrgSchema>;
 export type UpdateOrgInput = z.infer<typeof updateOrgSchema>;
+export type CreateInvitationsInput = z.infer<typeof createInvitationsSchema>;
+export type AcceptInvitationInput = z.infer<typeof acceptInvitationSchema>;
