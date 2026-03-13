@@ -627,6 +627,17 @@ class ApiClient {
       { method: "POST" }
     );
   }
+
+  // Buzz endpoints
+  async buzzMessage(messageId: string, recipientId: string, type: "in_app" | "sms" | "phone" = "in_app") {
+    return this.request<{ buzz: BuzzNotification }>(
+      `/messages/${messageId}/buzz`,
+      {
+        method: "POST",
+        body: JSON.stringify({ recipient_id: recipientId, type }),
+      }
+    );
+  }
 }
 
 // Types
@@ -863,6 +874,19 @@ export interface AppNotification {
   entityId: string | null;
   readAt: string | null;
   createdAt: string;
+}
+
+// Buzz types
+export interface BuzzNotification {
+  id: string;
+  messageId: string;
+  senderId: string;
+  recipientId: string;
+  type: "in_app" | "sms" | "phone";
+  status: "pending" | "delivered" | "read";
+  createdAt: string;
+  deliveredAt: string | null;
+  readAt: string | null;
 }
 
 export const api = new ApiClient();

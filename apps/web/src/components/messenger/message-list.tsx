@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import { api, type Message, type MessageReaction } from "@/lib/api";
 import { useAuth } from "@/hooks/use-auth";
-import { Loader2, Clock, AlertCircle, MessageSquareText, Pin, Star, Pencil, Trash2, Check, X, Forward, Copy, CheckCheck } from "lucide-react";
+import { Loader2, Clock, AlertCircle, MessageSquareText, Pin, Star, Pencil, Trash2, Check, X, Forward, Copy, CheckCheck, Zap } from "lucide-react";
 import {
   ReadReceiptIndicator,
   type ReadStatus,
@@ -47,9 +47,11 @@ interface MessageListProps {
   onEditMessage?: (messageId: string, content: string) => Promise<void>;
   onRecallMessage?: (messageId: string) => Promise<void>;
   onForwardMessage?: (message: Message) => void;
+  onBuzzMessage?: (message: Message) => void;
+  buzzedMessageIds?: Set<string>;
 }
 
-export function MessageList({ chatId, onMessagesLoaded, onlineUsers, memberCount, onOpenThread, pinnedMessageIds, favoritedMessageIds, onPinMessage, onUnpinMessage, onFavoriteMessage, onUnfavoriteMessage, onEditMessage, onRecallMessage, onForwardMessage }: MessageListProps) {
+export function MessageList({ chatId, onMessagesLoaded, onlineUsers, memberCount, onOpenThread, pinnedMessageIds, favoritedMessageIds, onPinMessage, onUnpinMessage, onFavoriteMessage, onUnfavoriteMessage, onEditMessage, onRecallMessage, onForwardMessage, onBuzzMessage, buzzedMessageIds }: MessageListProps) {
   const { user } = useAuth();
   const [messages, setMessages] = useState<OptimisticMessage[]>([]);
   const [senderMap, setSenderMap] = useState<SenderMap>(new Map());
@@ -497,6 +499,8 @@ export function MessageList({ chatId, onMessagesLoaded, onlineUsers, memberCount
                 onEdit={onEditMessage}
                 onRecall={onRecallMessage}
                 onForward={onForwardMessage}
+                onBuzz={onBuzzMessage}
+                isBuzzed={buzzedMessageIds?.has(message.id) ?? false}
               />
             );
           })}
@@ -539,6 +543,8 @@ interface MessageBubbleProps {
   onEdit?: (messageId: string, content: string) => Promise<void>;
   onRecall?: (messageId: string) => Promise<void>;
   onForward?: (message: Message) => void;
+  onBuzz?: (message: Message) => void;
+  isBuzzed?: boolean;
 }
 
 const EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -564,6 +570,8 @@ function MessageBubble({
   onEdit,
   onRecall,
   onForward,
+  onBuzz,
+  isBuzzed,
 }: MessageBubbleProps) {
   const [showPicker, setShowPicker] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -705,6 +713,15 @@ function MessageBubble({
             >
               <Forward className="h-4 w-4" />
             </button>
+            {isOwn && !isRecalled && (
+              <button
+                onClick={() => onBuzz?.(message)}
+                className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 hover:text-red-500 dark:hover:text-red-400"
+                title="Buzz - urgent notification"
+              >
+                <Zap className="h-4 w-4" />
+              </button>
+            )}
             {canEdit && (
               <button
                 onClick={handleStartEdit}
@@ -731,6 +748,13 @@ function MessageBubble({
           <div className="flex items-center gap-1 text-xs text-blue-500 mb-1">
             <Pin className="h-3 w-3" />
             <span>Pinned</span>
+          </div>
+        )}
+
+        {isBuzzed && (
+          <div className="flex items-center gap-1 text-xs text-red-500 mb-1">
+            <Zap className="h-3 w-3 fill-current" />
+            <span>Urgent</span>
           </div>
         )}
 

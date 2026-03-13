@@ -696,8 +696,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 42,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented buzz UI: BuzzDialog for selecting recipients (in-app tier), BuzzOverlay for full-screen urgent dismiss-required notification, Zap button in message hover menu (own messages only), red Urgent badge on buzzed messages, WebSocket buzz:new event handling."
     },
     {
       "id": "US-043",

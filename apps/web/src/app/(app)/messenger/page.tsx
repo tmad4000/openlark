@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import { useWebSocket, type NewMessageEvent, type MessageEditedEvent, type MessageRecalledEvent, type ReadReceiptEvent, type TypingEvent, type PresenceEvent, type ReactionEvent } from "@/hooks/use-websocket";
+import { useWebSocket, type NewMessageEvent, type MessageEditedEvent, type MessageRecalledEvent, type ReadReceiptEvent, type TypingEvent, type PresenceEvent, type ReactionEvent, type BuzzEvent } from "@/hooks/use-websocket";
 import { ChatList } from "@/components/messenger/chat-list";
 import { MessageList } from "@/components/messenger/message-list";
 import { MessageInput } from "@/components/messenger/message-input";
@@ -15,6 +15,8 @@ import { cn } from "@/lib/utils";
 import { MessageSquare, Wifi, WifiOff, Loader2, Pin, X, Star, FileText, File, Info, Megaphone } from "lucide-react";
 import { api, type Chat, type Pin as PinType, type Favorite, type Message, type Announcement, type ChatMember } from "@/lib/api";
 import { ForwardDialog } from "@/components/messenger/forward-dialog";
+import { BuzzDialog } from "@/components/messenger/buzz-dialog";
+import { BuzzOverlay } from "@/components/messenger/buzz-overlay";
 import { GroupSettingsPanel } from "@/components/messenger/group-settings-panel";
 import { AnnouncementsView } from "@/components/messenger/announcements-view";
 
@@ -38,6 +40,10 @@ export default function MessengerPage() {
   const [selectedChatType, setSelectedChatType] = useState<string | null>(null);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [chatMembers, setChatMembers] = useState<ChatMember[]>([]);
+  const [buzzedMessageIds, setBuzzedMessageIds] = useState<Set<string>>(new Set());
+  const [isBuzzDialogOpen, setIsBuzzDialogOpen] = useState(false);
+  const [buzzTargetMessage, setBuzzTargetMessage] = useState<Message | null>(null);
+  const [activeBuzz, setActiveBuzz] = useState<BuzzEvent | null>(null);
 
   // Sender map ref for thread panel
   const senderMapRef = useRef<Map<string, { displayName: string | null; avatarUrl: string | null }>>(new Map());
@@ -139,6 +145,34 @@ export default function MessengerPage() {
   const handleForwardMessage = useCallback((message: Message) => {
     setForwardMessages([message]);
     setIsForwardDialogOpen(true);
+  }, []);
+
+  const handleBuzzMessage = useCallback((message: Message) => {
+    setBuzzTargetMessage(message);
+    setIsBuzzDialogOpen(true);
+  }, []);
+
+  const handleBuzzSent = useCallback((messageId: string) => {
+    setBuzzedMessageIds((prev) => new Set([...prev, messageId]));
+  }, []);
+
+  const handleBuzzReceived = useCallback((event: BuzzEvent) => {
+    if (event.recipientId === user?.id) {
+      setActiveBuzz(event);
+    }
+    // Mark the message as buzzed for visual indicator
+    setBuzzedMessageIds((prev) => new Set([...prev, event.messageId]));
+  }, [user?.id]);
+
+  const handleDismissBuzz = useCallback(() => {
+    setActiveBuzz(null);
+  }, []);
+
+  const handleViewBuzzInChat = useCallback((chatId: string) => {
+    setActiveBuzz(null);
+    setSelectedChatId(chatId);
+    setShowFavorites(false);
+    setShowGroupSettings(false);
   }, []);
 
   // Announcement handlers
@@ -337,6 +371,7 @@ export default function MessengerPage() {
         MessageList.handleReactionRemoved(event.messageId, event.emoji, event.userId);
       }
     }, [selectedChatId]),
+    onBuzz: handleBuzzReceived,
   });
 
   // Send typing events from input
@@ -491,6 +526,8 @@ export default function MessengerPage() {
                 onEditMessage={handleEditMessage}
                 onRecallMessage={handleRecallMessage}
                 onForwardMessage={handleForwardMessage}
+                onBuzzMessage={handleBuzzMessage}
+                buzzedMessageIds={buzzedMessageIds}
               />
             ) : chatTab === "pins" ? (
               <PinnedMessagesView
@@ -619,6 +656,29 @@ export default function MessengerPage() {
         onOpenChange={setIsForwardDialogOpen}
         messages={forwardMessages}
       />
+
+      {/* Buzz dialog */}
+      {buzzTargetMessage && selectedChatId && (
+        <BuzzDialog
+          open={isBuzzDialogOpen}
+          onOpenChange={setIsBuzzDialogOpen}
+          messageId={buzzTargetMessage.id}
+          chatId={selectedChatId}
+          currentUserId={user?.id || ""}
+          onBuzzSent={handleBuzzSent}
+        />
+      )}
+
+      {/* Buzz overlay for incoming buzzes */}
+      {activeBuzz && (
+        <BuzzOverlay
+          messageId={activeBuzz.messageId}
+          chatId={activeBuzz.chatId}
+          senderId={activeBuzz.senderId}
+          onDismiss={handleDismissBuzz}
+          onViewInChat={handleViewBuzzInChat}
+        />
+      )}
     </>
   );
 }

@@ -52,6 +52,14 @@ export interface ReactionEvent {
   userId: string;
 }
 
+export interface BuzzEvent {
+  chatId: string;
+  messageId: string;
+  recipientId: string;
+  senderId: string;
+  buzzType: string;
+}
+
 interface UseWebSocketOptions {
   onMessage?: (event: NewMessageEvent) => void;
   onMessageEdited?: (event: MessageEditedEvent) => void;
@@ -61,6 +69,7 @@ interface UseWebSocketOptions {
   onPresence?: (event: PresenceEvent) => void;
   onReactionAdded?: (event: ReactionEvent) => void;
   onReactionRemoved?: (event: ReactionEvent) => void;
+  onBuzz?: (event: BuzzEvent) => void;
   onConnected?: () => void;
   onDisconnected?: () => void;
 }
@@ -200,6 +209,18 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
           userId: data.userId as string,
         };
         optionsRef.current.onReactionRemoved?.(event);
+        break;
+      }
+
+      case "buzz:new": {
+        const event: BuzzEvent = {
+          chatId: data.chatId as string,
+          messageId: data.messageId as string,
+          recipientId: data.recipientId as string,
+          senderId: data.senderId as string,
+          buzzType: data.buzzType as string,
+        };
+        optionsRef.current.onBuzz?.(event);
         break;
       }
 
