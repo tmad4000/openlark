@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import { api, type Message, type MessageReaction } from "@/lib/api";
 import { useAuth } from "@/hooks/use-auth";
-import { Loader2, Clock, AlertCircle, MessageSquareText } from "lucide-react";
+import { Loader2, Clock, AlertCircle, MessageSquareText, Pin, Star } from "lucide-react";
 import {
   ReadReceiptIndicator,
   type ReadStatus,
@@ -38,9 +38,15 @@ interface MessageListProps {
   onlineUsers?: Set<string>;
   memberCount?: number;
   onOpenThread?: (messageId: string) => void;
+  pinnedMessageIds?: Set<string>;
+  favoritedMessageIds?: Set<string>;
+  onPinMessage?: (messageId: string) => void;
+  onUnpinMessage?: (messageId: string) => void;
+  onFavoriteMessage?: (messageId: string) => void;
+  onUnfavoriteMessage?: (messageId: string) => void;
 }
 
-export function MessageList({ chatId, onMessagesLoaded, onlineUsers, memberCount, onOpenThread }: MessageListProps) {
+export function MessageList({ chatId, onMessagesLoaded, onlineUsers, memberCount, onOpenThread, pinnedMessageIds, favoritedMessageIds, onPinMessage, onUnpinMessage, onFavoriteMessage, onUnfavoriteMessage }: MessageListProps) {
   const { user } = useAuth();
   const [messages, setMessages] = useState<OptimisticMessage[]>([]);
   const [senderMap, setSenderMap] = useState<SenderMap>(new Map());
@@ -471,6 +477,12 @@ export function MessageList({ chatId, onMessagesLoaded, onlineUsers, memberCount
                 reactionGroups={reactionGroups}
                 onReactionToggle={handleReactionToggle}
                 onOpenThread={onOpenThread}
+                isPinned={pinnedMessageIds?.has(message.id) ?? false}
+                isFavorited={favoritedMessageIds?.has(message.id) ?? false}
+                onPin={onPinMessage}
+                onUnpin={onUnpinMessage}
+                onFavorite={onFavoriteMessage}
+                onUnfavorite={onUnfavoriteMessage}
               />
             );
           })}
@@ -503,6 +515,12 @@ interface MessageBubbleProps {
   reactionGroups: ReactionGroup[];
   onReactionToggle: (messageId: string, emoji: string, add: boolean) => void;
   onOpenThread?: (messageId: string) => void;
+  isPinned?: boolean;
+  isFavorited?: boolean;
+  onPin?: (messageId: string) => void;
+  onUnpin?: (messageId: string) => void;
+  onFavorite?: (messageId: string) => void;
+  onUnfavorite?: (messageId: string) => void;
 }
 
 function MessageBubble({
@@ -517,6 +535,12 @@ function MessageBubble({
   reactionGroups,
   onReactionToggle,
   onOpenThread,
+  isPinned,
+  isFavorited,
+  onPin,
+  onUnpin,
+  onFavorite,
+  onUnfavorite,
 }: MessageBubbleProps) {
   const [showPicker, setShowPicker] = useState(false);
   const isRecalled = !!message.recalledAt;
@@ -579,6 +603,37 @@ function MessageBubble({
             >
               <MessageSquareText className="h-4 w-4" />
             </button>
+            <button
+              onClick={() => isPinned ? onUnpin?.(message.id) : onPin?.(message.id)}
+              className={cn(
+                "p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700",
+                isPinned
+                  ? "text-blue-500 hover:text-blue-700"
+                  : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+              )}
+              title={isPinned ? "Unpin message" : "Pin message"}
+            >
+              <Pin className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => isFavorited ? onUnfavorite?.(message.id) : onFavorite?.(message.id)}
+              className={cn(
+                "p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700",
+                isFavorited
+                  ? "text-yellow-500 hover:text-yellow-700"
+                  : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+              )}
+              title={isFavorited ? "Remove from favorites" : "Add to favorites"}
+            >
+              <Star className={cn("h-4 w-4", isFavorited && "fill-current")} />
+            </button>
+          </div>
+        )}
+
+        {isPinned && (
+          <div className="flex items-center gap-1 text-xs text-blue-500 mb-1">
+            <Pin className="h-3 w-3" />
+            <span>Pinned</span>
           </div>
         )}
 

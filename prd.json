@@ -523,8 +523,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 32,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Frontend implementation: Pin/Favorite buttons in message hover menu, Pins tab in chat header, Favorites section in sidebar. Backend API was already implemented in US-018."
     },
     {
       "id": "US-033",

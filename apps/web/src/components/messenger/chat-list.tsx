@@ -3,19 +3,24 @@
 import { useState, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { api, type Chat } from "@/lib/api";
-import { Plus, MessageSquare, Users, Hash } from "lucide-react";
+import { Plus, MessageSquare, Users, Hash, Star } from "lucide-react";
+import type { Favorite } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 
 interface ChatListProps {
   selectedChatId: string | null;
   onSelectChat: (chatId: string) => void;
   onCreateChat?: () => void;
+  onOpenFavorites?: () => void;
+  showFavorites?: boolean;
 }
 
 export function ChatList({
   selectedChatId,
   onSelectChat,
   onCreateChat,
+  onOpenFavorites,
+  showFavorites,
 }: ChatListProps) {
   const [chats, setChats] = useState<Chat[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -87,6 +92,24 @@ export function ChatList({
           </Button>
         )}
       </div>
+
+      {/* Favorites section */}
+      {onOpenFavorites && (
+        <div className="px-2 py-1">
+          <button
+            onClick={onOpenFavorites}
+            className={cn(
+              "w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors",
+              showFavorites
+                ? "bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-400"
+                : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
+            )}
+          >
+            <Star className={cn("h-4 w-4", showFavorites && "fill-current")} />
+            Favorites
+          </button>
+        </div>
+      )}
 
       {/* Chat list */}
       <div className="flex-1 overflow-y-auto">

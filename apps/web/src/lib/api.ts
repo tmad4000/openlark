@@ -217,6 +217,44 @@ class ApiClient {
     );
   }
 
+  // Pin endpoints
+  async getPinnedMessages(chatId: string) {
+    return this.request<{ pins: Pin[] }>(`/messenger/chats/${chatId}/pins`);
+  }
+
+  async pinMessage(chatId: string, messageId: string) {
+    return this.request<{ success: boolean }>(`/messenger/chats/${chatId}/pins`, {
+      method: "POST",
+      body: JSON.stringify({ messageId }),
+    });
+  }
+
+  async unpinMessage(chatId: string, messageId: string) {
+    return this.request<{ success: boolean }>(
+      `/messenger/chats/${chatId}/pins/${messageId}`,
+      { method: "DELETE" }
+    );
+  }
+
+  // Favorite endpoints
+  async getUserFavorites() {
+    return this.request<{ favorites: Favorite[] }>("/messenger/favorites");
+  }
+
+  async favoriteMessage(messageId: string) {
+    return this.request<{ success: boolean }>(
+      `/messenger/messages/${messageId}/favorite`,
+      { method: "POST" }
+    );
+  }
+
+  async unfavoriteMessage(messageId: string) {
+    return this.request<{ success: boolean }>(
+      `/messenger/messages/${messageId}/favorite`,
+      { method: "DELETE" }
+    );
+  }
+
   // Calendar endpoints
   async getCalendars() {
     return this.request<{ calendars: Calendar[] }>("/calendar/calendars");
@@ -504,6 +542,23 @@ export interface MessageReaction {
   userId: string;
   emoji: string;
   createdAt: string;
+}
+
+export interface Pin {
+  id: string;
+  chatId: string;
+  messageId: string;
+  pinnedBy: string;
+  pinnedAt: string;
+  message?: Message;
+}
+
+export interface Favorite {
+  id: string;
+  userId: string;
+  messageId: string;
+  createdAt: string;
+  message?: Message;
 }
 
 // Calendar types
