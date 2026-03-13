@@ -1760,7 +1760,7 @@
       ],
       "priority": 104,
       "passes": true,
-      "notes": "Created apps/api/src/routes/bot-messaging.ts. POST /auth/app_access_token for client_credentials grant (app_id + app_secret → app_access_token, 2h TTL). POST /api/v1/messages/send with Bearer app_access_token auth, supports msg_type: text, rich_text, interactive (card JSON with header, elements: text/image/divider/action blocks, action buttons with action_id and value). POST /api/v1/messages/update to update previously sent card messages. POST /api/v1/card/action for card action callbacks — dispatches signed payload to app's webhook_url with HMAC-SHA256 signature. Bot messages use deterministic sender ID derived from app ID. Typecheck passes."
+      "notes": "Created apps/api/src/routes/bot-messaging.ts. POST /auth/app_access_token for client_credentials grant (app_id + app_secret \u2192 app_access_token, 2h TTL). POST /api/v1/messages/send with Bearer app_access_token auth, supports msg_type: text, rich_text, interactive (card JSON with header, elements: text/image/divider/action blocks, action buttons with action_id and value). POST /api/v1/messages/update to update previously sent card messages. POST /api/v1/card/action for card action callbacks \u2014 dispatches signed payload to app's webhook_url with HMAC-SHA256 signature. Bot messages use deterministic sender ID derived from app ID. Typecheck passes."
     },
     {
       "id": "US-105",
@@ -1794,8 +1794,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 106,
-      "passes": false,
-      "notes": "Use HyperFormula for formula calculation engine. Custom grid rendering with virtualization."
+      "passes": true,
+      "notes": "Created SheetEditor component at apps/web/src/components/SheetEditor.tsx. Grid renders 100x26 cells with virtualized rendering. Click-to-edit cells with Tab/Enter navigation between cells. Formula bar at top shows selected cell reference and formula/value. HyperFormula (GPL-v3) engine supports =SUM, =AVERAGE, =COUNT, =IF, =VLOOKUP and all built-in formulas. Cell formatting toolbar: font size picker, bold, italic, text color, background color, borders, alignment (left/center/right), number format (auto/number/currency/percent/date/text). Real-time collaboration via Yjs Y.Map for cell data and styles, synced through Hocuspocus. Collaborator cursors shown as colored labels on cells. Document page conditionally renders SheetEditor for type=sheet documents. Typecheck passes."
     },
     {
       "id": "US-107",

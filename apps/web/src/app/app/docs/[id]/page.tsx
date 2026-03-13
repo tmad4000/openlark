@@ -38,6 +38,18 @@ const DocumentEditor = dynamic(
   }
 );
 
+const SheetEditor = dynamic(
+  () => import("@/components/SheetEditor"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-full flex items-center justify-center">
+        <div className="text-gray-500">Loading spreadsheet...</div>
+      </div>
+    ),
+  }
+);
+
 interface DocumentData {
   id: string;
   title: string;
@@ -600,17 +612,28 @@ export default function DocumentEditorPage() {
       <div className="flex-1 flex overflow-hidden">
         {/* Editor */}
         <div className={`flex-1 overflow-hidden ${showCommentsPanel ? "" : ""}`}>
-          <DocumentEditor
-            ref={editorRef}
-            documentId={document.id}
-            yjsDocId={document.yjsDocId}
-            token={token}
-            userName={user.displayName || user.email}
-            onSyncStatusChange={handleSyncStatusChange}
-            onCollaboratorsChange={handleCollaboratorsChange}
-            onAddComment={handleAddComment}
-            onCommentClick={handleCommentClick}
-          />
+          {document.type === "sheet" ? (
+            <SheetEditor
+              documentId={document.id}
+              yjsDocId={document.yjsDocId}
+              token={token}
+              userName={user.displayName || user.email}
+              onSyncStatusChange={handleSyncStatusChange}
+              onCollaboratorsChange={handleCollaboratorsChange}
+            />
+          ) : (
+            <DocumentEditor
+              ref={editorRef}
+              documentId={document.id}
+              yjsDocId={document.yjsDocId}
+              token={token}
+              userName={user.displayName || user.email}
+              onSyncStatusChange={handleSyncStatusChange}
+              onCollaboratorsChange={handleCollaboratorsChange}
+              onAddComment={handleAddComment}
+              onCommentClick={handleCommentClick}
+            />
+          )}
         </div>
 
         {/* Version History Panel */}
