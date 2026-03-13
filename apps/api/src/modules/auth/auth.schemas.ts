@@ -55,5 +55,23 @@ export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type CreateOrgInput = z.infer<typeof createOrgSchema>;
 export type UpdateOrgInput = z.infer<typeof updateOrgSchema>;
+export const createDepartmentSchema = z.object({
+  name: z.string().min(1, "Department name is required").max(255),
+  parentId: z.string().uuid().optional(),
+});
+
+export const updateDepartmentSchema = z.object({
+  name: z.string().min(1).max(255).optional(),
+  parentId: z.string().uuid().nullable().optional(),
+});
+
+export const addDepartmentMemberSchema = z.object({
+  userId: z.string().uuid("Invalid user ID"),
+  role: z.enum(["head", "member"]).default("member"),
+});
+
 export type CreateInvitationsInput = z.infer<typeof createInvitationsSchema>;
 export type AcceptInvitationInput = z.infer<typeof acceptInvitationSchema>;
+export type CreateDepartmentInput = z.infer<typeof createDepartmentSchema>;
+export type UpdateDepartmentInput = z.infer<typeof updateDepartmentSchema>;
+export type AddDepartmentMemberInput = z.infer<typeof addDepartmentMemberSchema>;

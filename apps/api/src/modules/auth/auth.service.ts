@@ -6,6 +6,8 @@ import {
   organizations,
   sessions,
   invitations,
+  departments,
+  departmentMembers,
 } from "../../db/schema/index.js";
 import { config } from "../../config.js";
 import { eq, and, isNull, gt, ilike } from "drizzle-orm";
@@ -656,6 +658,158 @@ export class AuthService {
       .returning();
 
     return !!inv;
+  }
+  // ── Department management ──────────────────────────────────────
+
+  async getOrgDepartments(orgId: string) {
+    return db
+      .select()
+      .from(departments)
+      .where(and(eq(departments.orgId, orgId), isNull(departments.deletedAt)))
+      .orderBy(departments.name);
+  }
+
+  async getDepartmentById(deptId: string, orgId: string) {
+    const [dept] = await db
+      .select()
+      .from(departments)
+      .where(
+        and(
+          eq(departments.id, deptId),
+          eq(departments.orgId, orgId),
+          isNull(departments.deletedAt)
+        )
+      )
+      .limit(1);
+    return dept || null;
+  }
+
+  async createDepartment(
+    orgId: string,
+    input: { name: string; parentId?: string },
+    createdBy?: string
+  ) {
+    // If parentId given, verify it exists in the same org
+    if (input.parentId) {
+      const parent = await this.getDepartmentById(input.parentId, orgId);
+      if (!parent) return null;
+    }
+
+    const [dept] = await db
+      .insert(departments)
+      .values({
+        orgId,
+        name: input.name,
+        parentId: input.parentId,
+        createdBy,
+      })
+      .returning();
+    return dept || null;
+  }
+
+  async updateDepartment(
+    deptId: string,
+    orgId: string,
+    input: { name?: string; parentId?: string | null }
+  ) {
+    // If moving to a new parent, verify parent exists
+    if (input.parentId) {
+      const parent = await this.getDepartmentById(input.parentId, orgId);
+      if (!parent) return null;
+      // Prevent setting self as parent
+      if (input.parentId === deptId) return null;
+    }
+
+    const updates: Record<string, unknown> = { updatedAt: new Date() };
+    if (input.name !== undefined) updates.name = input.name;
+    if (input.parentId !== undefined) updates.parentId = input.parentId;
+
+    const [dept] = await db
+      .update(departments)
+      .set(updates)
+      .where(
+        and(
+          eq(departments.id, deptId),
+          eq(departments.orgId, orgId),
+          isNull(departments.deletedAt)
+        )
+      )
+      .returning();
+    return dept || null;
+  }
+
+  async deleteDepartment(deptId: string, orgId: string): Promise<{ success: boolean; reason?: string }> {
+    // Check if department has members
+    const members = await db
+      .select()
+      .from(departmentMembers)
+      .where(eq(departmentMembers.departmentId, deptId))
+      .limit(1);
+
+    if (members.length > 0) {
+      return { success: false, reason: "Department has members. Remove all members first." };
+    }
+
+    const [dept] = await db
+      .update(departments)
+      .set({ deletedAt: new Date(), updatedAt: new Date() })
+      .where(
+        and(
+          eq(departments.id, deptId),
+          eq(departments.orgId, orgId),
+          isNull(departments.deletedAt)
+        )
+      )
+      .returning();
+
+    return dept ? { success: true } : { success: false, reason: "Department not found" };
+  }
+
+  async addDepartmentMember(
+    deptId: string,
+    userId: string,
+    role: string = "member"
+  ) {
+    try {
+      const [member] = await db
+        .insert(departmentMembers)
+        .values({ departmentId: deptId, userId, role })
+        .returning();
+      return member || null;
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("unique")) {
+        return null; // Already a member
+      }
+      throw error;
+    }
+  }
+
+  async removeDepartmentMember(deptId: string, userId: string): Promise<boolean> {
+    const result = await db
+      .delete(departmentMembers)
+      .where(
+        and(
+          eq(departmentMembers.departmentId, deptId),
+          eq(departmentMembers.userId, userId)
+        )
+      )
+      .returning();
+    return result.length > 0;
+  }
+
+  async getDepartmentMembers(deptId: string) {
+    return db
+      .select({
+        userId: departmentMembers.userId,
+        role: departmentMembers.role,
+        createdAt: departmentMembers.createdAt,
+        displayName: users.displayName,
+        email: users.email,
+        avatarUrl: users.avatarUrl,
+      })
+      .from(departmentMembers)
+      .innerJoin(users, eq(departmentMembers.userId, users.id))
+      .where(eq(departmentMembers.departmentId, deptId));
   }
 }
 

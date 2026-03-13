@@ -226,8 +226,8 @@
         "Typecheck passes"
       ],
       "priority": 14,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Department CRUD in department.routes.ts registered at /api/v1/orgs/:id/departments. Tree builder returns hierarchical structure. PATCH/DELETE use /:deptId nested param. Soft-delete blocked if members exist (409). Member add/remove via /:deptId/members endpoints. Service methods in auth.service.ts."
     },
     {
       "id": "US-015",
