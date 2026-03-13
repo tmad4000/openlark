@@ -1405,8 +1405,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 83,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created leave management routes (apps/api/src/routes/leave.ts) with CRUD for leave types, leave balance tracking (auto-creates balances per year from defaults), leave request submission with balance validation and approval workflow integration, cancel/approve/reject endpoints, and calendar integration endpoint. Created leave UI page (apps/web/src/app/app/leave/page.tsx) with 3 views: Requests (submit form with leave type/date range/reason, list with status), Calendar (monthly view showing approved leave days per user), and Admin (configure leave types with name/paid/default days). Added Palmtree nav icon to layout. Typecheck passes."
     },
     {
       "id": "US-084",

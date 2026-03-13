@@ -13,6 +13,7 @@ import {
   FileCheck,
   Target,
   Clock,
+  Palmtree,
   Settings,
   User,
   LogOut,
@@ -52,6 +53,7 @@ const NAV_ITEMS = [
   { id: "approvals", label: "Approvals", icon: FileCheck, href: "/app/approvals" },
   { id: "okr", label: "OKR", icon: Target, href: "/app/okr" },
   { id: "attendance", label: "Attendance", icon: Clock, href: "/app/attendance" },
+  { id: "leave", label: "Leave", icon: Palmtree, href: "/app/leave" },
   { id: "email", label: "Email", icon: Mail, href: "/app/email" },
   { id: "admin", label: "Admin", icon: Settings, href: "/app/admin" },
 ];
