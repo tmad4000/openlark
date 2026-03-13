@@ -1558,8 +1558,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 92,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added POST /chats/:id/start-meeting API endpoint that creates a meeting, adds all chat members as participants, creates a meeting-type chat, and posts a 'meeting_started' system message in the original chat. Added Video icon button to chat header for DM and group chats. System message renders with a blue 'Join Meeting' button that opens the meeting in a new tab. Typecheck passes."
     },
     {
       "id": "US-093",

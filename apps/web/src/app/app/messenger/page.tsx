@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { Search, Plus, MessageCircle, Users, Bell, BellOff, AtSign, Info, Wifi, WifiOff, Loader2, Check, CheckCheck, Circle, MoreHorizontal, Reply, X, MessageSquare, Pin, Star, Pencil, Trash2, Forward, Square, CheckSquare, Tag, FileText, File, FolderOpen, ExternalLink, GripVertical, Shield, Crown, UserPlus, UserMinus, Settings, Globe, Lock, ChevronDown, ChevronRight, LogOut, Megaphone, Zap, ListTodo, Calendar, Languages } from "lucide-react";
+import { Search, Plus, MessageCircle, Users, Bell, BellOff, AtSign, Info, Wifi, WifiOff, Loader2, Check, CheckCheck, Circle, MoreHorizontal, Reply, X, MessageSquare, Pin, Star, Pencil, Trash2, Forward, Square, CheckSquare, Tag, FileText, File, FolderOpen, ExternalLink, GripVertical, Shield, Crown, UserPlus, UserMinus, Settings, Globe, Lock, ChevronDown, ChevronRight, LogOut, Megaphone, Zap, ListTodo, Calendar, Languages, Video } from "lucide-react";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as ContextMenu from "@radix-ui/react-context-menu";
 import MessageInput, { MentionUser } from "@/components/MessageInput";
@@ -368,6 +368,24 @@ function renderMessageContent(message: Message, currentUserId?: string): React.R
         return (
           <span className="text-gray-500 text-sm italic">
             {addedBy} added {members?.join(", ") || "new members"}
+          </span>
+        );
+      }
+      if (action === "meeting_started") {
+        const startedBy = typeof content.startedBy === "string" ? content.startedBy : "Someone";
+        const meetingId = typeof content.meetingId === "string" ? content.meetingId : null;
+        return (
+          <span className="text-gray-500 text-sm italic flex items-center gap-2 flex-wrap">
+            <Video className="w-4 h-4 inline text-blue-500" />
+            {startedBy} started a meeting
+            {meetingId && (
+              <button
+                onClick={() => window.open(`/app/meeting/${meetingId}`, "_blank")}
+                className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded transition-colors"
+              >
+                Join Meeting
+              </button>
+            )}
           </span>
         );
       }
@@ -1524,6 +1542,7 @@ function ChatView({
   const [favoritedMessageIds, setFavoritedMessageIds] = useState<Set<string>>(new Set());
   const [showPinsPanel, setShowPinsPanel] = useState(false);
   const [showChatInfoPanel, setShowChatInfoPanel] = useState(false);
+  const [startingMeeting, setStartingMeeting] = useState(false);
 
   // Thread panel state
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
@@ -2789,6 +2808,34 @@ function ChatView({
 
         {/* Header buttons */}
         <div className="flex items-center gap-1">
+          {/* Video call button */}
+          {(chat.type === "dm" || chat.type === "group" || chat.type === "topic_group" || chat.type === "supergroup") && (
+            <button
+              onClick={async () => {
+                if (startingMeeting) return;
+                setStartingMeeting(true);
+                try {
+                  const token = getCookie("session_token");
+                  if (!token) return;
+                  const res = await fetch(`/api/chats/${chat.id}/start-meeting`, {
+                    method: "POST",
+                    headers: { Authorization: `Bearer ${token}` },
+                  });
+                  if (res.ok) {
+                    const data = await res.json();
+                    window.open(`/app/meeting/${data.meeting.id}`, "_blank");
+                  }
+                } finally {
+                  setStartingMeeting(false);
+                }
+              }}
+              disabled={startingMeeting}
+              className="p-2 rounded-full hover:bg-gray-100 transition-colors text-gray-500 disabled:opacity-50"
+              title="Start video call"
+            >
+              <Video className="w-5 h-5" />
+            </button>
+          )}
           {/* Selection mode toggle */}
           <button
             onClick={toggleSelectionMode}

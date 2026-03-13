@@ -1,6 +1,6 @@
 import { FastifyInstance } from "fastify";
 import { db } from "../db";
-import { chats, chatMembers, users, messages, pins, chatTabs, announcements } from "../db/schema";
+import { chats, chatMembers, users, messages, pins, chatTabs, announcements, meetings, meetingParticipants } from "../db/schema";
 import { eq, and, or, inArray, desc, gt, sql, isNull } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
 import { createSystemMessage } from "./messages";
@@ -2486,6 +2486,124 @@ export async function chatsRoutes(fastify: FastifyInstance) {
         .where(eq(announcements.id, announcementId));
 
       return reply.status(200).send({ success: true });
+    }
+  );
+
+  /**
+   * POST /chats/:id/start-meeting - Start a video meeting from a chat
+   * Creates a meeting, a meeting chat with all participants,
+   * and posts a system message in the original chat.
+   */
+  fastify.post<{ Params: { id: string } }>(
+    "/chats/:id/start-meeting",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const user = request.user;
+      const { id: chatId } = request.params;
+
+      if (!UUID_REGEX.test(chatId)) {
+        return reply.status(400).send({ error: "Invalid chat ID" });
+      }
+
+      if (!user.orgId) {
+        return reply.status(400).send({ error: "User must belong to an organization" });
+      }
+
+      // Verify chat exists
+      const [chat] = await db
+        .select()
+        .from(chats)
+        .where(eq(chats.id, chatId))
+        .limit(1);
+
+      if (!chat) {
+        return reply.status(404).send({ error: "Chat not found" });
+      }
+
+      // Verify user is a member of the chat
+      const isMember = await db
+        .select({ chatId: chatMembers.chatId })
+        .from(chatMembers)
+        .where(and(eq(chatMembers.chatId, chatId), eq(chatMembers.userId, user.id)))
+        .limit(1);
+
+      if (isMember.length === 0) {
+        return reply.status(403).send({ error: "Not a member of this chat" });
+      }
+
+      // Get all chat members
+      const members = await db
+        .select({
+          userId: chatMembers.userId,
+          displayName: users.displayName,
+          email: users.email,
+        })
+        .from(chatMembers)
+        .innerJoin(users, eq(chatMembers.userId, users.id))
+        .where(eq(chatMembers.chatId, chatId));
+
+      // Create meeting
+      const roomId = `meeting-${crypto.randomUUID()}`;
+      const meetingTitle = chat.type === "dm"
+        ? `Call with ${members.find((m) => m.userId !== user.id)?.displayName || "User"}`
+        : `Meeting - ${chat.name || "Group"}`;
+
+      const [meeting] = await db
+        .insert(meetings)
+        .values({
+          orgId: user.orgId,
+          title: meetingTitle,
+          hostId: user.id,
+          type: "instant",
+          status: "active",
+          roomId,
+          settings: {},
+          startedAt: new Date(),
+        })
+        .returning();
+
+      // Add all chat members as meeting participants
+      const participantValues = members.map((m) => ({
+        meetingId: meeting.id,
+        userId: m.userId,
+        role: m.userId === user.id ? ("host" as const) : ("participant" as const),
+        joinedAt: m.userId === user.id ? new Date() : null,
+      }));
+
+      await db.insert(meetingParticipants).values(participantValues);
+
+      // Create meeting chat
+      const [meetingChat] = await db
+        .insert(chats)
+        .values({
+          type: "meeting",
+          name: meetingTitle,
+          orgId: user.orgId,
+        })
+        .returning();
+
+      // Add all members to meeting chat
+      const meetingChatMembers = members.map((m) => ({
+        chatId: meetingChat.id,
+        userId: m.userId,
+        role: m.userId === user.id ? ("owner" as const) : ("member" as const),
+      }));
+
+      await db.insert(chatMembers).values(meetingChatMembers);
+
+      // Post system message in the ORIGINAL chat
+      await createSystemMessage(chatId, user.id, {
+        action: "meeting_started",
+        startedBy: user.displayName || user.email,
+        meetingId: meeting.id,
+        meetingTitle,
+        meetingChatId: meetingChat.id,
+      });
+
+      return reply.status(201).send({
+        meeting,
+        meetingChat,
+      });
     }
   );
 }
