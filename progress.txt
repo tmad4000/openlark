@@ -90,3 +90,4 @@
 [2026-03-13 09:15] US-087 — Translation service integration — PASS
 [2026-03-13 10:00] US-088 — Chat message translation UI — PASS
 [2026-03-13 10:45] US-089 — Video meeting - LiveKit integration and join flow — PASS
+[2026-03-13 11:30] US-090 — Video meeting UI - grid view and controls — PASS
