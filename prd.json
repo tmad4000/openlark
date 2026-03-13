@@ -1573,8 +1573,8 @@
         "Typecheck passes"
       ],
       "priority": 93,
-      "passes": false,
-      "notes": "LiveKit Egress handles recording. Transcription is a BullMQ background job."
+      "passes": true,
+      "notes": "Created meeting_recordings table (id, meeting_id, storage_url, duration, size, transcription_status enum pending/processing/ready/failed). Created minutes table (id, meeting_id, recording_id, transcript jsonb with speaker/text/timestamps, summary jsonb, chapters jsonb, action_items jsonb, language, status enum). Created minutes_comments table (id, minutes_id, user_id, paragraph_index, content). Added POST /meetings/livekit-webhook endpoint that handles egress_ended events, saves recording to DB, and queues BullMQ transcription job. Created transcription-worker.ts with queue, worker, start/stop lifecycle. Worker wired into main index.ts. Typecheck passes."
     },
     {
       "id": "US-094",

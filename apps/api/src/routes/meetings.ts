@@ -1,9 +1,10 @@
 import { FastifyInstance } from "fastify";
 import { db } from "../db";
-import { meetings, meetingParticipants, users } from "../db/schema";
+import { meetings, meetingParticipants, meetingRecordings, minutes, users } from "../db/schema";
 import { eq } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
 import { AccessToken, VideoGrant } from "livekit-server-sdk";
+import { queueTranscriptionJob } from "../lib/transcription-worker";
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -187,6 +188,76 @@ export const meetingsRoutes = async (fastify: FastifyInstance) => {
       }).where(eq(meetings.id, id)).returning();
 
       return reply.send({ meeting: updated });
+    }
+  );
+
+  /**
+   * POST /meetings/livekit-webhook - LiveKit Egress webhook callback
+   * Called when a recording completes; saves to meeting_recordings and queues transcription
+   */
+  fastify.post<{
+    Body: {
+      event: string;
+      egressInfo?: {
+        egressId: string;
+        roomName: string;
+        status: number;
+        file?: {
+          filename: string;
+          duration: number;
+          size: string;
+          location: string;
+        };
+      };
+    };
+  }>(
+    "/meetings/livekit-webhook",
+    async (request, reply) => {
+      const { event, egressInfo } = request.body;
+
+      // Only handle egress_ended events (recording complete)
+      if (event !== "egress_ended" || !egressInfo) {
+        return reply.status(200).send({ ok: true });
+      }
+
+      // Extract meeting ID from room name (format: "meeting-<uuid>")
+      const roomName = egressInfo.roomName;
+      if (!roomName) {
+        return reply.status(400).send({ error: "Missing roomName" });
+      }
+
+      // Find the meeting by roomId
+      const [meeting] = await db
+        .select()
+        .from(meetings)
+        .where(eq(meetings.roomId, roomName))
+        .limit(1);
+
+      if (!meeting) {
+        return reply.status(404).send({ error: "Meeting not found for room" });
+      }
+
+      const file = egressInfo.file;
+      const storageUrl = file?.location || `egress/${egressInfo.egressId}`;
+      const duration = file ? Math.round(file.duration / 1e9) : null; // nanoseconds to seconds
+      const size = file ? parseInt(file.size, 10) : null;
+
+      // Save recording to DB
+      const [recording] = await db
+        .insert(meetingRecordings)
+        .values({
+          meetingId: meeting.id,
+          storageUrl,
+          duration,
+          size,
+          transcriptionStatus: "pending",
+        })
+        .returning();
+
+      // Queue transcription job
+      await queueTranscriptionJob(recording.id, meeting.id);
+
+      return reply.status(201).send({ recording });
     }
   );
 };

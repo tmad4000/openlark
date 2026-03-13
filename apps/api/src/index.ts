@@ -29,6 +29,7 @@ import { meetingsRoutes } from "./routes/meetings";
 import { wsRoutes } from "./routes/ws";
 import { closeRedis } from "./lib/redis";
 import { startAutomationWorker, stopAutomationWorker } from "./lib/automation-worker";
+import { startTranscriptionWorker, stopTranscriptionWorker } from "./lib/transcription-worker";
 
 const fastify = Fastify({
   logger: true,
@@ -84,8 +85,9 @@ const start = async () => {
     await fastify.listen({ port, host: "0.0.0.0" });
     console.log(`API server listening on port ${port}`);
 
-    // Start automation worker
+    // Start workers
     startAutomationWorker();
+    startTranscriptionWorker();
   } catch (err) {
     fastify.log.error(err);
     process.exit(1);
@@ -97,6 +99,7 @@ const shutdown = async () => {
   console.log("Shutting down...");
   await fastify.close();
   await stopAutomationWorker();
+  await stopTranscriptionWorker();
   await closeRedis();
   process.exit(0);
 };

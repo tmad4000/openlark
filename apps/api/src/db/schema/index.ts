@@ -21,3 +21,4 @@ export * from "./attendance";
 export * from "./emails";
 export * from "./translations";
 export * from "./meetings";
+export * from "./meeting-recordings";
