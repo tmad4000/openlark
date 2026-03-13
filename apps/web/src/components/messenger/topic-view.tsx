@@ -3,7 +3,9 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { api, type Topic, type Message, type ChatMember } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import { Plus, MessageCircle, Lock, Unlock, Send, ArrowLeft, Loader2 } from "lucide-react";
+import { Plus, MessageCircle, Lock, Unlock, Send, ArrowLeft, Loader2, Bell, BellOff } from "lucide-react";
+
+type TopicFilter = "all" | "subscribed";
 
 interface TopicViewProps {
   chatId: string;
@@ -13,9 +15,11 @@ interface TopicViewProps {
 
 export function TopicView({ chatId, currentUserId, chatMembers }: TopicViewProps) {
   const [topics, setTopics] = useState<Topic[]>([]);
+  const [subscribedTopics, setSubscribedTopics] = useState<Topic[]>([]);
   const [selectedTopic, setSelectedTopic] = useState<Topic | null>(null);
   const [topicMessages, setTopicMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
+  const [subscribedLoading, setSubscribedLoading] = useState(false);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newTopicTitle, setNewTopicTitle] = useState("");
@@ -23,9 +27,10 @@ export function TopicView({ chatId, currentUserId, chatMembers }: TopicViewProps
   const [replyText, setReplyText] = useState("");
   const [creating, setCreating] = useState(false);
   const [sending, setSending] = useState(false);
+  const [filter, setFilter] = useState<TopicFilter>("all");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Load topics
+  // Load topics for this chat
   useEffect(() => {
     setLoading(true);
     api.getTopics(chatId)
@@ -33,6 +38,16 @@ export function TopicView({ chatId, currentUserId, chatMembers }: TopicViewProps
       .catch(() => setTopics([]))
       .finally(() => setLoading(false));
   }, [chatId]);
+
+  // Load subscribed topics when switching to subscribed tab
+  useEffect(() => {
+    if (filter !== "subscribed") return;
+    setSubscribedLoading(true);
+    api.getSubscribedTopics()
+      .then((res) => setSubscribedTopics(res.topics))
+      .catch(() => setSubscribedTopics([]))
+      .finally(() => setSubscribedLoading(false));
+  }, [filter]);
 
   // Load topic messages when topic selected
   useEffect(() => {
@@ -56,7 +71,7 @@ export function TopicView({ chatId, currentUserId, chatMembers }: TopicViewProps
     setCreating(true);
     try {
       const res = await api.createTopic(chatId, newTopicTitle.trim(), newTopicMessage.trim());
-      setTopics((prev) => [{ ...res.topic, messageCount: 1 }, ...prev]);
+      setTopics((prev) => [{ ...res.topic, messageCount: 1, subscribed: true }, ...prev]);
       setNewTopicTitle("");
       setNewTopicMessage("");
       setShowCreateForm(false);
@@ -77,14 +92,13 @@ export function TopicView({ chatId, currentUserId, chatMembers }: TopicViewProps
       });
       setTopicMessages((prev) => [...prev, res.message]);
       setReplyText("");
-      // Update topic message count
-      setTopics((prev) =>
-        prev.map((t) =>
-          t.id === selectedTopic.id
-            ? { ...t, messageCount: t.messageCount + 1 }
-            : t
-        )
-      );
+      // Update topic message count and mark as subscribed (auto-subscribe on reply)
+      const updateTopic = (t: Topic) =>
+        t.id === selectedTopic.id
+          ? { ...t, messageCount: t.messageCount + 1, subscribed: true }
+          : t;
+      setTopics((prev) => prev.map(updateTopic));
+      setSelectedTopic((prev) => prev ? updateTopic(prev) : null);
     } catch {
       // ignore
     } finally {
@@ -101,6 +115,32 @@ export function TopicView({ chatId, currentUserId, chatMembers }: TopicViewProps
       );
       if (selectedTopic?.id === topic.id) {
         setSelectedTopic((prev) => prev ? { ...prev, ...res.topic } : null);
+      }
+    } catch {
+      // ignore
+    }
+  }, [selectedTopic]);
+
+  const handleToggleSubscription = useCallback(async (topic: Topic, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    const isSubscribed = topic.subscribed;
+    try {
+      if (isSubscribed) {
+        await api.unsubscribeTopic(topic.id);
+      } else {
+        await api.subscribeTopic(topic.id);
+      }
+      const updateSub = (t: Topic) =>
+        t.id === topic.id ? { ...t, subscribed: !isSubscribed } : t;
+      setTopics((prev) => prev.map(updateSub));
+      if (selectedTopic?.id === topic.id) {
+        setSelectedTopic((prev) => prev ? updateSub(prev) : null);
+      }
+      // Also update subscribed topics list if on that tab
+      if (!isSubscribed) {
+        setSubscribedTopics((prev) => [{ ...topic, subscribed: true }, ...prev]);
+      } else {
+        setSubscribedTopics((prev) => prev.filter((t) => t.id !== topic.id));
       }
     } catch {
       // ignore
@@ -135,6 +175,21 @@ export function TopicView({ chatId, currentUserId, chatMembers }: TopicViewProps
               {selectedTopic.status === "open" ? "Open" : "Closed"} · {selectedTopic.messageCount} messages
             </p>
           </div>
+          <button
+            onClick={() => handleToggleSubscription(selectedTopic)}
+            className={cn(
+              "px-2 py-1 text-xs rounded-md border transition-colors",
+              selectedTopic.subscribed
+                ? "border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                : "border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
+            )}
+          >
+            {selectedTopic.subscribed ? (
+              <span className="flex items-center gap-1"><BellOff className="h-3 w-3" /> Unsubscribe</span>
+            ) : (
+              <span className="flex items-center gap-1"><Bell className="h-3 w-3" /> Subscribe</span>
+            )}
+          </button>
           <button
             onClick={() => handleToggleTopicStatus(selectedTopic)}
             className={cn(
@@ -228,6 +283,9 @@ export function TopicView({ chatId, currentUserId, chatMembers }: TopicViewProps
     );
   }
 
+  const displayedTopics = filter === "subscribed" ? subscribedTopics : topics;
+  const isListLoading = filter === "subscribed" ? subscribedLoading : loading;
+
   // Topic list view
   return (
     <div className="flex-1 flex flex-col min-h-0">
@@ -242,6 +300,33 @@ export function TopicView({ chatId, currentUserId, chatMembers }: TopicViewProps
         >
           <Plus className="h-3 w-3" />
           New Topic
+        </button>
+      </div>
+
+      {/* Filter tabs */}
+      <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-800 flex gap-1">
+        <button
+          onClick={() => setFilter("all")}
+          className={cn(
+            "px-3 py-1 text-xs rounded-md transition-colors",
+            filter === "all"
+              ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium"
+              : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
+          )}
+        >
+          All
+        </button>
+        <button
+          onClick={() => setFilter("subscribed")}
+          className={cn(
+            "px-3 py-1 text-xs rounded-md transition-colors flex items-center gap-1",
+            filter === "subscribed"
+              ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-medium"
+              : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
+          )}
+        >
+          <Bell className="h-3 w-3" />
+          Subscribed
         </button>
       </div>
 
@@ -286,21 +371,25 @@ export function TopicView({ chatId, currentUserId, chatMembers }: TopicViewProps
 
       {/* Topics list */}
       <div className="flex-1 overflow-y-auto">
-        {loading ? (
+        {isListLoading ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="h-5 w-5 animate-spin text-gray-400" />
           </div>
-        ) : topics.length === 0 ? (
+        ) : displayedTopics.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center px-4">
             <MessageCircle className="h-8 w-8 text-gray-400 dark:text-gray-500 mb-2" />
-            <p className="text-sm text-gray-500 dark:text-gray-400">No topics yet</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              {filter === "subscribed" ? "No subscribed topics" : "No topics yet"}
+            </p>
             <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-              Create a topic to start a focused discussion
+              {filter === "subscribed"
+                ? "Subscribe to topics to see them here"
+                : "Create a topic to start a focused discussion"}
             </p>
           </div>
         ) : (
           <div className="divide-y divide-gray-200 dark:divide-gray-800">
-            {topics.map((topic) => (
+            {displayedTopics.map((topic) => (
               <button
                 key={topic.id}
                 onClick={() => setSelectedTopic(topic)}
@@ -321,6 +410,18 @@ export function TopicView({ chatId, currentUserId, chatMembers }: TopicViewProps
                       {topic.messageCount} {topic.messageCount === 1 ? "message" : "messages"} · {topic.status === "open" ? "Open" : "Closed"} · {new Date(topic.createdAt).toLocaleDateString()}
                     </p>
                   </div>
+                  <button
+                    onClick={(e) => handleToggleSubscription(topic, e)}
+                    className={cn(
+                      "p-1 rounded transition-colors flex-shrink-0",
+                      topic.subscribed
+                        ? "text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                        : "text-gray-400 dark:text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800"
+                    )}
+                    title={topic.subscribed ? "Unsubscribe" : "Subscribe"}
+                  >
+                    {topic.subscribed ? <Bell className="h-4 w-4" /> : <BellOff className="h-4 w-4" />}
+                  </button>
                 </div>
               </button>
             ))}

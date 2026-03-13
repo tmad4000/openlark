@@ -1556,6 +1556,147 @@ export class MessengerService {
 
     return topic ?? null;
   }
+
+  // ============ TOPIC SUBSCRIPTION OPERATIONS ============
+
+  /**
+   * Subscribe a user to a topic
+   */
+  async subscribeTopic(topicId: string, userId: string): Promise<boolean> {
+    // Verify topic exists
+    const topic = await this.getTopicById(topicId);
+    if (!topic) return false;
+
+    // Verify user is a member of the topic's chat
+    const isMember = await this.isChatMember(topic.chatId, userId);
+    if (!isMember) return false;
+
+    try {
+      await db.insert(topicSubscriptions).values({ topicId, userId });
+      return true;
+    } catch {
+      // Already subscribed (unique constraint)
+      return false;
+    }
+  }
+
+  /**
+   * Unsubscribe a user from a topic
+   */
+  async unsubscribeTopic(topicId: string, userId: string): Promise<boolean> {
+    const result = await db
+      .delete(topicSubscriptions)
+      .where(
+        and(
+          eq(topicSubscriptions.topicId, topicId),
+          eq(topicSubscriptions.userId, userId)
+        )
+      )
+      .returning();
+
+    return result.length > 0;
+  }
+
+  /**
+   * Check if a user is subscribed to a topic
+   */
+  async isSubscribedToTopic(topicId: string, userId: string): Promise<boolean> {
+    const [sub] = await db
+      .select()
+      .from(topicSubscriptions)
+      .where(
+        and(
+          eq(topicSubscriptions.topicId, topicId),
+          eq(topicSubscriptions.userId, userId)
+        )
+      )
+      .limit(1);
+
+    return !!sub;
+  }
+
+  /**
+   * Get all topics a user is subscribed to (across all topic groups)
+   */
+  async getSubscribedTopics(
+    userId: string
+  ): Promise<(Topic & { messageCount: number })[]> {
+    const subs = await db
+      .select({ topicId: topicSubscriptions.topicId })
+      .from(topicSubscriptions)
+      .where(eq(topicSubscriptions.userId, userId));
+
+    if (subs.length === 0) return [];
+
+    const topicIds = subs.map((s) => s.topicId);
+
+    const subscribedTopics = await db
+      .select()
+      .from(topics)
+      .where(inArray(topics.id, topicIds))
+      .orderBy(
+        sql`CASE WHEN ${topics.status} = 'open' THEN 0 ELSE 1 END`,
+        desc(topics.createdAt)
+      );
+
+    if (subscribedTopics.length === 0) return [];
+
+    // Get message counts
+    const counts = await db
+      .select({
+        topicId: messages.topicId,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(messages)
+      .where(inArray(messages.topicId, topicIds))
+      .groupBy(messages.topicId);
+
+    const countMap = new Map<string, number>();
+    for (const c of counts) {
+      if (c.topicId) countMap.set(c.topicId, c.count);
+    }
+
+    return subscribedTopics.map((t) => ({
+      ...t,
+      messageCount: countMap.get(t.id) || 0,
+    }));
+  }
+
+  /**
+   * Get subscription status for multiple topics for a user
+   */
+  async getTopicSubscriptionStatuses(
+    topicIds: string[],
+    userId: string
+  ): Promise<Set<string>> {
+    if (topicIds.length === 0) return new Set();
+
+    const subs = await db
+      .select({ topicId: topicSubscriptions.topicId })
+      .from(topicSubscriptions)
+      .where(
+        and(
+          inArray(topicSubscriptions.topicId, topicIds),
+          eq(topicSubscriptions.userId, userId)
+        )
+      );
+
+    return new Set(subs.map((s) => s.topicId));
+  }
+
+  /**
+   * Auto-subscribe user to a topic (silently, no error on duplicate)
+   */
+  async autoSubscribeTopic(topicId: string, userId: string): Promise<void> {
+    try {
+      await db
+        .insert(topicSubscriptions)
+        .values({ topicId, userId })
+        .onConflictDoNothing();
+    } catch {
+      // ignore
+    }
+  }
 }
 
 export const messengerService = new MessengerService();

@@ -731,8 +731,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 44,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Subscribe/unsubscribe API endpoints, auto-subscribe on create/reply/@mention, Subscribed filter tab in topic list UI, subscribe toggle button per topic."
     },
     {
       "id": "US-045",

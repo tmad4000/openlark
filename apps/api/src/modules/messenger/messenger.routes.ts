@@ -340,6 +340,11 @@ export async function messengerRoutes(app: FastifyInstance) {
           });
         }
 
+        // Auto-subscribe sender to topic when replying
+        if (input.topicId) {
+          await messengerService.autoSubscribeTopic(input.topicId, req.user!.id);
+        }
+
         // Publish real-time event
         await publishMessageEvent(req.params.chatId, {
           type: "message:new",
@@ -354,6 +359,10 @@ export async function messengerRoutes(app: FastifyInstance) {
           | undefined;
         if (mentions && mentions.length > 0) {
           for (const mention of mentions) {
+            // Auto-subscribe mentioned users to topic
+            if (input.topicId) {
+              await messengerService.autoSubscribeTopic(input.topicId, mention.id);
+            }
             if (mention.id !== req.user!.id) {
               // Don't notify self
               await publishMessageEvent(req.params.chatId, {
@@ -1190,10 +1199,30 @@ export async function messengerRoutes(app: FastifyInstance) {
         });
       }
 
-      const topics = await messengerService.getTopics(req.params.chatId);
-      return reply.send({ data: { topics } });
+      const topicsList = await messengerService.getTopics(req.params.chatId);
+
+      // Include subscription status for each topic
+      const topicIds = topicsList.map((t) => t.id);
+      const subscribedSet = await messengerService.getTopicSubscriptionStatuses(
+        topicIds,
+        req.user!.id
+      );
+
+      const topicsWithSub = topicsList.map((t) => ({
+        ...t,
+        subscribed: subscribedSet.has(t.id),
+      }));
+
+      return reply.send({ data: { topics: topicsWithSub } });
     }
   );
+
+  // GET /messenger/topics/subscribed - Get all topics user is subscribed to
+  // NOTE: Must be registered before /topics/:topicId routes to avoid param matching
+  app.get("/topics/subscribed", async (req, reply) => {
+    const subscribedTopics = await messengerService.getSubscribedTopics(req.user!.id);
+    return reply.send({ data: { topics: subscribedTopics } });
+  });
 
   // GET /messenger/topics/:topicId/messages - Get messages for a topic
   app.get<{ Params: { topicId: string }; Querystring: Record<string, unknown> }>(
@@ -1260,6 +1289,40 @@ export async function messengerRoutes(app: FastifyInstance) {
         }
         throw error;
       }
+    }
+  );
+
+  // POST /messenger/topics/:topicId/subscribe - Subscribe to a topic
+  app.post<{ Params: { topicId: string } }>(
+    "/topics/:topicId/subscribe",
+    async (req, reply) => {
+      const subscribed = await messengerService.subscribeTopic(
+        req.params.topicId,
+        req.user!.id
+      );
+
+      // Return 201 even if already subscribed (idempotent)
+      return reply.status(201).send({ data: { success: true, alreadySubscribed: !subscribed } });
+    }
+  );
+
+  // DELETE /messenger/topics/:topicId/subscribe - Unsubscribe from a topic
+  app.delete<{ Params: { topicId: string } }>(
+    "/topics/:topicId/subscribe",
+    async (req, reply) => {
+      const unsubscribed = await messengerService.unsubscribeTopic(
+        req.params.topicId,
+        req.user!.id
+      );
+
+      if (!unsubscribed) {
+        return reply.status(404).send({
+          code: "NOT_SUBSCRIBED",
+          message: "Not subscribed to this topic",
+        });
+      }
+
+      return reply.send({ data: { success: true } });
     }
   );
 

@@ -416,6 +416,26 @@ class ApiClient {
     );
   }
 
+  async subscribeTopic(topicId: string) {
+    return this.request<{ success: boolean }>(
+      `/messenger/topics/${topicId}/subscribe`,
+      { method: "POST" }
+    );
+  }
+
+  async unsubscribeTopic(topicId: string) {
+    return this.request<{ success: boolean }>(
+      `/messenger/topics/${topicId}/subscribe`,
+      { method: "DELETE" }
+    );
+  }
+
+  async getSubscribedTopics() {
+    return this.request<{ topics: Topic[] }>(
+      `/messenger/topics/subscribed`
+    );
+  }
+
   // Calendar endpoints
   async getCalendars() {
     return this.request<{ calendars: Calendar[] }>("/calendar/calendars");
@@ -923,6 +943,7 @@ export interface Topic {
   status: "open" | "closed";
   createdAt: string;
   messageCount: number;
+  subscribed?: boolean;
 }
 
 // Buzz types
