@@ -598,6 +598,35 @@ class ApiClient {
       }
     );
   }
+
+  // Notification endpoints
+  async getNotifications(params?: { limit?: number; offset?: number }) {
+    const searchParams = new URLSearchParams();
+    if (params?.limit) searchParams.set("limit", params.limit.toString());
+    if (params?.offset) searchParams.set("offset", params.offset.toString());
+    const query = searchParams.toString();
+    return this.request<{ notifications: AppNotification[]; unreadCount: number }>(
+      `/notifications${query ? `?${query}` : ""}`
+    );
+  }
+
+  async getUnreadNotificationCount() {
+    return this.request<{ unreadCount: number }>("/notifications/unread-count");
+  }
+
+  async markNotificationRead(notificationId: string) {
+    return this.request<{ notification: AppNotification }>(
+      `/notifications/${notificationId}/read`,
+      { method: "PATCH" }
+    );
+  }
+
+  async markAllNotificationsRead() {
+    return this.request<{ success: boolean; count: number }>(
+      "/notifications/read-all",
+      { method: "POST" }
+    );
+  }
 }
 
 // Types
@@ -821,6 +850,19 @@ export interface DocumentComment {
   resolved: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+// Notification types
+export interface AppNotification {
+  id: string;
+  userId: string;
+  type: "dm_received" | "mentioned" | "thread_reply" | "task_assigned" | "approval_pending";
+  title: string;
+  body: string | null;
+  entityType: string | null;
+  entityId: string | null;
+  readAt: string | null;
+  createdAt: string;
 }
 
 export const api = new ApiClient();

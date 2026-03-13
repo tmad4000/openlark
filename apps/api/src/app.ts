@@ -18,6 +18,7 @@ import {
 } from "./modules/messenger/index.js";
 import { calendarRoutes } from "./modules/calendar/index.js";
 import { docsRoutes } from "./modules/docs/index.js";
+import { notificationRoutes } from "./modules/notifications/index.js";
 
 export async function buildApp() {
   const app = Fastify({
@@ -77,6 +78,9 @@ export async function buildApp() {
 
       // Docs module (collaborative documents)
       api.register(docsRoutes, { prefix: "/docs" });
+
+      // Notifications module
+      api.register(notificationRoutes, { prefix: "/notifications" });
     },
     { prefix: "/api/v1" }
   );

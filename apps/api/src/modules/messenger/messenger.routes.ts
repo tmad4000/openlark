@@ -21,6 +21,7 @@ import {
 import { authenticate } from "../auth/middleware.js";
 import { formatZodError } from "../../utils/validation.js";
 import { publishMessageEvent, notifyUserJoinedChat } from "./websocket.js";
+import { notificationsService } from "../notifications/notifications.service.js";
 
 export async function messengerRoutes(app: FastifyInstance) {
   // All messenger routes require authentication
@@ -359,7 +360,49 @@ export async function messengerRoutes(app: FastifyInstance) {
                 mentionedUserId: mention.id,
                 senderId: req.user!.id,
               });
+              // Persist @mention notification
+              await notificationsService.createNotification({
+                userId: mention.id,
+                type: "mentioned",
+                title: `You were mentioned by ${req.user!.email}`,
+                body: typeof contentJson?.text === "string" ? contentJson.text.slice(0, 200) : undefined,
+                entityType: "message",
+                entityId: message.id,
+              });
             }
+          }
+        }
+
+        // Generate DM / thread reply notifications
+        const chat = await messengerService.getChatById(req.params.chatId);
+        if (chat?.type === "dm") {
+          // DM received notification for the other user
+          const members = await messengerService.getChatMembers(req.params.chatId);
+          for (const m of members) {
+            if (m.userId !== req.user!.id) {
+              await notificationsService.createNotification({
+                userId: m.userId,
+                type: "dm_received",
+                title: `New message from ${req.user!.email}`,
+                body: typeof contentJson?.text === "string" ? contentJson.text.slice(0, 200) : undefined,
+                entityType: "chat",
+                entityId: req.params.chatId,
+              });
+            }
+          }
+        }
+        if (message.threadId) {
+          // Thread reply notification for the thread starter
+          const parentMessage = await messengerService.getMessageById(message.threadId);
+          if (parentMessage && parentMessage.senderId !== req.user!.id) {
+            await notificationsService.createNotification({
+              userId: parentMessage.senderId,
+              type: "thread_reply",
+              title: `New reply in your thread`,
+              body: typeof contentJson?.text === "string" ? contentJson.text.slice(0, 200) : undefined,
+              entityType: "message",
+              entityId: message.threadId,
+            });
           }
         }
 

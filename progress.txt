@@ -27,3 +27,4 @@
 [2026-03-13 12:00] US-037 — Group chat settings and admin panel — PASS
 [2026-03-13 13:00] US-038 — Code block messages — PASS
 [2026-03-13 14:00] US-039 — Group announcements — PASS
+[2026-03-13 15:00] US-040 — Notification system - in-app notifications — PASS
