@@ -23,16 +23,44 @@ import {
   X,
   Search,
   ClipboardList,
+  Circle,
+  MinusCircle,
+  Moon,
+  Smile,
 } from "lucide-react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { GlobalSearchDialog } from "../../components/GlobalSearchDialog";
+
+type UserStatus = "active" | "away" | "busy" | "offline";
 
 interface UserData {
   id: string;
   email: string;
   displayName: string;
   avatarUrl: string | null;
+  status: UserStatus | null;
+  statusText: string | null;
+  statusEmoji: string | null;
+  timezone: string | null;
+  workingHoursStart: string | null;
+  workingHoursEnd: string | null;
 }
+
+const STATUS_PRESETS = [
+  { emoji: "🟢", text: "", status: "active" as UserStatus, label: "Active" },
+  { emoji: "🟡", text: "", status: "away" as UserStatus, label: "Away" },
+  { emoji: "⛔", text: "", status: "busy" as UserStatus, label: "Do Not Disturb" },
+  { emoji: "📅", text: "In a meeting", status: "busy" as UserStatus, label: "In a meeting" },
+  { emoji: "🏖️", text: "On vacation", status: "away" as UserStatus, label: "On vacation" },
+  { emoji: "🏠", text: "Working remotely", status: "active" as UserStatus, label: "Working remotely" },
+] as const;
+
+const STATUS_COLORS: Record<UserStatus, string> = {
+  active: "bg-green-500",
+  away: "bg-yellow-500",
+  busy: "bg-red-500",
+  offline: "bg-gray-400",
+};
 
 interface NotificationData {
   id: string;
@@ -82,6 +110,34 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [notifications, setNotifications] = useState<NotificationData[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [statusMenuOpen, setStatusMenuOpen] = useState(false);
+  const [customStatusText, setCustomStatusText] = useState("");
+  const [customStatusEmoji, setCustomStatusEmoji] = useState("");
+
+  const updateUserStatus = async (status: UserStatus, statusText?: string | null, statusEmoji?: string | null) => {
+    const token = getCookie("session_token");
+    if (!token) return;
+    try {
+      const res = await fetch("/api/users/me", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          status,
+          status_text: statusText ?? null,
+          status_emoji: statusEmoji ?? null,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setUser(data.user);
+      }
+    } catch (error) {
+      console.error("Failed to update status:", error);
+    }
+  };
 
   useEffect(() => {
     const token = getCookie("session_token");
@@ -247,12 +303,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     };
   }, [isResizing]);
 
-  // Cmd+K / Ctrl+K to open global search
+  // Cmd+K / Ctrl+K to open global search, Cmd+Shift+Y to toggle status menu
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
         setSearchOpen((prev) => !prev);
+      }
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === "y") {
+        e.preventDefault();
+        setStatusMenuOpen((prev) => !prev);
       }
     };
     document.addEventListener("keydown", handleKeyDown);
@@ -355,7 +415,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <div>
           <DropdownMenu.Root>
             <DropdownMenu.Trigger asChild>
-              <button className="w-10 h-10 rounded-full overflow-hidden border-2 border-transparent hover:border-gray-600 transition-colors focus:outline-none focus:border-blue-500">
+              <button className="w-10 h-10 rounded-full overflow-hidden border-2 border-transparent hover:border-gray-600 transition-colors focus:outline-none focus:border-blue-500 relative">
                 {user?.avatarUrl ? (
                   <img
                     src={user.avatarUrl}
@@ -369,12 +429,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                       "U"}
                   </div>
                 )}
+                {/* Status indicator dot */}
+                <span
+                  className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-gray-900 ${STATUS_COLORS[user?.status || "offline"]}`}
+                />
               </button>
             </DropdownMenu.Trigger>
 
             <DropdownMenu.Portal>
               <DropdownMenu.Content
-                className="min-w-[200px] bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50"
+                className="min-w-[240px] bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50"
                 sideOffset={8}
                 side="right"
                 align="end"
@@ -384,7 +448,61 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     {user?.displayName || "User"}
                   </p>
                   <p className="text-xs text-gray-500 truncate">{user?.email}</p>
+                  {(user?.statusText || user?.statusEmoji) && (
+                    <p className="text-xs text-gray-600 mt-1">
+                      {user.statusEmoji && <span className="mr-1">{user.statusEmoji}</span>}
+                      {user.statusText}
+                    </p>
+                  )}
                 </div>
+
+                {/* Status Setter */}
+                <DropdownMenu.Sub>
+                  <DropdownMenu.SubTrigger className="flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer focus:outline-none focus:bg-gray-100 data-[state=open]:bg-gray-100">
+                    <span className={`w-2.5 h-2.5 rounded-full mr-2 ${STATUS_COLORS[user?.status || "offline"]}`} />
+                    Set Status
+                    <span className="ml-auto text-xs text-gray-400">⌘⇧Y</span>
+                  </DropdownMenu.SubTrigger>
+                  <DropdownMenu.Portal>
+                    <DropdownMenu.SubContent
+                      className="min-w-[220px] bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50"
+                      sideOffset={8}
+                    >
+                      {STATUS_PRESETS.map((preset) => (
+                        <DropdownMenu.Item
+                          key={preset.label}
+                          className="flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer focus:outline-none focus:bg-gray-100"
+                          onSelect={() => updateUserStatus(preset.status, preset.text || null, preset.emoji || null)}
+                        >
+                          <span className="mr-2">{preset.emoji}</span>
+                          {preset.label}
+                        </DropdownMenu.Item>
+                      ))}
+                      <DropdownMenu.Separator className="h-px bg-gray-200 my-1" />
+                      <DropdownMenu.Item
+                        className="flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer focus:outline-none focus:bg-gray-100"
+                        onSelect={() => setStatusMenuOpen(true)}
+                      >
+                        <Smile className="w-4 h-4 mr-2" />
+                        Custom Status...
+                      </DropdownMenu.Item>
+                      {(user?.statusText || user?.statusEmoji) && (
+                        <>
+                          <DropdownMenu.Separator className="h-px bg-gray-200 my-1" />
+                          <DropdownMenu.Item
+                            className="flex items-center px-3 py-2 text-sm text-red-600 hover:bg-red-50 cursor-pointer focus:outline-none focus:bg-red-50"
+                            onSelect={() => updateUserStatus("active", null, null)}
+                          >
+                            <X className="w-4 h-4 mr-2" />
+                            Clear Status
+                          </DropdownMenu.Item>
+                        </>
+                      )}
+                    </DropdownMenu.SubContent>
+                  </DropdownMenu.Portal>
+                </DropdownMenu.Sub>
+
+                <DropdownMenu.Separator className="h-px bg-gray-200 my-1" />
 
                 <DropdownMenu.Item
                   className="flex items-center px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer focus:outline-none focus:bg-gray-100"
@@ -531,6 +649,80 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* Global Search Dialog */}
       <GlobalSearchDialog open={searchOpen} onOpenChange={setSearchOpen} />
+
+      {/* Custom Status Dialog */}
+      {statusMenuOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setStatusMenuOpen(false)} />
+          <div className="relative bg-white rounded-lg shadow-xl w-[400px] p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Set Custom Status</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Emoji</label>
+                <input
+                  type="text"
+                  value={customStatusEmoji}
+                  onChange={(e) => setCustomStatusEmoji(e.target.value)}
+                  placeholder="e.g. 🎯"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  maxLength={8}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Status Text</label>
+                <input
+                  type="text"
+                  value={customStatusText}
+                  onChange={(e) => setCustomStatusText(e.target.value)}
+                  placeholder="What's your status?"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  maxLength={100}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Quick Presets</label>
+                <div className="flex flex-wrap gap-2">
+                  {STATUS_PRESETS.filter((p) => p.text).map((preset) => (
+                    <button
+                      key={preset.label}
+                      onClick={() => {
+                        setCustomStatusEmoji(preset.emoji);
+                        setCustomStatusText(preset.text);
+                      }}
+                      className="px-3 py-1.5 text-xs border border-gray-200 rounded-full hover:bg-gray-100 transition-colors"
+                    >
+                      {preset.emoji} {preset.text}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-6">
+              <button
+                onClick={() => setStatusMenuOpen(false)}
+                className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  updateUserStatus(
+                    user?.status || "active",
+                    customStatusText || null,
+                    customStatusEmoji || null
+                  );
+                  setStatusMenuOpen(false);
+                  setCustomStatusText("");
+                  setCustomStatusEmoji("");
+                }}
+                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

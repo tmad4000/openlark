@@ -1999,8 +1999,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 118,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added status_text and status_emoji columns to users schema with migration 0020. Updated PATCH /users/me to accept status, status_text, status_emoji fields. Added POST /users/working-hours-check endpoint to check if users are within their working hours. Updated GET /users/:id to return status text, emoji, timezone, and working hours. Added status setter dropdown submenu in user avatar menu with presets (Active, Away, DND, In a meeting, On vacation, Working remotely) and custom status dialog. Added Cmd+Shift+Y keyboard shortcut to open custom status dialog. Status badge shown on user avatar in nav rail and messenger OnlineIndicator. Created /app/profile page with working hours configuration (start/end time, timezone). Working hours warning shown above message input in DM chats when recipient is outside their working hours. Typecheck passes."
     },
     {
       "id": "US-119",

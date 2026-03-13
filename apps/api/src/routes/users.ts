@@ -17,6 +17,13 @@ interface UpdateProfileBody {
   working_hours_start?: string;
   working_hours_end?: string;
   phone?: string;
+  status?: "active" | "away" | "busy" | "offline";
+  status_text?: string | null;
+  status_emoji?: string | null;
+}
+
+interface WorkingHoursCheckBody {
+  user_ids: string[];
 }
 
 // UUID validation regex
@@ -77,6 +84,9 @@ export async function usersRoutes(fastify: FastifyInstance) {
         working_hours_start,
         working_hours_end,
         phone,
+        status,
+        status_text,
+        status_emoji,
       } = request.body;
 
       // Build update object
@@ -88,6 +98,9 @@ export async function usersRoutes(fastify: FastifyInstance) {
         workingHoursStart: string;
         workingHoursEnd: string;
         phone: string | null;
+        status: "active" | "away" | "busy" | "offline";
+        statusText: string | null;
+        statusEmoji: string | null;
         updatedAt: Date;
       }> = {
         updatedAt: new Date(),
@@ -153,6 +166,32 @@ export async function usersRoutes(fastify: FastifyInstance) {
         updates.phone = phone || null;
       }
 
+      // Validate and set status
+      if (status !== undefined) {
+        const validStatuses = ["active", "away", "busy", "offline"] as const;
+        if (!validStatuses.includes(status)) {
+          return reply.status(400).send({
+            error: "Invalid status. Must be one of: active, away, busy, offline",
+          });
+        }
+        updates.status = status;
+      }
+
+      // Set status text (can be null to clear)
+      if (status_text !== undefined) {
+        if (status_text && status_text.length > 100) {
+          return reply.status(400).send({
+            error: "Status text must be 100 characters or less",
+          });
+        }
+        updates.statusText = status_text || null;
+      }
+
+      // Set status emoji (can be null to clear)
+      if (status_emoji !== undefined) {
+        updates.statusEmoji = status_emoji || null;
+      }
+
       // Update user
       const [updatedUser] = await db
         .update(users)
@@ -167,6 +206,8 @@ export async function usersRoutes(fastify: FastifyInstance) {
           timezone: users.timezone,
           locale: users.locale,
           status: users.status,
+          statusText: users.statusText,
+          statusEmoji: users.statusEmoji,
           workingHoursStart: users.workingHoursStart,
           workingHoursEnd: users.workingHoursEnd,
           orgId: users.orgId,
@@ -225,6 +266,11 @@ export async function usersRoutes(fastify: FastifyInstance) {
           displayName: users.displayName,
           avatarUrl: users.avatarUrl,
           status: users.status,
+          statusText: users.statusText,
+          statusEmoji: users.statusEmoji,
+          timezone: users.timezone,
+          workingHoursStart: users.workingHoursStart,
+          workingHoursEnd: users.workingHoursEnd,
           orgId: users.orgId,
         })
         .from(users)
@@ -270,6 +316,11 @@ export async function usersRoutes(fastify: FastifyInstance) {
           displayName: user.displayName,
           avatarUrl: user.avatarUrl,
           status: user.status,
+          statusText: user.statusText,
+          statusEmoji: user.statusEmoji,
+          timezone: user.timezone,
+          workingHoursStart: user.workingHoursStart,
+          workingHoursEnd: user.workingHoursEnd,
           isOnline,
           departments: userDepartments,
         },
@@ -319,6 +370,80 @@ export async function usersRoutes(fastify: FastifyInstance) {
       }
 
       return reply.status(200).send({ presence });
+    }
+  );
+
+  /**
+   * POST /users/working-hours-check - Check if users are within their working hours
+   */
+  fastify.post<{ Body: WorkingHoursCheckBody }>(
+    "/users/working-hours-check",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { user_ids } = request.body;
+
+      if (!Array.isArray(user_ids) || user_ids.length === 0) {
+        return reply.status(400).send({ error: "user_ids must be a non-empty array" });
+      }
+
+      if (user_ids.length > 100) {
+        return reply.status(400).send({ error: "Maximum 100 user IDs allowed" });
+      }
+
+      for (const id of user_ids) {
+        if (!UUID_REGEX.test(id)) {
+          return reply.status(400).send({ error: `Invalid user ID format: ${id}` });
+        }
+      }
+
+      const result: Record<string, { withinWorkingHours: boolean; workingHoursStart: string | null; workingHoursEnd: string | null; timezone: string | null }> = {};
+
+      for (const userId of user_ids) {
+        const [user] = await db
+          .select({
+            timezone: users.timezone,
+            workingHoursStart: users.workingHoursStart,
+            workingHoursEnd: users.workingHoursEnd,
+          })
+          .from(users)
+          .where(eq(users.id, userId))
+          .limit(1);
+
+        if (!user || !user.workingHoursStart || !user.workingHoursEnd) {
+          result[userId] = { withinWorkingHours: true, workingHoursStart: null, workingHoursEnd: null, timezone: null };
+          continue;
+        }
+
+        // Calculate current time in user's timezone
+        const tz = user.timezone || "UTC";
+        const now = new Date();
+        const formatter = new Intl.DateTimeFormat("en-US", {
+          timeZone: tz,
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        });
+        const parts = formatter.formatToParts(now);
+        const hour = parseInt(parts.find((p) => p.type === "hour")?.value || "0");
+        const minute = parseInt(parts.find((p) => p.type === "minute")?.value || "0");
+        const currentMinutes = hour * 60 + minute;
+
+        const [startH, startM] = user.workingHoursStart.split(":").map(Number);
+        const [endH, endM] = user.workingHoursEnd.split(":").map(Number);
+        const startMinutes = startH * 60 + startM;
+        const endMinutes = endH * 60 + endM;
+
+        const withinWorkingHours = currentMinutes >= startMinutes && currentMinutes <= endMinutes;
+
+        result[userId] = {
+          withinWorkingHours,
+          workingHoursStart: user.workingHoursStart,
+          workingHoursEnd: user.workingHoursEnd,
+          timezone: tz,
+        };
+      }
+
+      return reply.status(200).send({ workingHours: result });
     }
   );
 }

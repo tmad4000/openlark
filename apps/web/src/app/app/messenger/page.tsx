@@ -1247,15 +1247,27 @@ function TypingIndicator({ typingUsers }: { typingUsers: TypingUser[] }) {
   );
 }
 
-function OnlineIndicator({ isOnline, size = "md" }: { isOnline: boolean; size?: "sm" | "md" }) {
-  if (!isOnline) return null;
+function OnlineIndicator({ isOnline, status, size = "md" }: { isOnline: boolean; status?: string | null; size?: "sm" | "md" }) {
+  if (!isOnline && !status) return null;
 
   const sizeClasses = size === "sm" ? "w-2.5 h-2.5" : "w-3 h-3";
 
+  const statusColorMap: Record<string, string> = {
+    active: "bg-green-500",
+    away: "bg-yellow-500",
+    busy: "bg-red-500",
+    offline: "bg-gray-400",
+  };
+
+  const color = status && statusColorMap[status] ? statusColorMap[status] : isOnline ? "bg-green-500" : "bg-gray-400";
+  const title = status ? status.charAt(0).toUpperCase() + status.slice(1) : isOnline ? "Online" : "Offline";
+
+  if (!isOnline && status === "offline") return null;
+
   return (
     <span
-      className={`${sizeClasses} bg-green-500 rounded-full border-2 border-white absolute bottom-0 right-0`}
-      title="Online"
+      className={`${sizeClasses} ${color} rounded-full border-2 border-white absolute bottom-0 right-0`}
+      title={title}
     />
   );
 }
@@ -1565,6 +1577,60 @@ function ChatView({
   const [showPinsPanel, setShowPinsPanel] = useState(false);
   const [showChatInfoPanel, setShowChatInfoPanel] = useState(false);
   const [startingMeeting, setStartingMeeting] = useState(false);
+
+  // Working hours warning for DMs
+  const [workingHoursWarning, setWorkingHoursWarning] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (chat.type !== "dm") {
+      setWorkingHoursWarning(null);
+      return;
+    }
+    const token = getCookie("session_token");
+    if (!token) return;
+
+    // For DMs, check the other user's working hours
+    // The chat members are fetched separately, but we can use the chat ID pattern
+    // to extract the other user's ID, or use the members endpoint
+    const checkWorkingHours = async () => {
+      try {
+        const membersRes = await fetch(`/api/chats/${chat.id}/members`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!membersRes.ok) return;
+        const membersData = await membersRes.json();
+        const otherMembers = (membersData.members || []).filter(
+          (m: { userId: string }) => m.userId !== currentUserId
+        );
+        if (otherMembers.length === 0) return;
+
+        const otherUserIds = otherMembers.map((m: { userId: string }) => m.userId);
+        const whRes = await fetch("/api/users/working-hours-check", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ user_ids: otherUserIds }),
+        });
+        if (!whRes.ok) return;
+        const whData = await whRes.json();
+        const warnings: string[] = [];
+        for (const userId of otherUserIds) {
+          const wh = whData.workingHours?.[userId];
+          if (wh && !wh.withinWorkingHours && wh.workingHoursStart && wh.workingHoursEnd) {
+            warnings.push(
+              `This person's working hours are ${wh.workingHoursStart}–${wh.workingHoursEnd} (${wh.timezone || "UTC"})`
+            );
+          }
+        }
+        setWorkingHoursWarning(warnings.length > 0 ? warnings[0] : null);
+      } catch {
+        // Silently fail
+      }
+    };
+    checkWorkingHours();
+  }, [chat.id, chat.type, currentUserId]);
 
   // Thread panel state
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
@@ -3555,6 +3621,16 @@ function ChatView({
               })}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Working Hours Warning */}
+      {activeTab === "chat" && workingHoursWarning && (
+        <div className="flex-shrink-0 bg-amber-50 border-t border-amber-200 px-4 py-2">
+          <p className="text-xs text-amber-700 flex items-center gap-1.5">
+            <span>&#9888;</span>
+            <span>Outside working hours — {workingHoursWarning}</span>
+          </p>
         </div>
       )}
 

@@ -34,6 +34,8 @@ export const users = pgTable(
     timezone: varchar("timezone", { length: 50 }).default("UTC"),
     locale: varchar("locale", { length: 10 }).default("en"),
     status: userStatusEnum("status").default("offline"),
+    statusText: varchar("status_text", { length: 100 }),
+    statusEmoji: varchar("status_emoji", { length: 32 }),
     workingHoursStart: time("working_hours_start"),
     workingHoursEnd: time("working_hours_end"),
     role: userRoleEnum("role").notNull().default("member"),
