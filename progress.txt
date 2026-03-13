@@ -32,3 +32,4 @@
 [2026-03-13 17:00] US-042 — Buzz UI - send and receive — PASS
 [2026-03-13 18:00] US-043 — Topic groups - create and manage topics — PASS
 [2026-03-13 19:00] US-044 — Topic groups - subscribe, close, reopen — PASS
+[2026-03-13 20:00] US-045 — Calendar event schema — PASS

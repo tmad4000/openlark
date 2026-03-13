@@ -261,7 +261,7 @@ describe("CreateEventDialog", () => {
 
   it("adds attendees and displays them as tags", async () => {
     const mockUsers = [
-      { id: "user-2", displayName: "Jane Doe", email: "jane@example.com" },
+      { id: "user-2", displayName: "Jane Doe", email: "jane@example.com", avatarUrl: null },
     ];
     vi.mocked(api.searchUsers).mockResolvedValue({ users: mockUsers });
 
@@ -294,7 +294,7 @@ describe("CreateEventDialog", () => {
 
   it("removes attendee when clicking remove button", async () => {
     const mockUsers = [
-      { id: "user-2", displayName: "Jane Doe", email: "jane@example.com" },
+      { id: "user-2", displayName: "Jane Doe", email: "jane@example.com", avatarUrl: null },
     ];
     vi.mocked(api.searchUsers).mockResolvedValue({ users: mockUsers });
 
@@ -327,7 +327,7 @@ describe("CreateEventDialog", () => {
 
   it("includes attendeeIds when creating event with attendees", async () => {
     const mockUsers = [
-      { id: "user-2", displayName: "Jane Doe", email: "jane@example.com" },
+      { id: "user-2", displayName: "Jane Doe", email: "jane@example.com", avatarUrl: null },
     ];
     vi.mocked(api.searchUsers).mockResolvedValue({ users: mockUsers });
     vi.mocked(api.createEvent).mockResolvedValue({
