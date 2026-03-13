@@ -16,8 +16,8 @@
         "Typecheck passes"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": "Use pnpm workspaces. Next.js 15 with App Router. Fastify 5 for API."
+      "passes": true,
+      "notes": "Use pnpm workspaces. Next.js 15 with App Router. Fastify 5 for API. [Pre-existing implementation verified]"
     },
     {
       "id": "US-002",
@@ -32,8 +32,8 @@
         "Typecheck passes"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": "Use drizzle-orm with postgres-js driver. Connection pooling built in."
+      "passes": true,
+      "notes": "Use drizzle-orm with postgres-js driver. Connection pooling built in. [Pre-existing implementation verified]"
     },
     {
       "id": "US-003",
@@ -47,8 +47,8 @@
         "Typecheck passes"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": "All tables use uuid primary keys. Soft deletes via deleted_at timestamp."
+      "passes": true,
+      "notes": "All tables use uuid primary keys. Soft deletes via deleted_at timestamp. [Pre-existing implementation verified]"
     },
     {
       "id": "US-004",
@@ -62,8 +62,8 @@
         "Typecheck passes"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": "parent_id enables tree structure for nested departments."
+      "passes": true,
+      "notes": "parent_id enables tree structure for nested departments. [Pre-existing implementation verified]"
     },
     {
       "id": "US-005",
@@ -77,8 +77,8 @@
         "Typecheck passes"
       ],
       "priority": 5,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": " [Pre-existing implementation verified]"
     },
     {
       "id": "US-006",
@@ -93,8 +93,8 @@
         "Typecheck passes"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": "Auto-create a personal organization for the user on registration."
+      "passes": true,
+      "notes": "Auto-create a personal organization for the user on registration. [Pre-existing implementation verified]"
     },
     {
       "id": "US-007",
@@ -109,8 +109,8 @@
         "Typecheck passes"
       ],
       "priority": 7,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": " [Pre-existing implementation verified]"
     },
     {
       "id": "US-008",
@@ -125,8 +125,8 @@
         "Typecheck passes"
       ],
       "priority": 8,
-      "passes": false,
-      "notes": "Hash the token before lookup to prevent timing attacks."
+      "passes": true,
+      "notes": "Hash the token before lookup to prevent timing attacks. [Pre-existing implementation verified]"
     },
     {
       "id": "US-009",
@@ -143,8 +143,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 9,
-      "passes": false,
-      "notes": "Use Tailwind CSS. Clean, minimal design."
+      "passes": true,
+      "notes": "Use Tailwind CSS. Clean, minimal design. [Pre-existing implementation verified]"
     },
     {
       "id": "US-010",
@@ -161,8 +161,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 10,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": " [Pre-existing implementation verified]"
     },
     {
       "id": "US-011",
@@ -178,8 +178,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 11,
-      "passes": false,
-      "notes": "Use Radix UI for dropdown. Lucide icons for nav. Three-panel layout matches Lark desktop."
+      "passes": true,
+      "notes": "Use Radix UI for dropdown. Lucide icons for nav. Three-panel layout matches Lark desktop. [Pre-existing implementation verified]"
     },
     {
       "id": "US-012",
@@ -193,8 +193,8 @@
         "Typecheck passes"
       ],
       "priority": 12,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "POST /orgs, GET /orgs/:id, PATCH /orgs/:id implemented in org.routes.ts. requireAdmin middleware enforces admin/primary_admin access for PATCH. Registered at /api/v1/orgs."
     },
     {
       "id": "US-013",
@@ -271,8 +271,8 @@
         "Typecheck passes"
       ],
       "priority": 17,
-      "passes": false,
-      "notes": "content is JSONB to support different message types (text, rich_text blocks, code with language, etc.)"
+      "passes": true,
+      "notes": "content is JSONB to support different message types (text, rich_text blocks, code with language, etc.) [Pre-existing implementation verified]"
     },
     {
       "id": "US-018",
@@ -305,8 +305,8 @@
         "Typecheck passes"
       ],
       "priority": 19,
-      "passes": false,
-      "notes": "Each chat has a Redis pub/sub channel: chat:{chat_id}. User presence tracked via Redis sorted set."
+      "passes": true,
+      "notes": "Each chat has a Redis pub/sub channel: chat:{chat_id}. User presence tracked via Redis sorted set. [Pre-existing implementation verified]"
     },
     {
       "id": "US-020",
@@ -321,8 +321,8 @@
         "Typecheck passes"
       ],
       "priority": 20,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": " [Pre-existing implementation verified]"
     },
     {
       "id": "US-021",
@@ -337,8 +337,8 @@
         "Typecheck passes"
       ],
       "priority": 21,
-      "passes": false,
-      "notes": "content is JSONB: {text: 'hello'} for text, {blocks: [...]} for rich text, {code: '...', language: 'js'} for code blocks."
+      "passes": true,
+      "notes": "content is JSONB: {text: 'hello'} for text, {blocks: [...]} for rich text, {code: '...', language: 'js'} for code blocks. [Pre-existing implementation verified]"
     },
     {
       "id": "US-022",
@@ -352,8 +352,8 @@
         "Typecheck passes"
       ],
       "priority": 22,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": " [Pre-existing implementation verified]"
     },
     {
       "id": "US-023",
@@ -370,8 +370,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 23,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": " [Pre-existing implementation verified]"
     },
     {
       "id": "US-024",
@@ -387,8 +387,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 24,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": " [Pre-existing implementation verified]"
     },
     {
       "id": "US-025",

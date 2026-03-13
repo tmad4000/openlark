@@ -273,6 +273,59 @@ export class AuthService {
     return safeUser;
   }
 
+  async createOrganization(
+    input: { name: string; domain?: string },
+    creatorUserId: string
+  ) {
+    const [org] = await db
+      .insert(organizations)
+      .values({
+        name: input.name,
+        domain: input.domain,
+      })
+      .returning();
+
+    if (!org) {
+      throw new Error("Failed to create organization");
+    }
+
+    // Move creator to the new org as primary_admin
+    await db
+      .update(users)
+      .set({
+        orgId: org.id,
+        role: "primary_admin",
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, creatorUserId));
+
+    return org;
+  }
+
+  async updateOrganization(
+    orgId: string,
+    input: {
+      name?: string;
+      logoUrl?: string | null;
+      industry?: string;
+      settings?: Record<string, unknown>;
+    }
+  ) {
+    const updates: Record<string, unknown> = { updatedAt: new Date() };
+    if (input.name !== undefined) updates.name = input.name;
+    if (input.logoUrl !== undefined) updates.logoUrl = input.logoUrl;
+    if (input.industry !== undefined) updates.industry = input.industry;
+    if (input.settings !== undefined) updates.settingsJson = input.settings;
+
+    const [org] = await db
+      .update(organizations)
+      .set(updates)
+      .where(and(eq(organizations.id, orgId), isNull(organizations.deletedAt)))
+      .returning();
+
+    return org || null;
+  }
+
   async getOrganizationById(orgId: string) {
     const [org] = await db
       .select()

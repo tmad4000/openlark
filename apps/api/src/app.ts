@@ -3,7 +3,7 @@ import cors from "@fastify/cors";
 import sensible from "@fastify/sensible";
 import websocket from "@fastify/websocket";
 import { config } from "./config.js";
-import { authRoutes } from "./modules/auth/index.js";
+import { authRoutes, orgRoutes } from "./modules/auth/index.js";
 import {
   messengerRoutes,
   registerWebSocketRoutes,
@@ -41,6 +41,9 @@ export async function buildApp() {
 
       // Auth module
       api.register(authRoutes, { prefix: "/auth" });
+
+      // Organization management
+      api.register(orgRoutes, { prefix: "/orgs" });
 
       // Messenger module (HTTP + WebSocket)
       api.register(messengerRoutes, { prefix: "/messenger" });

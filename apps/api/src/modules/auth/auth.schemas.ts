@@ -22,5 +22,19 @@ export const loginSchema = z.object({
   password: z.string().min(1, "Password is required"),
 });
 
+export const createOrgSchema = z.object({
+  name: z.string().min(1, "Organization name is required").max(255),
+  domain: z.string().max(255).optional(),
+});
+
+export const updateOrgSchema = z.object({
+  name: z.string().min(1).max(255).optional(),
+  logoUrl: z.string().url().nullable().optional(),
+  industry: z.string().max(100).optional(),
+  settings: z.record(z.unknown()).optional(),
+});
+
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
+export type CreateOrgInput = z.infer<typeof createOrgSchema>;
+export type UpdateOrgInput = z.infer<typeof updateOrgSchema>;
