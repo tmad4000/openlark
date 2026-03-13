@@ -1915,8 +1915,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 113,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "CalendarView: monthly grid showing records by configurable date field, drag-to-reschedule via native HTML drag events, today highlight, multi-day support with optional end date field, overflow with +N more indicator. GanttView: horizontal timeline with day-resolution bars, configurable start/end date fields, drag to move bars and resize handle to extend end dates, SVG dependency arrows between linked records using cubic Bezier curves with arrowhead markers, today line, month/day header with weekend dimming, left sidebar with record names. Both views have config bars for selecting which date fields to use. View type selector updated with Calendar and Gantt options. View tab icons use Calendar and GanttChart from lucide-react. Typecheck passes."
     },
     {
       "id": "US-114",

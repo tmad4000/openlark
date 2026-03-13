@@ -33,6 +33,10 @@ import {
   CheckCircle,
   Zap,
   BarChart3,
+  GanttChart,
+  ChevronLeft,
+  ChevronRight,
+  ArrowRight,
 } from "lucide-react";
 import { ViewToolbar } from "@/components/base/ViewToolbar";
 import { AutomationsPanel } from "@/components/base/AutomationsPanel";
@@ -1548,6 +1552,635 @@ function RecordDetailPanel({
   );
 }
 
+// Calendar View Component
+function CalendarView({
+  table,
+  records,
+  view,
+  onCellEdit,
+  onRecordClick,
+  onUpdateViewConfig,
+}: {
+  table: TableWithDetails;
+  records: RecordData[];
+  view: ViewData;
+  onCellEdit: (recordId: string, fieldId: string, value: unknown) => void;
+  onRecordClick: (record: RecordData) => void;
+  onUpdateViewConfig: (config: Partial<ViewConfig>) => void;
+}) {
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [dragRecord, setDragRecord] = useState<RecordData | null>(null);
+
+  // Get date fields
+  const dateFields = table.fields.filter(
+    (f) => f.type === "date" || f.type === "datetime"
+  );
+  const dateFieldId = view.config?.dateFieldId || dateFields[0]?.id;
+  const endDateFieldId = view.config?.endDateFieldId;
+  const titleField = table.fields.find((f) => f.type === "text") || table.fields[0];
+
+  // Navigation
+  const prevMonth = () => setCurrentDate((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1));
+  const nextMonth = () => setCurrentDate((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1));
+  const goToday = () => setCurrentDate(new Date());
+
+  // Build calendar grid
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth();
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  const startOffset = firstDay.getDay();
+  const totalDays = lastDay.getDate();
+
+  const weeks: (number | null)[][] = [];
+  let currentWeek: (number | null)[] = [];
+  for (let i = 0; i < startOffset; i++) currentWeek.push(null);
+  for (let d = 1; d <= totalDays; d++) {
+    currentWeek.push(d);
+    if (currentWeek.length === 7) {
+      weeks.push(currentWeek);
+      currentWeek = [];
+    }
+  }
+  if (currentWeek.length > 0) {
+    while (currentWeek.length < 7) currentWeek.push(null);
+    weeks.push(currentWeek);
+  }
+
+  // Map records to dates
+  const recordsByDate = useMemo(() => {
+    const map: Record<string, RecordData[]> = {};
+    if (!dateFieldId) return map;
+    records.forEach((r) => {
+      const val = r.data[dateFieldId];
+      if (!val) return;
+      const dateStr = String(val).slice(0, 10);
+      if (!map[dateStr]) map[dateStr] = [];
+      map[dateStr].push(r);
+    });
+    return map;
+  }, [records, dateFieldId]);
+
+  const formatDateKey = (day: number) => {
+    const m = String(month + 1).padStart(2, "0");
+    const d = String(day).padStart(2, "0");
+    return `${year}-${m}-${d}`;
+  };
+
+  const today = new Date();
+  const isToday = (day: number) =>
+    day === today.getDate() && month === today.getMonth() && year === today.getFullYear();
+
+  const handleDrop = (day: number) => {
+    if (!dragRecord || !dateFieldId) return;
+    const newDate = formatDateKey(day);
+    onCellEdit(dragRecord.id, dateFieldId, newDate);
+    setDragRecord(null);
+  };
+
+  if (!dateFieldId) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-8">
+        <div className="text-center">
+          <Calendar className="w-16 h-16 mx-auto text-gray-300 mb-4" />
+          <p className="text-gray-500 mb-4">
+            Calendar view requires a Date or Date & Time field.
+          </p>
+          <p className="text-sm text-gray-400">
+            Add a Date field to your table to use Calendar view.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const monthNames = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
+  ];
+
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Config bar */}
+      <div className="flex items-center gap-3 px-4 py-2 border-b border-gray-200 bg-gray-50">
+        <label className="text-xs text-gray-500">Date field:</label>
+        <select
+          value={dateFieldId}
+          onChange={(e) => onUpdateViewConfig({ dateFieldId: e.target.value })}
+          className="text-sm px-2 py-1 border border-gray-300 rounded"
+        >
+          {dateFields.map((f) => (
+            <option key={f.id} value={f.id}>{f.name}</option>
+          ))}
+        </select>
+        <label className="text-xs text-gray-500 ml-2">End date:</label>
+        <select
+          value={endDateFieldId || ""}
+          onChange={(e) => onUpdateViewConfig({ endDateFieldId: e.target.value || undefined })}
+          className="text-sm px-2 py-1 border border-gray-300 rounded"
+        >
+          <option value="">None</option>
+          {dateFields.map((f) => (
+            <option key={f.id} value={f.id}>{f.name}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Month navigation */}
+      <div className="flex items-center gap-4 px-4 py-3 border-b border-gray-100">
+        <button onClick={prevMonth} className="p-1 hover:bg-gray-100 rounded">
+          <ChevronLeft className="w-5 h-5" />
+        </button>
+        <h2 className="text-lg font-semibold text-gray-900 min-w-[180px] text-center">
+          {monthNames[month]} {year}
+        </h2>
+        <button onClick={nextMonth} className="p-1 hover:bg-gray-100 rounded">
+          <ChevronRight className="w-5 h-5" />
+        </button>
+        <button
+          onClick={goToday}
+          className="text-sm text-blue-600 hover:text-blue-700 ml-2"
+        >
+          Today
+        </button>
+      </div>
+
+      {/* Calendar grid */}
+      <div className="flex-1 overflow-auto">
+        <table className="w-full border-collapse table-fixed">
+          <thead>
+            <tr>
+              {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
+                <th
+                  key={d}
+                  className="text-xs font-medium text-gray-500 py-2 text-center border-b border-gray-200"
+                >
+                  {d}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {weeks.map((week, wi) => (
+              <tr key={wi}>
+                {week.map((day, di) => {
+                  const dateKey = day ? formatDateKey(day) : "";
+                  const dayRecords = day ? recordsByDate[dateKey] || [] : [];
+                  return (
+                    <td
+                      key={di}
+                      className={`border border-gray-100 align-top h-28 p-1 ${
+                        day ? "bg-white hover:bg-gray-50" : "bg-gray-50"
+                      }`}
+                      onDragOver={(e) => { if (day) e.preventDefault(); }}
+                      onDrop={() => { if (day) handleDrop(day); }}
+                    >
+                      {day && (
+                        <>
+                          <div
+                            className={`text-xs font-medium mb-1 w-6 h-6 flex items-center justify-center rounded-full ${
+                              isToday(day)
+                                ? "bg-blue-600 text-white"
+                                : "text-gray-600"
+                            }`}
+                          >
+                            {day}
+                          </div>
+                          <div className="space-y-0.5 overflow-hidden max-h-20">
+                            {dayRecords.slice(0, 3).map((r) => (
+                              <div
+                                key={r.id}
+                                draggable
+                                onDragStart={() => setDragRecord(r)}
+                                onDragEnd={() => setDragRecord(null)}
+                                onClick={() => onRecordClick(r)}
+                                className="text-xs px-1.5 py-0.5 bg-blue-100 text-blue-800 rounded truncate cursor-pointer hover:bg-blue-200"
+                                title={titleField ? String(r.data[titleField.id] || "Untitled") : "Record"}
+                              >
+                                {titleField ? String(r.data[titleField.id] || "Untitled") : "Record"}
+                              </div>
+                            ))}
+                            {dayRecords.length > 3 && (
+                              <div className="text-xs text-gray-400 pl-1.5">
+                                +{dayRecords.length - 3} more
+                              </div>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// Gantt View Component
+function GanttView({
+  table,
+  records,
+  view,
+  onCellEdit,
+  onRecordClick,
+  onUpdateViewConfig,
+}: {
+  table: TableWithDetails;
+  records: RecordData[];
+  view: ViewData;
+  onCellEdit: (recordId: string, fieldId: string, value: unknown) => void;
+  onRecordClick: (record: RecordData) => void;
+  onUpdateViewConfig: (config: Partial<ViewConfig>) => void;
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [dragState, setDragState] = useState<{
+    recordId: string;
+    mode: "move" | "resize";
+    startX: number;
+    originalStart: string;
+    originalEnd: string;
+  } | null>(null);
+
+  const dateFields = table.fields.filter(
+    (f) => f.type === "date" || f.type === "datetime"
+  );
+  const startFieldId = view.config?.startDateFieldId || dateFields[0]?.id;
+  const endFieldId = view.config?.endDateFieldId || view.config?.durationFieldId || dateFields[1]?.id || dateFields[0]?.id;
+  const titleField = table.fields.find((f) => f.type === "text") || table.fields[0];
+
+  // Link fields for dependency arrows
+  const linkFields = table.fields.filter((f) => f.type === "link");
+
+  // Compute date range
+  const { minDate, maxDate, dayCount, dayWidth } = useMemo(() => {
+    const DAY_WIDTH = 36;
+    let min = new Date();
+    let max = new Date();
+    let hasDate = false;
+
+    records.forEach((r) => {
+      if (startFieldId && r.data[startFieldId]) {
+        const d = new Date(String(r.data[startFieldId]));
+        if (!isNaN(d.getTime())) {
+          if (!hasDate || d < min) min = new Date(d);
+          if (!hasDate || d > max) max = new Date(d);
+          hasDate = true;
+        }
+      }
+      if (endFieldId && r.data[endFieldId]) {
+        const d = new Date(String(r.data[endFieldId]));
+        if (!isNaN(d.getTime())) {
+          if (!hasDate || d < min) min = new Date(d);
+          if (!hasDate || d > max) max = new Date(d);
+          hasDate = true;
+        }
+      }
+    });
+
+    // Pad by 7 days on each side
+    min.setDate(min.getDate() - 7);
+    max.setDate(max.getDate() + 14);
+    const days = Math.max(30, Math.ceil((max.getTime() - min.getTime()) / (1000 * 60 * 60 * 24)));
+    return { minDate: min, maxDate: max, dayCount: days, dayWidth: DAY_WIDTH };
+  }, [records, startFieldId, endFieldId]);
+
+  const dayToX = (dateStr: string) => {
+    const d = new Date(dateStr);
+    const diff = (d.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24);
+    return Math.round(diff * dayWidth);
+  };
+
+  const xToDate = (x: number) => {
+    const days = Math.round(x / dayWidth);
+    const d = new Date(minDate);
+    d.setDate(d.getDate() + days);
+    return d.toISOString().slice(0, 10);
+  };
+
+  // Generate month labels and day columns
+  const headerMonths = useMemo(() => {
+    const months: { label: string; startX: number; width: number }[] = [];
+    const d = new Date(minDate);
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    while (d <= maxDate) {
+      const monthStart = new Date(d);
+      const monthLabel = `${monthNames[d.getMonth()]} ${d.getFullYear()}`;
+      const nextMonth = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+      const endOfPeriod = nextMonth <= maxDate ? nextMonth : new Date(maxDate);
+      const daysDiff = (endOfPeriod.getTime() - monthStart.getTime()) / (1000 * 60 * 60 * 24);
+      const startX = dayToX(monthStart.toISOString().slice(0, 10));
+      months.push({ label: monthLabel, startX, width: daysDiff * dayWidth });
+      d.setMonth(d.getMonth() + 1);
+      d.setDate(1);
+    }
+    return months;
+  }, [minDate, maxDate, dayWidth]);
+
+  // Drag handling
+  const handleMouseMove = useCallback(
+    (e: MouseEvent) => {
+      if (!dragState || !startFieldId) return;
+      const dx = e.clientX - dragState.startX;
+      const daysDelta = Math.round(dx / dayWidth);
+      if (daysDelta === 0) return;
+
+      const origStart = new Date(dragState.originalStart);
+      const origEnd = new Date(dragState.originalEnd);
+
+      if (dragState.mode === "move") {
+        const newStart = new Date(origStart);
+        newStart.setDate(newStart.getDate() + daysDelta);
+        const newEnd = new Date(origEnd);
+        newEnd.setDate(newEnd.getDate() + daysDelta);
+        onCellEdit(dragState.recordId, startFieldId, newStart.toISOString().slice(0, 10));
+        if (endFieldId && endFieldId !== startFieldId) {
+          onCellEdit(dragState.recordId, endFieldId, newEnd.toISOString().slice(0, 10));
+        }
+      } else {
+        // resize - move end date
+        const newEnd = new Date(origEnd);
+        newEnd.setDate(newEnd.getDate() + daysDelta);
+        if (newEnd >= origStart && endFieldId) {
+          onCellEdit(dragState.recordId, endFieldId, newEnd.toISOString().slice(0, 10));
+        }
+      }
+    },
+    [dragState, dayWidth, startFieldId, endFieldId, onCellEdit]
+  );
+
+  const handleMouseUp = useCallback(() => {
+    setDragState(null);
+  }, []);
+
+  useEffect(() => {
+    if (dragState) {
+      window.addEventListener("mousemove", handleMouseMove);
+      window.addEventListener("mouseup", handleMouseUp);
+      return () => {
+        window.removeEventListener("mousemove", handleMouseMove);
+        window.removeEventListener("mouseup", handleMouseUp);
+      };
+    }
+  }, [dragState, handleMouseMove, handleMouseUp]);
+
+  if (!startFieldId) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-8">
+        <div className="text-center">
+          <GanttChart className="w-16 h-16 mx-auto text-gray-300 mb-4" />
+          <p className="text-gray-500 mb-4">
+            Gantt view requires at least one Date field for start dates.
+          </p>
+          <p className="text-sm text-gray-400">
+            Add Date fields to your table to use Gantt view.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Build dependency map from link fields
+  const dependencies: { from: string; to: string }[] = [];
+  linkFields.forEach((lf) => {
+    records.forEach((r) => {
+      const linked = r.data[lf.id];
+      if (Array.isArray(linked)) {
+        linked.forEach((targetId) => {
+          if (typeof targetId === "string") {
+            dependencies.push({ from: r.id, to: targetId });
+          }
+        });
+      } else if (typeof linked === "string" && linked) {
+        dependencies.push({ from: r.id, to: linked });
+      }
+    });
+  });
+
+  // Row positions for dependency arrows
+  const ROW_HEIGHT = 40;
+  const HEADER_HEIGHT = 56;
+  const recordIndexMap: Record<string, number> = {};
+  records.forEach((r, i) => { recordIndexMap[r.id] = i; });
+
+  const totalWidth = dayCount * dayWidth;
+  const todayX = dayToX(new Date().toISOString().slice(0, 10));
+
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden">
+      {/* Config bar */}
+      <div className="flex items-center gap-3 px-4 py-2 border-b border-gray-200 bg-gray-50">
+        <label className="text-xs text-gray-500">Start date:</label>
+        <select
+          value={startFieldId}
+          onChange={(e) => onUpdateViewConfig({ startDateFieldId: e.target.value })}
+          className="text-sm px-2 py-1 border border-gray-300 rounded"
+        >
+          {dateFields.map((f) => (
+            <option key={f.id} value={f.id}>{f.name}</option>
+          ))}
+        </select>
+        <label className="text-xs text-gray-500 ml-2">End date:</label>
+        <select
+          value={endFieldId || ""}
+          onChange={(e) => onUpdateViewConfig({ endDateFieldId: e.target.value || undefined })}
+          className="text-sm px-2 py-1 border border-gray-300 rounded"
+        >
+          <option value="">Same as start</option>
+          {dateFields.map((f) => (
+            <option key={f.id} value={f.id}>{f.name}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Gantt chart */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Left sidebar - record names */}
+        <div className="w-52 flex-shrink-0 border-r border-gray-200 bg-white overflow-y-auto">
+          <div className="h-14 border-b border-gray-200 flex items-end px-3 pb-2">
+            <span className="text-xs font-medium text-gray-500 uppercase">Records</span>
+          </div>
+          {records.map((r) => (
+            <div
+              key={r.id}
+              className="h-10 flex items-center px-3 border-b border-gray-50 cursor-pointer hover:bg-gray-50 truncate"
+              onClick={() => onRecordClick(r)}
+            >
+              <span className="text-sm text-gray-800 truncate">
+                {titleField ? String(r.data[titleField.id] || "Untitled") : "Record"}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        {/* Right - timeline */}
+        <div ref={scrollRef} className="flex-1 overflow-auto">
+          <div style={{ width: totalWidth, minHeight: "100%" }} className="relative">
+            {/* Month header */}
+            <div className="sticky top-0 z-10 bg-white border-b border-gray-200 h-14">
+              <div className="h-7 flex border-b border-gray-100">
+                {headerMonths.map((m, i) => (
+                  <div
+                    key={i}
+                    className="text-xs font-medium text-gray-600 px-2 flex items-center border-r border-gray-100"
+                    style={{ position: "absolute", left: m.startX, width: m.width }}
+                  >
+                    {m.label}
+                  </div>
+                ))}
+              </div>
+              {/* Day ticks */}
+              <div className="h-7 relative">
+                {Array.from({ length: dayCount }).map((_, i) => {
+                  const d = new Date(minDate);
+                  d.setDate(d.getDate() + i);
+                  const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+                  return (
+                    <div
+                      key={i}
+                      className={`absolute text-center text-[10px] leading-7 ${
+                        isWeekend ? "text-gray-300" : "text-gray-400"
+                      }`}
+                      style={{ left: i * dayWidth, width: dayWidth }}
+                    >
+                      {d.getDate()}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Today line */}
+            <div
+              className="absolute top-0 bottom-0 w-px bg-red-400 z-5"
+              style={{ left: todayX }}
+            />
+
+            {/* Rows */}
+            {records.map((r, rowIndex) => {
+              const startVal = r.data[startFieldId];
+              const endVal = endFieldId ? r.data[endFieldId] : startVal;
+              if (!startVal) {
+                return (
+                  <div
+                    key={r.id}
+                    className="h-10 border-b border-gray-50"
+                  />
+                );
+              }
+
+              const startStr = String(startVal).slice(0, 10);
+              const endStr = endVal ? String(endVal).slice(0, 10) : startStr;
+
+              const barLeft = dayToX(startStr);
+              const barRight = dayToX(endStr) + dayWidth;
+              const barWidth = Math.max(barRight - barLeft, dayWidth);
+
+              return (
+                <div
+                  key={r.id}
+                  className="h-10 relative border-b border-gray-50"
+                >
+                  {/* Weekend shading handled by bars */}
+                  <div
+                    className="absolute top-1 rounded h-8 bg-blue-500 hover:bg-blue-600 cursor-grab flex items-center px-2 group select-none"
+                    style={{ left: barLeft, width: barWidth }}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      setDragState({
+                        recordId: r.id,
+                        mode: "move",
+                        startX: e.clientX,
+                        originalStart: startStr,
+                        originalEnd: endStr,
+                      });
+                    }}
+                    onClick={() => onRecordClick(r)}
+                  >
+                    <span className="text-xs text-white truncate font-medium">
+                      {titleField ? String(r.data[titleField.id] || "") : ""}
+                    </span>
+                    {/* Resize handle */}
+                    {endFieldId && endFieldId !== startFieldId && (
+                      <div
+                        className="absolute right-0 top-0 bottom-0 w-2 cursor-col-resize hover:bg-blue-700 rounded-r"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setDragState({
+                            recordId: r.id,
+                            mode: "resize",
+                            startX: e.clientX,
+                            originalStart: startStr,
+                            originalEnd: endStr,
+                          });
+                        }}
+                      />
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Dependency arrows (SVG overlay) */}
+            {dependencies.length > 0 && (
+              <svg
+                className="absolute top-0 left-0 pointer-events-none"
+                style={{ width: totalWidth, height: records.length * ROW_HEIGHT + HEADER_HEIGHT }}
+              >
+                <defs>
+                  <marker
+                    id="arrowhead"
+                    markerWidth="8"
+                    markerHeight="6"
+                    refX="8"
+                    refY="3"
+                    orient="auto"
+                  >
+                    <polygon points="0 0, 8 3, 0 6" fill="#6b7280" />
+                  </marker>
+                </defs>
+                {dependencies.map((dep, i) => {
+                  const fromIdx = recordIndexMap[dep.from];
+                  const toIdx = recordIndexMap[dep.to];
+                  if (fromIdx === undefined || toIdx === undefined) return null;
+
+                  const fromRecord = records[fromIdx];
+                  const toRecord = records[toIdx];
+                  const fromEnd = fromRecord.data[endFieldId || startFieldId];
+                  const toStart = toRecord.data[startFieldId];
+                  if (!fromEnd || !toStart) return null;
+
+                  const fromX = dayToX(String(fromEnd).slice(0, 10)) + dayWidth;
+                  const fromY = HEADER_HEIGHT + fromIdx * ROW_HEIGHT + ROW_HEIGHT / 2;
+                  const toX = dayToX(String(toStart).slice(0, 10));
+                  const toY = HEADER_HEIGHT + toIdx * ROW_HEIGHT + ROW_HEIGHT / 2;
+
+                  const midX = fromX + (toX - fromX) / 2;
+
+                  return (
+                    <path
+                      key={i}
+                      d={`M ${fromX} ${fromY} C ${midX} ${fromY}, ${midX} ${toY}, ${toX} ${toY}`}
+                      fill="none"
+                      stroke="#9ca3af"
+                      strokeWidth="1.5"
+                      markerEnd="url(#arrowhead)"
+                    />
+                  );
+                })}
+              </svg>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Main Base Page Component
 export default function BasePage() {
   const params = useParams();
@@ -1572,7 +2205,7 @@ export default function BasePage() {
   const [newFieldType, setNewFieldType] = useState("text");
   const [isAddViewOpen, setIsAddViewOpen] = useState(false);
   const [newViewName, setNewViewName] = useState("");
-  const [newViewType, setNewViewType] = useState<"grid" | "kanban" | "form">("grid");
+  const [newViewType, setNewViewType] = useState<"grid" | "kanban" | "calendar" | "gantt" | "form">("grid");
   const [showAutomations, setShowAutomations] = useState(false);
   const [showDashboard, setShowDashboard] = useState(false);
 
@@ -2006,7 +2639,7 @@ export default function BasePage() {
       {activeTable && (
         <div className="flex items-center border-b border-gray-200 px-2 bg-white">
           {activeTable.views.map((view) => {
-            const ViewIcon = view.type === "kanban" ? Kanban : view.type === "calendar" ? Calendar : view.type === "form" ? FileText : Grid3X3;
+            const ViewIcon = view.type === "kanban" ? Kanban : view.type === "calendar" ? Calendar : view.type === "gantt" ? GanttChart : view.type === "form" ? FileText : Grid3X3;
             return (
               <button
                 key={view.id}
@@ -2136,6 +2769,24 @@ export default function BasePage() {
                 onUpdateViewConfig={updateViewConfig}
                 onAddRecord={addRecord}
                 baseId={baseId}
+              />
+            ) : activeView?.type === "calendar" ? (
+              <CalendarView
+                table={activeTable}
+                records={records}
+                view={activeView}
+                onCellEdit={editCell}
+                onRecordClick={handleRecordClick}
+                onUpdateViewConfig={updateViewConfig}
+              />
+            ) : activeView?.type === "gantt" ? (
+              <GanttView
+                table={activeTable}
+                records={records}
+                view={activeView}
+                onCellEdit={editCell}
+                onRecordClick={handleRecordClick}
+                onUpdateViewConfig={updateViewConfig}
               />
             ) : (
               <GridView
@@ -2334,6 +2985,28 @@ export default function BasePage() {
                   >
                     <Kanban className="w-5 h-5" />
                     <span className="font-medium">Kanban</span>
+                  </button>
+                  <button
+                    onClick={() => setNewViewType("calendar")}
+                    className={`flex items-center gap-2 px-4 py-3 border rounded-lg transition-colors ${
+                      newViewType === "calendar"
+                        ? "border-blue-500 bg-blue-50 text-blue-700"
+                        : "border-gray-200 hover:border-gray-300"
+                    }`}
+                  >
+                    <Calendar className="w-5 h-5" />
+                    <span className="font-medium">Calendar</span>
+                  </button>
+                  <button
+                    onClick={() => setNewViewType("gantt")}
+                    className={`flex items-center gap-2 px-4 py-3 border rounded-lg transition-colors ${
+                      newViewType === "gantt"
+                        ? "border-blue-500 bg-blue-50 text-blue-700"
+                        : "border-gray-200 hover:border-gray-300"
+                    }`}
+                  >
+                    <GanttChart className="w-5 h-5" />
+                    <span className="font-medium">Gantt</span>
                   </button>
                   <button
                     onClick={() => setNewViewType("form")}
