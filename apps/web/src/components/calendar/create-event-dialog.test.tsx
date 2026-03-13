@@ -3,6 +3,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { CreateEventDialog } from "./create-event-dialog";
 import { api, type CalendarEvent, type EventAttendee, type Calendar, type MeetingRoom } from "@/lib/api";
 
+// Mock sonner toast
+vi.mock("sonner", () => ({
+  toast: {
+    success: vi.fn(),
+    error: vi.fn(),
+  },
+}));
+
 // Mock the api module
 vi.mock("@/lib/api", () => ({
   api: {
@@ -10,6 +18,7 @@ vi.mock("@/lib/api", () => ({
     createEvent: vi.fn(),
     searchUsers: vi.fn(),
     getMeetingRooms: vi.fn(),
+    getRoomsWithAvailability: vi.fn(),
   },
 }));
 
@@ -39,6 +48,7 @@ const mockEvent: CalendarEvent = {
   location: null,
   recurrenceRule: null,
   roomId: null,
+  meetingLink: null,
   creatorId: "user-1",
   isCancelled: false,
   createdAt: "2026-03-01T00:00:00Z",
@@ -83,6 +93,7 @@ describe("CreateEventDialog", () => {
     vi.clearAllMocks();
     vi.mocked(api.getCalendars).mockResolvedValue({ calendars: mockCalendars });
     vi.mocked(api.getMeetingRooms).mockResolvedValue({ rooms: [] });
+    vi.mocked(api.getRoomsWithAvailability).mockResolvedValue({ rooms: [] });
   });
 
   it("renders dialog when open", () => {
@@ -385,8 +396,11 @@ describe("CreateEventDialog", () => {
 
   // Room booking tests (T-004 subtask 3)
   describe("room booking", () => {
+    const mockRoomsWithAvailability = mockRooms.map((r) => ({ ...r, available: true }));
+
     beforeEach(() => {
       vi.mocked(api.getMeetingRooms).mockResolvedValue({ rooms: mockRooms });
+      vi.mocked(api.getRoomsWithAvailability).mockResolvedValue({ rooms: mockRoomsWithAvailability });
     });
 
     it("shows meeting room selector", async () => {
@@ -397,11 +411,12 @@ describe("CreateEventDialog", () => {
       });
     });
 
-    it("loads and displays meeting rooms", async () => {
+    it("loads and displays meeting rooms with availability", async () => {
       render(<CreateEventDialog open={true} onOpenChange={() => {}} />);
 
+      // Rooms are loaded with availability once times are set
       await waitFor(() => {
-        expect(api.getMeetingRooms).toHaveBeenCalled();
+        expect(api.getRoomsWithAvailability).toHaveBeenCalled();
       });
 
       // Check that rooms are shown in the dropdown
@@ -410,8 +425,8 @@ describe("CreateEventDialog", () => {
 
       // Check for the "No room" option plus rooms
       await waitFor(() => {
-        expect(screen.getByText("Conference Room A (10 people)")).toBeInTheDocument();
-        expect(screen.getByText("Board Room (20 people)")).toBeInTheDocument();
+        expect(screen.getByText(/Conference Room A \(10 people\)/)).toBeInTheDocument();
+        expect(screen.getByText(/Board Room \(20 people\)/)).toBeInTheDocument();
       });
     });
 
@@ -424,7 +439,7 @@ describe("CreateEventDialog", () => {
 
       // Wait for rooms to load
       await waitFor(() => {
-        expect(screen.getByText("Conference Room A (10 people)")).toBeInTheDocument();
+        expect(screen.getByText(/Conference Room A \(10 people\)/)).toBeInTheDocument();
       });
 
       // Select a room
@@ -455,7 +470,7 @@ describe("CreateEventDialog", () => {
 
       // Wait for rooms to load
       await waitFor(() => {
-        expect(screen.getByText("Conference Room A (10 people)")).toBeInTheDocument();
+        expect(screen.getByText(/Conference Room A \(10 people\)/)).toBeInTheDocument();
       });
 
       // Fill in form

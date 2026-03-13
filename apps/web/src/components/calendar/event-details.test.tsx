@@ -46,6 +46,7 @@ const mockEvent: CalendarEvent = {
   location: "Room A",
   recurrenceRule: null,
   roomId: null,
+  meetingLink: null,
   creatorId: "user-1",
   isCancelled: false,
   createdAt: "2026-03-01T00:00:00Z",

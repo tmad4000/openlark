@@ -816,8 +816,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 49,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Enhanced create-event-dialog.tsx with: timezone selector (14 common timezones with auto-detect), recurrence selector (none/daily/weekly/monthly/yearly/custom RFC 5545), video meeting toggle (generateMeetingLink), room availability API endpoint (GET /rooms/availability), success toast via sonner. API updated with roomAvailabilityQuerySchema. All 17 tests pass."
     },
     {
       "id": "US-050",

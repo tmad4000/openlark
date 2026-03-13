@@ -16,6 +16,7 @@ import {
   roomSearchSchema,
   availabilitySearchSchema,
   availabilityQuerySchema,
+  roomAvailabilityQuerySchema,
 } from "./calendar.schemas.js";
 import { authenticate, requireAdmin } from "../auth/middleware.js";
 import { formatZodError } from "../../utils/validation.js";
@@ -316,6 +317,35 @@ export async function calendarRoutes(app: FastifyInstance) {
       return reply.status(204).send();
     }
   );
+
+  // GET /calendar/rooms/availability - Check room availability for a time slot (US-049)
+  app.get("/rooms/availability", async (req, reply) => {
+    try {
+      const query = roomAvailabilityQuerySchema.parse(req.query);
+      const rooms = await calendarService.getMeetingRooms(req.user!.orgId);
+      const startTime = new Date(query.start);
+      const endTime = new Date(query.end);
+
+      // Check availability for each room
+      const roomsWithAvailability = await Promise.all(
+        rooms.map(async (room) => {
+          const isAvailable = await calendarService.isRoomAvailable(
+            room.id,
+            startTime,
+            endTime
+          );
+          return { ...room, available: isAvailable };
+        })
+      );
+
+      return reply.send({ data: { rooms: roomsWithAvailability } });
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return reply.status(400).send(formatZodError(error));
+      }
+      throw error;
+    }
+  });
 
   // ============ EVENT ENDPOINTS ============
 

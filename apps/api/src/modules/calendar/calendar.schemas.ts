@@ -178,6 +178,12 @@ export const availabilityQuerySchema = z.object({
   end: z.string().datetime(),
 });
 
+// GET /rooms/availability - US-049
+export const roomAvailabilityQuerySchema = z.object({
+  start: z.string().datetime(),
+  end: z.string().datetime(),
+});
+
 // ============ TYPE EXPORTS ============
 
 export type CreateCalendarInput = z.infer<typeof createCalendarSchema>;
@@ -194,3 +200,4 @@ export type EventsQueryInput = z.infer<typeof eventsQuerySchema>;
 export type RoomSearchInput = z.infer<typeof roomSearchSchema>;
 export type AvailabilitySearchInput = z.infer<typeof availabilitySearchSchema>;
 export type AvailabilityQueryInput = z.infer<typeof availabilityQuerySchema>;
+export type RoomAvailabilityQueryInput = z.infer<typeof roomAvailabilityQuerySchema>;

@@ -482,6 +482,8 @@ class ApiClient {
     timezone?: string;
     attendeeIds?: string[];
     roomId?: string;
+    recurrenceRule?: string;
+    generateMeetingLink?: boolean;
   }) {
     return this.request<{ event: CalendarEvent; attendees: EventAttendee[] }>(
       "/calendar/events",
@@ -538,6 +540,15 @@ class ApiClient {
     const query = searchParams.toString();
     return this.request<{ rooms: MeetingRoom[] }>(
       `/calendar/rooms${query ? `?${query}` : ""}`
+    );
+  }
+
+  async getRoomsWithAvailability(startTime: string, endTime: string) {
+    const searchParams = new URLSearchParams();
+    searchParams.set("start", startTime);
+    searchParams.set("end", endTime);
+    return this.request<{ rooms: MeetingRoomWithAvailability[] }>(
+      `/calendar/rooms/availability?${searchParams.toString()}`
     );
   }
 
@@ -847,6 +858,7 @@ export interface CalendarEvent {
   location: string | null;
   recurrenceRule: string | null;
   roomId: string | null;
+  meetingLink: string | null;
   creatorId: string;
   isCancelled: boolean;
   createdAt: string;
@@ -875,6 +887,10 @@ export interface MeetingRoom {
   equipment: string[] | null;
   location: string | null;
   floor: string | null;
+}
+
+export interface MeetingRoomWithAvailability extends MeetingRoom {
+  available: boolean;
 }
 
 // Document types
