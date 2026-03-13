@@ -5,9 +5,14 @@ import {
   approvalRequests,
   approvalSteps,
   users,
+  chats,
+  chatMembers,
+  messages,
 } from "../db/schema";
 import { eq, and, or, inArray, desc, sql } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
+import { publish, getChatChannel, getUserPresenceChannel } from "../lib/redis";
+import { createNotification } from "../lib/notifications";
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -37,6 +42,133 @@ interface DecideBody {
 
 interface ApprovalsQuery {
   status?: string;
+}
+
+/**
+ * Find or create a DM chat between two users in an org
+ */
+async function findOrCreateDm(userId1: string, userId2: string, orgId: string): Promise<string> {
+  // Find existing DM
+  const userDmChats = await db
+    .select({ chatId: chatMembers.chatId })
+    .from(chatMembers)
+    .innerJoin(chats, eq(chatMembers.chatId, chats.id))
+    .where(
+      and(
+        eq(chats.type, "dm"),
+        eq(chats.orgId, orgId),
+        or(eq(chatMembers.userId, userId1), eq(chatMembers.userId, userId2))
+      )
+    );
+
+  const chatIds = [...new Set(userDmChats.map((r) => r.chatId))];
+  for (const chatId of chatIds) {
+    const membersInChat = await db
+      .select({ userId: chatMembers.userId })
+      .from(chatMembers)
+      .where(eq(chatMembers.chatId, chatId));
+    const memberIds = membersInChat.map((m) => m.userId);
+    if (memberIds.length === 2 && memberIds.includes(userId1) && memberIds.includes(userId2)) {
+      return chatId;
+    }
+  }
+
+  // Create new DM
+  const [newChat] = await db
+    .insert(chats)
+    .values({ type: "dm", orgId, maxMembers: 2 })
+    .returning();
+
+  await db.insert(chatMembers).values([
+    { chatId: newChat.id, userId: userId1, role: "member" },
+    { chatId: newChat.id, userId: userId2, role: "member" },
+  ]);
+
+  return newChat.id;
+}
+
+/**
+ * Send an approval card message to a user's DM
+ */
+async function sendApprovalCardMessage(params: {
+  senderId: string;
+  recipientId: string;
+  orgId: string;
+  approvalRequestId: string;
+  templateName: string;
+  requesterName: string;
+  formData: Record<string, unknown>;
+  status: string;
+  stepId: string;
+}): Promise<string> {
+  const { senderId, recipientId, orgId, approvalRequestId, templateName, requesterName, formData, status, stepId } = params;
+
+  const chatId = await findOrCreateDm(senderId, recipientId, orgId);
+
+  const content: Record<string, unknown> = {
+    card_type: "approval",
+    approval_request_id: approvalRequestId,
+    step_id: stepId,
+    template_name: templateName,
+    requester_name: requesterName,
+    form_data: formData,
+    status,
+    text: `Approval Request: ${templateName}`,
+  };
+
+  const [message] = await db
+    .insert(messages)
+    .values({
+      chatId,
+      senderId,
+      type: "card",
+      content,
+    })
+    .returning();
+
+  // Publish to chat channel for real-time delivery
+  await publish(getChatChannel(chatId), {
+    type: "message",
+    payload: message,
+  });
+
+  return message.id;
+}
+
+/**
+ * Update an existing approval card message with new status
+ */
+async function updateApprovalCardMessages(approvalRequestId: string, newStatus: string, decidedByName: string, comment: string | null) {
+  // Find all card messages for this approval
+  const cardMessages = await db
+    .select()
+    .from(messages)
+    .where(
+      and(
+        eq(messages.type, "card"),
+        sql`${messages.content}->>'card_type' = 'approval' AND ${messages.content}->>'approval_request_id' = ${approvalRequestId}`
+      )
+    );
+
+  for (const msg of cardMessages) {
+    const updatedContent = {
+      ...(msg.content as Record<string, unknown>),
+      status: newStatus,
+      decided_by_name: decidedByName,
+      decided_comment: comment,
+    };
+
+    await db
+      .update(messages)
+      .set({ content: updatedContent, editedAt: new Date() })
+      .where(eq(messages.id, msg.id));
+
+    // Publish update to chat channel
+    await publish(getChatChannel(msg.chatId), {
+      type: "message_updated",
+      payload: { ...msg, content: updatedContent, editedAt: new Date().toISOString() },
+    });
+  }
 }
 
 export async function approvalsRoutes(fastify: FastifyInstance) {
@@ -166,6 +298,26 @@ export async function approvalsRoutes(fastify: FastifyInstance) {
         .from(approvalSteps)
         .where(eq(approvalSteps.requestId, approvalRequest.id))
         .orderBy(approvalSteps.stepIndex);
+
+      // Send approval card messages to each approver's DM
+      const requesterName = user.displayName || user.email;
+      for (const step of steps) {
+        for (const approverId of step.approverIds) {
+          if (approverId !== user.id) {
+            await sendApprovalCardMessage({
+              senderId: user.id,
+              recipientId: approverId,
+              orgId: user.orgId!,
+              approvalRequestId: approvalRequest.id,
+              templateName: template.name,
+              requesterName,
+              formData: form_data,
+              status: "pending",
+              stepId: step.id,
+            });
+          }
+        }
+      }
 
       return reply.status(201).send({
         request: { ...approvalRequest, steps },
@@ -363,6 +515,32 @@ export async function approvalsRoutes(fastify: FastifyInstance) {
         .from(approvalRequests)
         .where(eq(approvalRequests.id, id))
         .limit(1);
+
+      // Update all approval card messages with the new status
+      const deciderName = user.displayName || user.email;
+      await updateApprovalCardMessages(id, updatedRequest.status, deciderName, comment || null);
+
+      // Notify the requester about the decision
+      if (approvalRequest.requesterId !== user.id) {
+        // Look up template name for the notification
+        const [template] = await db
+          .select({ name: approvalTemplates.name })
+          .from(approvalTemplates)
+          .where(eq(approvalTemplates.id, approvalRequest.templateId))
+          .limit(1);
+
+        const templateName = template?.name || "Approval request";
+        const decisionLabel = decision === "approve" ? "approved" : "rejected";
+
+        await createNotification({
+          userId: approvalRequest.requesterId,
+          type: "approval_pending",
+          title: `${deciderName} ${decisionLabel} your request`,
+          body: templateName,
+          entityType: "approval",
+          entityId: id,
+        });
+      }
 
       return reply.send({ step: updatedStep, request: updatedRequest });
     }

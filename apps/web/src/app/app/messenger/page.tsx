@@ -6,6 +6,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import * as ContextMenu from "@radix-ui/react-context-menu";
 import MessageInput, { MentionUser } from "@/components/MessageInput";
 import { CodeBlockRenderer } from "@/components/CodeBlockRenderer";
+import { ApprovalCard } from "@/components/ApprovalCard";
 import { TopicGroupView } from "@/components/TopicGroupView";
 import { useWebSocket, ConnectionStatus, WebSocketMessage, TypingEvent, PresenceEvent, ReadReceiptEvent, ReactionEvent } from "@/hooks/useWebSocket";
 import data from "@emoji-mart/data";
@@ -97,6 +98,10 @@ function getMessagePreview(message: Chat["lastMessage"]): string {
       return `${content.addedBy} added members`;
     }
     return "System message";
+  }
+
+  if (message.type === "card" && content.card_type === "approval") {
+    return `Approval: ${content.template_name || "Request"}`;
   }
 
   return "Message";
@@ -320,7 +325,7 @@ function BundledMessageContent({ bundle }: { bundle: BundledMessage[] }) {
   );
 }
 
-function renderMessageContent(message: Message): React.ReactNode {
+function renderMessageContent(message: Message, currentUserId?: string): React.ReactNode {
   const { type, content, recalledAt } = message;
 
   // Check if message was recalled/deleted
@@ -399,6 +404,17 @@ function renderMessageContent(message: Message): React.ReactNode {
           </div>
         );
       }
+    }
+
+    if (type === "card" && content.card_type === "approval") {
+      // Current user is the approver if they are NOT the sender of the card message
+      const isApprover = !!currentUserId && message.senderId !== currentUserId;
+      return (
+        <ApprovalCard
+          content={content as unknown as { card_type: "approval"; approval_request_id: string; step_id: string; template_name: string; requester_name: string; form_data: Record<string, unknown>; status: string; decided_by_name?: string; decided_comment?: string }}
+          isCurrentUserApprover={isApprover}
+        />
+      );
     }
 
     return <span className="text-gray-500 italic">[Message]</span>;
@@ -790,6 +806,7 @@ function ReadReceiptsPopover({
 function MessageBubble({
   message,
   isCurrentUser,
+  currentUserId,
   readStatus,
   onShowReadReceipts,
   onToggleReaction,
@@ -810,6 +827,7 @@ function MessageBubble({
 }: {
   message: Message;
   isCurrentUser: boolean;
+  currentUserId?: string;
   readStatus?: { totalMembers: number; readCount: number };
   onShowReadReceipts?: (messageId: string) => void;
   onToggleReaction?: (messageId: string, emoji: string) => void;
@@ -871,7 +889,7 @@ function MessageBubble({
     return (
       <div className="flex justify-center py-2">
         <div className="bg-gray-100 px-3 py-1 rounded-full text-gray-500 text-xs">
-          {renderMessageContent(message)}
+          {renderMessageContent(message, currentUserId)}
         </div>
       </div>
     );
@@ -955,7 +973,7 @@ function MessageBubble({
                 : "bg-gray-100 text-gray-900 rounded-bl-md"
             } ${isBuzzed ? "ring-2 ring-red-500 ring-opacity-50" : ""}`}
           >
-            {renderMessageContent(message)}
+            {renderMessageContent(message, currentUserId)}
           </div>
 
           {/* Quick reaction picker - shows on hover */}
@@ -1350,6 +1368,7 @@ function ThreadPanel({
                 <MessageBubble
                   message={parentMessage}
                   isCurrentUser={parentMessage.senderId === currentUserId}
+                  currentUserId={currentUserId}
                   onToggleReaction={onToggleReaction}
                 />
               </div>
@@ -1369,6 +1388,7 @@ function ThreadPanel({
                     key={reply.id}
                     message={reply}
                     isCurrentUser={reply.senderId === currentUserId}
+                    currentUserId={currentUserId}
                     onToggleReaction={onToggleReaction}
                   />
                 ))}
@@ -2949,6 +2969,7 @@ function ChatView({
                       <MessageBubble
                         message={messageWithReactions}
                         isCurrentUser={message.senderId === currentUserId}
+                        currentUserId={currentUserId}
                         readStatus={messageReadStatus[message.id]}
                         onShowReadReceipts={setSelectedMessageForReceipts}
                         onToggleReaction={toggleReaction}

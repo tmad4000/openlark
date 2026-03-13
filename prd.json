@@ -1320,8 +1320,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 78,
-      "passes": false,
-      "notes": "This is a key Lark differentiator - approvals without leaving chat."
+      "passes": true,
+      "notes": "Added findOrCreateDm and sendApprovalCardMessage helpers to approvals API. On approval request submission, sends card-type message to each approver DM with template name, requester name, key form fields, and Approve/Reject status. On decide, updateApprovalCardMessages updates all card messages with new status and decider info, and sends notification to requester. Created ApprovalCard UI component with status-colored card, form field display, and interactive Approve/Reject buttons that call the decide API. Integrated into messenger renderMessageContent for card_type=approval. Message preview in chat list shows approval template name. Real-time updates via existing message_updated WebSocket handler. Typecheck passes."
     },
     {
       "id": "US-079",
