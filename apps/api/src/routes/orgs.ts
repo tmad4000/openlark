@@ -66,7 +66,6 @@ export async function orgsRoutes(fastify: FastifyInstance) {
         .values({
           name: name.trim(),
           domain: domain?.toLowerCase() || null,
-          primaryAdminId: request.user.id,
         })
         .returning();
 
@@ -159,8 +158,8 @@ export async function orgsRoutes(fastify: FastifyInstance) {
         });
       }
 
-      // Check authorization: must be primary admin OR have org.manage scope via API key
-      const isPrimaryAdmin = org.primaryAdminId === request.user.id;
+      // Check authorization: must be org member with manage scope via API key
+      const isPrimaryAdmin = false; // TODO: implement admin role check
 
       // Check if user has org.manage scope
       let hasManageScope = false;

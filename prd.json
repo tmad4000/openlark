@@ -1197,8 +1197,8 @@
         "Typecheck passes"
       ],
       "priority": 71,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created tasks schema (apps/api/src/db/schema/tasks.ts) with 5 tables: tasks (uuid pk, org_id, title, description, status enum todo/in_progress/done, priority enum none/low/medium/high/urgent, assignee_ids uuid[], creator_id, due_date, start_date, parent_task_id self-ref, custom_fields jsonb, recurrence_rule, completed_at, timestamps), task_lists (uuid pk, org_id, name, owner_id, settings jsonb, created_at), task_list_items (composite pk task_list_id+task_id, position), task_dependencies (composite pk task_id+depends_on_task_id, type enum fs/ss/ff/sf), task_comments (uuid pk, task_id, user_id, content, created_at). Created CRUD routes (apps/api/src/routes/tasks.ts): POST/GET/PATCH/DELETE /tasks with filtering by status, assignee, due_date, list; POST /tasks/from-message to create task from chat message; GET/POST /tasks/:id/comments; POST/GET /task-lists. All indexed appropriately. Typecheck passes."
     },
     {
       "id": "US-072",

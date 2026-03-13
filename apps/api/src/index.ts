@@ -17,6 +17,7 @@ import { uploadsRoutes } from "./routes/uploads";
 import { wikiRoutes } from "./routes/wiki";
 import { basesRoutes } from "./routes/bases";
 import { automationsRoutes } from "./routes/automations";
+import { tasksRoutes } from "./routes/tasks";
 import { wsRoutes } from "./routes/ws";
 import { closeRedis } from "./lib/redis";
 import { startAutomationWorker, stopAutomationWorker } from "./lib/automation-worker";
@@ -50,6 +51,7 @@ await fastify.register(uploadsRoutes);
 await fastify.register(wikiRoutes);
 await fastify.register(basesRoutes);
 await fastify.register(automationsRoutes);
+await fastify.register(tasksRoutes);
 await fastify.register(wsRoutes);
 
 fastify.get("/", async () => {
