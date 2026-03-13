@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { AppShell } from "@/components/layout/app-shell";
 import { BaseGridView, BaseKanbanView } from "@/components/base";
+import type { ViewConfig } from "@/components/base/base-view-toolbar";
 import { api, type BaseInfo, type BaseTableInfo, type BaseViewInfo } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import {
@@ -390,11 +391,29 @@ export default function BasePage() {
                   });
                 }
               }}
+              viewConfig={viewConfig as ViewConfig}
+              onViewConfigChange={(newConfig) => {
+                if (selectedView) {
+                  handleViewConfigChange(selectedView.id, {
+                    ...viewConfig,
+                    ...newConfig,
+                  });
+                }
+              }}
             />
           ) : (
             <BaseGridView
               tableId={selectedTable.id}
               tableName={selectedTable.name}
+              viewConfig={viewConfig as ViewConfig}
+              onViewConfigChange={(newConfig) => {
+                if (selectedView) {
+                  handleViewConfigChange(selectedView.id, {
+                    ...viewConfig,
+                    ...newConfig,
+                  });
+                }
+              }}
             />
           )
         ) : (

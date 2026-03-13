@@ -1111,8 +1111,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 66,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Client-side filter/sort/group via BaseViewToolbar component. FilterCondition supports eq/neq/contains/gt/lt/gte/lte/empty/not_empty operators with AND/OR conjunction. Sort supports multiple levels with asc/desc. Group creates collapsible sections with subtotals for number fields. View config persisted per view via JSONB config column. Shared toolbar across grid and kanban views."
     },
     {
       "id": "US-067",

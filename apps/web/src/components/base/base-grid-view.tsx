@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { api, type BaseField, type BaseRecord } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import {
@@ -18,6 +18,11 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  BaseViewToolbar,
+  applyViewConfig,
+  type ViewConfig,
+} from "./base-view-toolbar";
 
 // Field type icon mapping
 const fieldTypeIcons: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -173,9 +178,11 @@ function CellDisplay({ field, value }: { field: BaseField; value: unknown }) {
 interface BaseGridViewProps {
   tableId: string;
   tableName: string;
+  viewConfig?: ViewConfig;
+  onViewConfigChange?: (config: ViewConfig) => void;
 }
 
-export function BaseGridView({ tableId, tableName }: BaseGridViewProps) {
+export function BaseGridView({ tableId, tableName, viewConfig, onViewConfigChange }: BaseGridViewProps) {
   const [fields, setFields] = useState<BaseField[]>([]);
   const [records, setRecords] = useState<BaseRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -316,8 +323,93 @@ export function BaseGridView({ tableId, tableName }: BaseGridViewProps) {
     );
   }
 
+  const currentConfig: ViewConfig = viewConfig || {};
+  const { records: processedRecords, groups } = applyViewConfig(
+    records,
+    fields,
+    currentConfig
+  );
+
+  const renderRecordRow = (record: BaseRecord, rowIndex: number) => {
+    const data = (record.data as Record<string, unknown>) || {};
+    return (
+      <tr
+        key={record.id}
+        className={cn(
+          "border-b border-gray-100 dark:border-gray-800 hover:bg-blue-50/50 dark:hover:bg-blue-950/20 transition-colors",
+          selectedRows.has(record.id) &&
+            "bg-blue-50 dark:bg-blue-950/30"
+        )}
+      >
+        {/* Checkbox */}
+        <td className="px-2 py-1 border-r border-gray-100 dark:border-gray-800">
+          <input
+            type="checkbox"
+            checked={selectedRows.has(record.id)}
+            onChange={() => handleSelectRow(record.id)}
+            className="w-4 h-4 rounded border-gray-300"
+          />
+        </td>
+        {/* Row number */}
+        <td className="px-2 py-1 text-xs text-gray-400 text-center border-r border-gray-100 dark:border-gray-800">
+          {rowIndex + 1}
+        </td>
+        {/* Field cells */}
+        {fields.map((field) => {
+          const isEditing =
+            editingCell?.recordId === record.id &&
+            editingCell?.fieldId === field.id;
+          return (
+            <td
+              key={field.id}
+              className={cn(
+                "px-0 py-0 min-w-[150px] h-8 border-r border-gray-100 dark:border-gray-800 cursor-pointer",
+                isEditing && "ring-2 ring-blue-500 ring-inset"
+              )}
+              onClick={() => {
+                if (!isEditing) {
+                  setEditingCell({
+                    recordId: record.id,
+                    fieldId: field.id,
+                  });
+                }
+              }}
+            >
+              {isEditing ? (
+                <CellEditor
+                  field={field}
+                  value={data[field.id]}
+                  onSave={(value) =>
+                    handleCellSave(record.id, field.id, value)
+                  }
+                  onCancel={() => setEditingCell(null)}
+                />
+              ) : (
+                <div className="px-2 py-1 h-full flex items-center">
+                  <CellDisplay field={field} value={data[field.id]} />
+                </div>
+              )}
+            </td>
+          );
+        })}
+        <td className="border-r border-gray-100 dark:border-gray-800" />
+      </tr>
+    );
+  };
+
+  const colCount = fields.length + 3; // checkbox + row number + fields + add-field
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
+      {/* View toolbar */}
+      {onViewConfigChange && (
+        <BaseViewToolbar
+          fields={fields}
+          config={currentConfig}
+          onChange={onViewConfigChange}
+        />
+      )}
+
       {/* Grid */}
       <div className="flex-1 overflow-auto">
         <table className="w-full border-collapse min-w-max">
@@ -329,7 +421,7 @@ export function BaseGridView({ tableId, tableName }: BaseGridViewProps) {
                 <input
                   type="checkbox"
                   checked={
-                    records.length > 0 && selectedRows.size === records.length
+                    processedRecords.length > 0 && selectedRows.size === processedRecords.length
                   }
                   onChange={handleSelectAll}
                   className="w-4 h-4 rounded border-gray-300"
@@ -391,72 +483,50 @@ export function BaseGridView({ tableId, tableName }: BaseGridViewProps) {
 
           {/* Body */}
           <tbody>
-            {records.map((record, rowIndex) => {
-              const data = (record.data as Record<string, unknown>) || {};
-              return (
-                <tr
-                  key={record.id}
-                  className={cn(
-                    "border-b border-gray-100 dark:border-gray-800 hover:bg-blue-50/50 dark:hover:bg-blue-950/20 transition-colors",
-                    selectedRows.has(record.id) &&
-                      "bg-blue-50 dark:bg-blue-950/30"
-                  )}
-                >
-                  {/* Checkbox */}
-                  <td className="px-2 py-1 border-r border-gray-100 dark:border-gray-800">
-                    <input
-                      type="checkbox"
-                      checked={selectedRows.has(record.id)}
-                      onChange={() => handleSelectRow(record.id)}
-                      className="w-4 h-4 rounded border-gray-300"
-                    />
-                  </td>
-                  {/* Row number */}
-                  <td className="px-2 py-1 text-xs text-gray-400 text-center border-r border-gray-100 dark:border-gray-800">
-                    {rowIndex + 1}
-                  </td>
-                  {/* Field cells */}
-                  {fields.map((field) => {
-                    const isEditing =
-                      editingCell?.recordId === record.id &&
-                      editingCell?.fieldId === field.id;
-                    return (
-                      <td
-                        key={field.id}
-                        className={cn(
-                          "px-0 py-0 min-w-[150px] h-8 border-r border-gray-100 dark:border-gray-800 cursor-pointer",
-                          isEditing && "ring-2 ring-blue-500 ring-inset"
-                        )}
-                        onClick={() => {
-                          if (!isEditing) {
-                            setEditingCell({
-                              recordId: record.id,
-                              fieldId: field.id,
-                            });
-                          }
-                        }}
-                      >
-                        {isEditing ? (
-                          <CellEditor
-                            field={field}
-                            value={data[field.id]}
-                            onSave={(value) =>
-                              handleCellSave(record.id, field.id, value)
-                            }
-                            onCancel={() => setEditingCell(null)}
-                          />
-                        ) : (
-                          <div className="px-2 py-1 h-full flex items-center">
-                            <CellDisplay field={field} value={data[field.id]} />
+            {groups ? (
+              <>
+                {groups.map((group) => {
+                  // Compute subtotal for number fields
+                  const numberFields = fields.filter((f) => f.type === "number");
+                  return (
+                    <React.Fragment key={group.value}>
+                      {/* Group header row */}
+                      <tr className="bg-gray-100 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-700">
+                        <td colSpan={colCount} className="px-3 py-1.5">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
+                              {group.fieldName}: {group.value}
+                            </span>
+                            <span className="text-[10px] text-gray-400 bg-gray-200 dark:bg-gray-700 px-1.5 py-0.5 rounded-full">
+                              {group.count}
+                            </span>
+                            {numberFields.length > 0 && (
+                              <span className="text-[10px] text-gray-400 ml-2">
+                                {numberFields.map((nf) => {
+                                  const sum = group.records.reduce((acc, r) => {
+                                    const d = (r.data as Record<string, unknown>) || {};
+                                    const v = Number(d[nf.id]);
+                                    return acc + (isNaN(v) ? 0 : v);
+                                  }, 0);
+                                  return sum !== 0 ? `${nf.name}: ${sum}` : null;
+                                }).filter(Boolean).join(" | ")}
+                              </span>
+                            )}
                           </div>
-                        )}
-                      </td>
-                    );
-                  })}
-                  <td className="border-r border-gray-100 dark:border-gray-800" />
-                </tr>
-              );
-            })}
+                        </td>
+                      </tr>
+                      {group.records.map((record, idx) =>
+                        renderRecordRow(record, idx + 1)
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </>
+            ) : (
+              processedRecords.map((record, rowIndex) =>
+                renderRecordRow(record, rowIndex + 1)
+              )
+            )}
           </tbody>
         </table>
       </div>

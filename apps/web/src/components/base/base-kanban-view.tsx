@@ -6,12 +6,19 @@ import { cn } from "@/lib/utils";
 import { Plus, GripVertical, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { RecordDetailPanel } from "./record-detail-panel";
+import {
+  BaseViewToolbar,
+  applyViewConfig,
+  type ViewConfig,
+} from "./base-view-toolbar";
 
 interface BaseKanbanViewProps {
   tableId: string;
   tableName: string;
   groupByFieldId: string | null;
   onGroupByChange: (fieldId: string) => void;
+  viewConfig?: ViewConfig;
+  onViewConfigChange?: (config: ViewConfig) => void;
 }
 
 interface DragState {
@@ -24,6 +31,8 @@ export function BaseKanbanView({
   tableName,
   groupByFieldId,
   onGroupByChange,
+  viewConfig,
+  onViewConfigChange,
 }: BaseKanbanViewProps) {
   const [fields, setFields] = useState<BaseField[]>([]);
   const [records, setRecords] = useState<BaseRecord[]>([]);
@@ -62,6 +71,11 @@ export function BaseKanbanView({
     loadData();
   }, [loadData]);
 
+  // Apply filter/sort from viewConfig (excluding grouping which kanban handles itself)
+  const currentConfig: ViewConfig = viewConfig || {};
+  const configWithoutGroup = { ...currentConfig, groupByFieldId: undefined };
+  const { records: filteredRecords } = applyViewConfig(records, fields, configWithoutGroup);
+
   const groupByField = fields.find((f) => f.id === groupByFieldId);
   const groupableFields = fields.filter((f) => f.type === "select");
 
@@ -79,7 +93,7 @@ export function BaseKanbanView({
     groupedRecords[col] = [];
   }
 
-  for (const record of records) {
+  for (const record of filteredRecords) {
     const data = (record.data as Record<string, unknown>) || {};
     const value = groupByField ? String(data[groupByField.id] ?? "") : "";
     const col = value && columns.includes(value) ? value : "__uncategorized__";
@@ -233,7 +247,16 @@ export function BaseKanbanView({
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      {/* Toolbar */}
+      {/* View toolbar (filter/sort/group) */}
+      {onViewConfigChange && (
+        <BaseViewToolbar
+          fields={fields}
+          config={currentConfig}
+          onChange={onViewConfigChange}
+        />
+      )}
+
+      {/* Kanban-specific toolbar */}
       <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-950">
         <span className="text-xs text-gray-500">Group by:</span>
         <select
