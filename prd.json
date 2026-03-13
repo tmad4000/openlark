@@ -1457,8 +1457,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 86,
-      "passes": false,
-      "notes": "Initial implementation uses PostgreSQL full-text search. Meilisearch migration is a follow-up."
+      "passes": true,
+      "notes": "Created GET /api/search route that searches across messages, docs, events, contacts, tasks, and email with ilike queries. Permission-scoped: messages filtered by chat membership, tasks by assignee/creator, emails by user mailbox. Created GlobalSearchDialog component with Radix UI Dialog, category tabs (All/Messages/Docs/Events/Contacts/Tasks/Email), keyboard navigation (arrow keys + enter), recent searches in localStorage, debounced search (300ms). Cmd+K / Ctrl+K keyboard shortcut wired in app layout. Search button added to navigation rail. Typecheck passes."
     },
     {
       "id": "US-087",

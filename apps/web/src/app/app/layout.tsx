@@ -21,8 +21,10 @@ import {
   ChevronRight,
   Bell,
   X,
+  Search,
 } from "lucide-react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
+import { GlobalSearchDialog } from "../../components/GlobalSearchDialog";
 
 interface UserData {
   id: string;
@@ -77,6 +79,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [notificationPanelOpen, setNotificationPanelOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotificationData[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [searchOpen, setSearchOpen] = useState(false);
 
   useEffect(() => {
     const token = getCookie("session_token");
@@ -242,6 +245,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     };
   }, [isResizing]);
 
+  // Cmd+K / Ctrl+K to open global search
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        setSearchOpen((prev) => !prev);
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   const getActiveModule = () => {
     const segments = pathname.split("/");
     return segments[2] || "";
@@ -296,8 +311,22 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           })}
         </div>
 
+        {/* Search Button */}
+        <div className="mt-auto mb-2">
+          <button
+            onClick={() => setSearchOpen(true)}
+            className="w-10 h-10 rounded-lg flex items-center justify-center transition-colors group relative text-gray-400 hover:bg-gray-800 hover:text-white"
+            title="Search (⌘K)"
+          >
+            <Search className="w-5 h-5" />
+            <span className="absolute left-full ml-2 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
+              Search (⌘K)
+            </span>
+          </button>
+        </div>
+
         {/* Notification Bell */}
-        <div className="mt-auto mb-2 relative">
+        <div className="mb-2 relative">
           <button
             onClick={() => setNotificationPanelOpen(!notificationPanelOpen)}
             className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors group relative ${
@@ -497,6 +526,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* Main Content Area */}
       <main className={`flex-1 overflow-hidden ${hasOwnSidebar ? "" : "bg-gray-50"}`}>{children}</main>
+
+      {/* Global Search Dialog */}
+      <GlobalSearchDialog open={searchOpen} onOpenChange={setSearchOpen} />
     </div>
   );
 }
