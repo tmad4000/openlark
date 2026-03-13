@@ -2,6 +2,7 @@ import { Server } from "@hocuspocus/server";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import crypto from "crypto";
+import http from "http";
 import { eq, and, gt, or } from "drizzle-orm";
 import * as Y from "yjs";
 
@@ -269,21 +270,34 @@ const server = Server.configure({
   // User info from onAuthenticate is broadcast to all connected clients
 });
 
+// Health check HTTP server (separate port to avoid conflict with Hocuspocus WebSocket server)
+const HEALTH_PORT = parseInt(process.env.COLLAB_HEALTH_PORT || String(PORT + 1), 10);
+const healthServer = http.createServer((_req, res) => {
+  if (_req.url === "/health") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ status: "healthy" }));
+  } else {
+    res.writeHead(404);
+    res.end();
+  }
+});
+
+healthServer.listen(HEALTH_PORT, () => {
+  console.log(`Health check endpoint available at http://0.0.0.0:${HEALTH_PORT}/health`);
+});
+
 server.listen().then(() => {
   console.log(`🔮 Hocuspocus collaboration server running on port ${PORT}`);
 });
 
 // Graceful shutdown
-process.on("SIGINT", async () => {
+const gracefulShutdown = async () => {
   console.log("Shutting down collaboration server...");
+  healthServer.close();
   await server.destroy();
   await client.end();
   process.exit(0);
-});
+};
 
-process.on("SIGTERM", async () => {
-  console.log("Shutting down collaboration server...");
-  await server.destroy();
-  await client.end();
-  process.exit(0);
-});
+process.on("SIGINT", gracefulShutdown);
+process.on("SIGTERM", gracefulShutdown);

@@ -1882,8 +1882,8 @@
         "Typecheck passes"
       ],
       "priority": 111,
-      "passes": false,
-      "notes": "This is the 'deploy in 10 minutes' goal from the PRD."
+      "passes": true,
+      "notes": "Created docker-compose.prod.yml with all 9 services: web, api, worker, collab, livekit, redis, postgres, minio, nginx. Multi-stage Dockerfiles for web (standalone Next.js), api (tsc build), and collab (tsc build) — all use node:20-alpine with non-root user. Root .env.example documents all required vars (POSTGRES_PASSWORD, JWT_SECRET, REDIS_PASSWORD, S3, LiveKit, optional SMTP/AI/translation). Health checks on all services: postgres (pg_isready), redis (redis-cli ping), minio (mc ready), livekit (wget), api (/health), worker (/health), collab (separate health port 1235), web (wget /), nginx (/nginx-health). Nginx reverse proxy routes: / → web, /api/ → api, /collab/ → collab, /livekit/ → livekit. Updated next.config.js with standalone output mode and configurable API URL. Added HTTP health server to collab alongside Hocuspocus WebSocket server. Typecheck passes."
     },
     {
       "id": "US-112",
