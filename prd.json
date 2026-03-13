@@ -1948,8 +1948,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 115,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added POST /messages/export-to-doc API endpoint that accepts message_ids (up to 100) and chat_id. Creates a new Lark Doc with formatted message content including sender name, timestamp, and message text. Voice messages show transcript or '[Voice Message]' placeholder. Video content shown as '[Video]'. Doc title follows '[Chat name] Export [date]' format. Added Export to Doc button in message hover menu (QuickReactionPicker) and in multi-select toolbar. Export confirmation modal shows message count and preview of document title. Created document opens in new tab. Typecheck passes."
     },
     {
       "id": "US-116",

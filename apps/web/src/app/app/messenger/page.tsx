@@ -470,6 +470,7 @@ function QuickReactionPicker({
   onBuzz,
   onCreateTask,
   onTranslate,
+  onExportToDoc,
   isPinned,
   isFavorited,
   isTranslated,
@@ -479,6 +480,7 @@ function QuickReactionPicker({
   canBuzz,
   canCreateTask,
   canTranslate,
+  canExportToDoc,
 }: {
   onSelect: (emoji: string) => void;
   onOpenFull: () => void;
@@ -491,6 +493,7 @@ function QuickReactionPicker({
   onBuzz?: () => void;
   onCreateTask?: () => void;
   onTranslate?: () => void;
+  onExportToDoc?: () => void;
   isPinned?: boolean;
   isFavorited?: boolean;
   isTranslated?: boolean;
@@ -500,6 +503,7 @@ function QuickReactionPicker({
   canBuzz?: boolean;
   canCreateTask?: boolean;
   canTranslate?: boolean;
+  canExportToDoc?: boolean;
 }) {
   return (
     <div className="flex items-center gap-0.5 bg-white border border-gray-200 rounded-full shadow-lg px-1.5 py-0.5">
@@ -595,6 +599,15 @@ function QuickReactionPicker({
           title="Create Task"
         >
           <ListTodo className="w-4 h-4" />
+        </button>
+      )}
+      {canExportToDoc && onExportToDoc && (
+        <button
+          onClick={onExportToDoc}
+          className="w-7 h-7 flex items-center justify-center hover:bg-blue-50 rounded-full transition-colors text-gray-500 hover:text-blue-600"
+          title="Export to Doc"
+        >
+          <FileText className="w-4 h-4" />
         </button>
       )}
       {canBuzz && onBuzz && (
@@ -854,6 +867,7 @@ function MessageBubble({
   onBuzz,
   onCreateTask,
   onTranslate,
+  onExportToDoc,
   isPinned,
   isFavorited,
   isBuzzed,
@@ -878,6 +892,7 @@ function MessageBubble({
   onBuzz?: (messageId: string) => void;
   onCreateTask?: (messageId: string) => void;
   onTranslate?: (messageId: string) => void;
+  onExportToDoc?: (messageId: string) => void;
   isPinned?: boolean;
   isFavorited?: boolean;
   isBuzzed?: boolean;
@@ -1069,6 +1084,10 @@ function MessageBubble({
                   setShowReactionPicker(false);
                   onTranslate(message.id);
                 } : undefined}
+                onExportToDoc={onExportToDoc ? () => {
+                  setShowReactionPicker(false);
+                  onExportToDoc(message.id);
+                } : undefined}
                 isPinned={isPinned}
                 isFavorited={isFavorited}
                 isTranslated={!!translation}
@@ -1078,6 +1097,7 @@ function MessageBubble({
                 canBuzz={isCurrentUser && !message.recalledAt && message.type !== "system"}
                 canCreateTask={!message.recalledAt && message.type !== "system"}
                 canTranslate={!message.recalledAt && (message.type === "text" || message.type === "rich_text")}
+                canExportToDoc={!message.recalledAt && message.type !== "system"}
               />
             </div>
           )}
@@ -2131,6 +2151,60 @@ function ChatView({
     }
   }, [selectedMessageIds.size]);
 
+  // Export to doc state
+  const [showExportToDocModal, setShowExportToDocModal] = useState(false);
+  const [exportMessageIds, setExportMessageIds] = useState<string[]>([]);
+  const [isExporting, setIsExporting] = useState(false);
+
+  // Export single message to doc (from hover menu)
+  const exportSingleMessageToDoc = useCallback((messageId: string) => {
+    setExportMessageIds([messageId]);
+    setShowExportToDocModal(true);
+  }, []);
+
+  // Export selected messages to doc (from selection toolbar)
+  const exportSelectedToDoc = useCallback(() => {
+    if (selectedMessageIds.size > 0) {
+      setExportMessageIds(Array.from(selectedMessageIds));
+      setShowExportToDocModal(true);
+    }
+  }, [selectedMessageIds]);
+
+  // Perform export to doc
+  const performExportToDoc = useCallback(async () => {
+    if (exportMessageIds.length === 0) return;
+    setIsExporting(true);
+    try {
+      const sessionToken = getCookie("session_token");
+      const res = await fetch("/api/messages/export-to-doc", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${sessionToken}`,
+        },
+        body: JSON.stringify({
+          message_ids: exportMessageIds,
+          chat_id: chat.id,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setShowExportToDocModal(false);
+        setExportMessageIds([]);
+        if (isSelectionMode) {
+          setIsSelectionMode(false);
+          setSelectedMessageIds(new Set());
+        }
+        // Navigate to the created document
+        window.open(`/app/docs/${data.document.id}`, "_blank");
+      }
+    } catch {
+      // silently handle
+    } finally {
+      setIsExporting(false);
+    }
+  }, [chat.id, exportMessageIds, isSelectionMode]);
+
   // Close multi-forward modal
   const closeMultiForwardModal = useCallback(() => {
     setShowMultiForwardModal(false);
@@ -2885,7 +2959,7 @@ function ChatView({
           <div className="text-sm text-blue-700">
             {selectedMessageIds.size > 0
               ? `${selectedMessageIds.size} message${selectedMessageIds.size > 1 ? "s" : ""} selected`
-              : "Select messages to forward"}
+              : "Select messages"}
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -2896,6 +2970,15 @@ function ChatView({
               className="px-3 py-1 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded transition-colors"
             >
               Cancel
+            </button>
+            <button
+              onClick={exportSelectedToDoc}
+              disabled={selectedMessageIds.size === 0 || selectedMessageIds.size > 100}
+              className="flex items-center gap-1.5 px-3 py-1 text-sm bg-green-600 hover:bg-green-700 text-white font-medium rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title={selectedMessageIds.size > 100 ? "Cannot export more than 100 messages" : "Export to Doc"}
+            >
+              <FileText className="w-4 h-4" />
+              Export to Doc{selectedMessageIds.size > 1 ? ` (${selectedMessageIds.size})` : ""}
             </button>
             <button
               onClick={openMultiForwardModal}
@@ -3212,6 +3295,7 @@ function ChatView({
                         onBuzz={openBuzzDialog}
                         onCreateTask={openCreateTaskDialog}
                         onTranslate={translateMessage}
+                        onExportToDoc={exportSingleMessageToDoc}
                         isPinned={pinnedMessageIds.has(message.id)}
                         isFavorited={favoritedMessageIds.has(message.id)}
                         isBuzzed={buzzedMessageIds.has(message.id)}
@@ -3491,6 +3575,58 @@ function ChatView({
           currentChatId={chat.id}
           onClose={closeMultiForwardModal}
         />
+      )}
+
+      {/* Export to Doc Modal */}
+      {showExportToDocModal && exportMessageIds.length > 0 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-4 p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Export to Document</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Export {exportMessageIds.length} message{exportMessageIds.length > 1 ? "s" : ""} to a new Lark Doc.
+              The document will include sender names, timestamps, and message content.
+            </p>
+            {exportMessageIds.length > 100 && (
+              <p className="text-sm text-red-600 mb-4">
+                Cannot export more than 100 messages at once. Please select fewer messages.
+              </p>
+            )}
+            <div className="bg-gray-50 rounded-lg p-3 mb-4">
+              <p className="text-xs text-gray-500 mb-1">Document title</p>
+              <p className="text-sm font-medium text-gray-800">
+                {chat?.name || "Chat"} Export {new Date().toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })}
+              </p>
+            </div>
+            <div className="flex items-center justify-end gap-2">
+              <button
+                onClick={() => {
+                  setShowExportToDocModal(false);
+                  setExportMessageIds([]);
+                }}
+                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={performExportToDoc}
+                disabled={isExporting || exportMessageIds.length > 100}
+                className="flex items-center gap-1.5 px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isExporting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Exporting...
+                  </>
+                ) : (
+                  <>
+                    <FileText className="w-4 h-4" />
+                    Export
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Create Task from Message Dialog */}

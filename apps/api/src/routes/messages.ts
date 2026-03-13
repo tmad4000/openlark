@@ -1,6 +1,7 @@
 import { FastifyInstance } from "fastify";
 import { db } from "../db";
-import { messages, chatMembers, chats, users, messageReadReceipts, messageReactions, favorites, buzzNotifications } from "../db/schema";
+import { messages, chatMembers, chats, users, messageReadReceipts, messageReactions, favorites, buzzNotifications, documents, documentPermissions } from "../db/schema";
+import { randomUUID } from "crypto";
 import { eq, and, desc, lt, gt, gte, inArray, sql } from "drizzle-orm";
 import { authMiddleware } from "../middleware/auth";
 import { publish, getChatChannel, getUserPresenceChannel } from "../lib/redis";
@@ -2262,4 +2263,200 @@ export async function messagesRoutes(fastify: FastifyInstance) {
       });
     }
   );
+
+  /**
+   * POST /messages/export-to-doc - Export selected messages to a new Lark Document
+   * Body: { message_ids: string[], chat_id: string }
+   * Creates a new document with message content formatted as sender, timestamp, and text.
+   * Returns: { success: true, document: { id, title, type, yjsDocId } }
+   */
+  fastify.post<{
+    Body: { message_ids: string[]; chat_id: string };
+  }>(
+    "/messages/export-to-doc",
+    { preHandler: authMiddleware },
+    async (request, reply) => {
+      const { message_ids, chat_id } = request.body;
+      const currentUserId = request.user.id;
+
+      // Validate message_ids
+      if (!message_ids || !Array.isArray(message_ids) || message_ids.length === 0) {
+        return reply.status(400).send({
+          error: "message_ids must be a non-empty array",
+        });
+      }
+
+      if (message_ids.length > 100) {
+        return reply.status(400).send({
+          error: "Cannot export more than 100 messages at once",
+        });
+      }
+
+      // Validate chat_id
+      if (!chat_id || !UUID_REGEX.test(chat_id)) {
+        return reply.status(400).send({
+          error: "Valid chat_id is required",
+        });
+      }
+
+      // Validate all UUIDs
+      for (const id of message_ids) {
+        if (!UUID_REGEX.test(id)) {
+          return reply.status(400).send({
+            error: `Invalid message ID format: ${id}`,
+          });
+        }
+      }
+
+      // Verify user is a member of the chat
+      const [membership] = await db
+        .select()
+        .from(chatMembers)
+        .where(and(eq(chatMembers.chatId, chat_id), eq(chatMembers.userId, currentUserId)))
+        .limit(1);
+
+      if (!membership) {
+        return reply.status(403).send({
+          error: "You are not a member of this chat",
+        });
+      }
+
+      // Get the chat info for the title
+      const [chat] = await db
+        .select()
+        .from(chats)
+        .where(eq(chats.id, chat_id))
+        .limit(1);
+
+      if (!chat) {
+        return reply.status(404).send({ error: "Chat not found" });
+      }
+
+      // Fetch all requested messages
+      const selectedMessages = await db
+        .select({
+          id: messages.id,
+          senderId: messages.senderId,
+          type: messages.type,
+          content: messages.content,
+          createdAt: messages.createdAt,
+          senderName: users.displayName,
+        })
+        .from(messages)
+        .innerJoin(users, eq(messages.senderId, users.id))
+        .where(and(eq(messages.chatId, chat_id), inArray(messages.id, message_ids)))
+        .orderBy(messages.createdAt);
+
+      if (selectedMessages.length === 0) {
+        return reply.status(404).send({
+          error: "No messages found matching the provided IDs",
+        });
+      }
+
+      // Build document content as HTML
+      const htmlParts: string[] = [];
+      for (const msg of selectedMessages) {
+        const timestamp = msg.createdAt
+          ? new Date(msg.createdAt).toLocaleString("en-US", {
+              year: "numeric",
+              month: "short",
+              day: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            })
+          : "";
+
+        let messageText = "";
+        const content = msg.content as Record<string, unknown>;
+
+        if (msg.type === "voice") {
+          // Voice messages converted to text placeholder
+          messageText = (content.transcript as string) || "[Voice Message]";
+        } else if (msg.type === "card" && content.cardType === "video") {
+          messageText = "[Video]";
+        } else if (content.text) {
+          messageText = String(content.text);
+        } else if (content.html) {
+          messageText = String(content.html);
+        } else {
+          messageText = JSON.stringify(content);
+        }
+
+        // Check for video attachments in content
+        if (content.attachments && Array.isArray(content.attachments)) {
+          for (const att of content.attachments as Array<Record<string, unknown>>) {
+            if (att.type === "video" || (att.mimeType && String(att.mimeType).startsWith("video/"))) {
+              messageText = messageText || "[Video]";
+            }
+          }
+        }
+
+        htmlParts.push(
+          `<p><strong>${escapeHtml(msg.senderName || "Unknown")}</strong> <em>${escapeHtml(timestamp)}</em></p>` +
+          `<p>${escapeHtml(messageText)}</p><hr/>`
+        );
+      }
+
+      const docHtml = htmlParts.join("\n");
+
+      // Generate document title
+      const chatName = chat.name || "Chat";
+      const dateStr = new Date().toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      });
+      const docTitle = `${chatName} Export ${dateStr}`;
+
+      // User must belong to an organization
+      if (!request.user.orgId) {
+        return reply.status(400).send({
+          error: "User must belong to an organization to create documents",
+        });
+      }
+
+      const yjsDocId = `doc-${randomUUID()}`;
+
+      // Create the document
+      const [newDoc] = await db
+        .insert(documents)
+        .values({
+          title: docTitle,
+          type: "doc",
+          orgId: request.user.orgId,
+          ownerId: currentUserId,
+          yjsDocId,
+          settings: {},
+        })
+        .returning();
+
+      // Create owner permission
+      await db.insert(documentPermissions).values({
+        documentId: newDoc.id,
+        principalId: currentUserId,
+        principalType: "user",
+        role: "owner",
+      });
+
+      return reply.status(201).send({
+        success: true,
+        document: {
+          id: newDoc.id,
+          title: newDoc.title,
+          type: newDoc.type,
+          yjsDocId: newDoc.yjsDocId,
+          content: docHtml,
+        },
+      });
+    }
+  );
+}
+
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 }
