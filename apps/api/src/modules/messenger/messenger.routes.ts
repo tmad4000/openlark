@@ -463,6 +463,18 @@ export async function messengerRoutes(app: FastifyInstance) {
           });
         }
 
+        // Publish real-time event (look up chatId from message)
+        const msg = await messengerService.getMessageById(req.params.messageId);
+        if (msg) {
+          await publishMessageEvent(msg.chatId, {
+            type: "reaction:added",
+            chatId: msg.chatId,
+            messageId: req.params.messageId,
+            emoji: input.emoji,
+            userId: req.user!.id,
+          });
+        }
+
         return reply.status(201).send({ data: { success: true } });
       } catch (error) {
         if (error instanceof ZodError) {
@@ -487,6 +499,18 @@ export async function messengerRoutes(app: FastifyInstance) {
         return reply.status(404).send({
           code: "REACTION_NOT_FOUND",
           message: "Reaction not found",
+        });
+      }
+
+      // Publish real-time event
+      const msg = await messengerService.getMessageById(req.params.messageId);
+      if (msg) {
+        await publishMessageEvent(msg.chatId, {
+          type: "reaction:removed",
+          chatId: msg.chatId,
+          messageId: req.params.messageId,
+          emoji: req.params.emoji,
+          userId: req.user!.id,
         });
       }
 

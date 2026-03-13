@@ -187,6 +187,30 @@ class ApiClient {
     }>(`/messenger/messages/${messageId}/read-receipts`);
   }
 
+  // Reaction endpoints
+  async addReaction(messageId: string, emoji: string) {
+    return this.request<{ success: boolean }>(
+      `/messenger/messages/${messageId}/reactions`,
+      {
+        method: "POST",
+        body: JSON.stringify({ emoji }),
+      }
+    );
+  }
+
+  async removeReaction(messageId: string, emoji: string) {
+    return this.request<{ success: boolean }>(
+      `/messenger/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`,
+      { method: "DELETE" }
+    );
+  }
+
+  async getReactions(messageId: string) {
+    return this.request<{ reactions: MessageReaction[] }>(
+      `/messenger/messages/${messageId}/reactions`
+    );
+  }
+
   // Calendar endpoints
   async getCalendars() {
     return this.request<{ calendars: Calendar[] }>("/calendar/calendars");
@@ -464,6 +488,13 @@ export interface Message {
   createdAt: string;
   editedAt: string | null;
   recalledAt: string | null;
+}
+
+export interface MessageReaction {
+  messageId: string;
+  userId: string;
+  emoji: string;
+  createdAt: string;
 }
 
 // Calendar types

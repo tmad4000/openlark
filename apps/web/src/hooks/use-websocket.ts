@@ -45,6 +45,13 @@ export interface PresenceEvent {
   status: "online" | "offline";
 }
 
+export interface ReactionEvent {
+  chatId: string;
+  messageId: string;
+  emoji: string;
+  userId: string;
+}
+
 interface UseWebSocketOptions {
   onMessage?: (event: NewMessageEvent) => void;
   onMessageEdited?: (event: MessageEditedEvent) => void;
@@ -52,6 +59,8 @@ interface UseWebSocketOptions {
   onReadReceipt?: (event: ReadReceiptEvent) => void;
   onTyping?: (event: TypingEvent) => void;
   onPresence?: (event: PresenceEvent) => void;
+  onReactionAdded?: (event: ReactionEvent) => void;
+  onReactionRemoved?: (event: ReactionEvent) => void;
   onConnected?: () => void;
   onDisconnected?: () => void;
 }
@@ -169,6 +178,28 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
           status: "offline",
         };
         optionsRef.current.onPresence?.(event);
+        break;
+      }
+
+      case "reaction:added": {
+        const event: ReactionEvent = {
+          chatId: data.chatId as string,
+          messageId: data.messageId as string,
+          emoji: data.emoji as string,
+          userId: data.userId as string,
+        };
+        optionsRef.current.onReactionAdded?.(event);
+        break;
+      }
+
+      case "reaction:removed": {
+        const event: ReactionEvent = {
+          chatId: data.chatId as string,
+          messageId: data.messageId as string,
+          emoji: data.emoji as string,
+          userId: data.userId as string,
+        };
+        optionsRef.current.onReactionRemoved?.(event);
         break;
       }
 

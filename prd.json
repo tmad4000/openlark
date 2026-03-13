@@ -471,8 +471,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 29,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Backend API routes already existed (POST/DELETE/GET reactions). Added: WebSocket event publishing for reactions (reaction:added/reaction:removed), API client methods (addReaction/removeReaction/getReactions), ReactionPicker with quick 5-emoji bar + expanded 24-emoji grid, ReactionDisplay with grouped counts and reactor tooltips, optimistic updates, real-time sync via WebSocket."
     },
     {
       "id": "US-030",

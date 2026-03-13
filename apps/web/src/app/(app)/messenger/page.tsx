@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import { useWebSocket, type NewMessageEvent, type MessageEditedEvent, type MessageRecalledEvent, type ReadReceiptEvent, type TypingEvent, type PresenceEvent } from "@/hooks/use-websocket";
+import { useWebSocket, type NewMessageEvent, type MessageEditedEvent, type MessageRecalledEvent, type ReadReceiptEvent, type TypingEvent, type PresenceEvent, type ReactionEvent } from "@/hooks/use-websocket";
 import { ChatList } from "@/components/messenger/chat-list";
 import { MessageList } from "@/components/messenger/message-list";
 import { MessageInput } from "@/components/messenger/message-input";
@@ -121,6 +121,16 @@ export default function MessengerPage() {
     }, [selectedChatId, user?.id]),
     onTyping: handleTyping,
     onPresence: handlePresence,
+    onReactionAdded: useCallback((event: ReactionEvent) => {
+      if (event.chatId === selectedChatId) {
+        MessageList.handleReactionAdded(event.messageId, event.emoji, event.userId);
+      }
+    }, [selectedChatId]),
+    onReactionRemoved: useCallback((event: ReactionEvent) => {
+      if (event.chatId === selectedChatId) {
+        MessageList.handleReactionRemoved(event.messageId, event.emoji, event.userId);
+      }
+    }, [selectedChatId]),
   });
 
   // Send typing events from input

@@ -2,13 +2,19 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { cn } from "@/lib/utils";
-import { api, type Message } from "@/lib/api";
+import { api, type Message, type MessageReaction } from "@/lib/api";
 import { useAuth } from "@/hooks/use-auth";
 import { Loader2, Clock, AlertCircle } from "lucide-react";
 import {
   ReadReceiptIndicator,
   type ReadStatus,
 } from "./read-receipt-indicator";
+import {
+  ReactionPicker,
+  ReactionDisplay,
+  groupReactions,
+  type ReactionGroup,
+} from "./message-reactions";
 
 // Extended message type for optimistic updates
 export interface OptimisticMessage extends Message {
@@ -42,6 +48,7 @@ export function MessageList({ chatId, onMessagesLoaded, onlineUsers, memberCount
   const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [readStatuses, setReadStatuses] = useState<Map<string, ReadStatusInfo>>(new Map());
+  const [reactions, setReactions] = useState<Map<string, MessageReaction[]>>(new Map());
   const [totalMembers, setTotalMembers] = useState(0);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const loadMoreTriggerRef = useRef<HTMLDivElement>(null);
@@ -83,6 +90,12 @@ export function MessageList({ chatId, onMessagesLoaded, onlineUsers, memberCount
           .map((m) => m.id);
         if (ownMsgIds.length > 0) {
           fetchReadStatuses(chatId, ownMsgIds, membersResponse.members.length);
+        }
+
+        // Fetch reactions for all messages
+        const allMsgIds = messagesResponse.messages.map((m) => m.id);
+        if (allMsgIds.length > 0) {
+          fetchReactions(allMsgIds);
         }
 
         // Auto-mark chat as read
@@ -136,6 +149,100 @@ export function MessageList({ chatId, onMessagesLoaded, onlineUsers, memberCount
       }
     },
     []
+  );
+
+  // Fetch reactions for a batch of messages
+  const fetchReactions = useCallback(async (messageIds: string[]) => {
+    const results = await Promise.allSettled(
+      messageIds.map((id) => api.getReactions(id).then((r) => ({ id, reactions: r.reactions })))
+    );
+    setReactions((prev) => {
+      const next = new Map(prev);
+      for (const result of results) {
+        if (result.status === "fulfilled") {
+          next.set(result.value.id, result.value.reactions);
+        }
+      }
+      return next;
+    });
+  }, []);
+
+  // Toggle a reaction on a message
+  const handleReactionToggle = useCallback(
+    async (messageId: string, emoji: string, add: boolean) => {
+      if (!user?.id) return;
+
+      // Optimistic update
+      setReactions((prev) => {
+        const next = new Map(prev);
+        const existing = next.get(messageId) || [];
+        if (add) {
+          next.set(messageId, [
+            ...existing,
+            { messageId, userId: user.id, emoji, createdAt: new Date().toISOString() },
+          ]);
+        } else {
+          next.set(
+            messageId,
+            existing.filter((r) => !(r.emoji === emoji && r.userId === user.id))
+          );
+        }
+        return next;
+      });
+
+      try {
+        if (add) {
+          await api.addReaction(messageId, emoji);
+        } else {
+          await api.removeReaction(messageId, emoji);
+        }
+      } catch {
+        // Revert optimistic update on failure
+        const data = await api.getReactions(messageId);
+        setReactions((prev) => {
+          const next = new Map(prev);
+          next.set(messageId, data.reactions);
+          return next;
+        });
+      }
+    },
+    [user?.id]
+  );
+
+  // Handle real-time reaction events
+  const handleReactionAdded = useCallback(
+    (messageId: string, emoji: string, userId: string) => {
+      // Skip if this is our own reaction (already handled optimistically)
+      if (userId === user?.id) return;
+      setReactions((prev) => {
+        const next = new Map(prev);
+        const existing = next.get(messageId) || [];
+        // Don't add duplicates
+        if (existing.some((r) => r.emoji === emoji && r.userId === userId)) return prev;
+        next.set(messageId, [
+          ...existing,
+          { messageId, userId, emoji, createdAt: new Date().toISOString() },
+        ]);
+        return next;
+      });
+    },
+    [user?.id]
+  );
+
+  const handleReactionRemoved = useCallback(
+    (messageId: string, emoji: string, userId: string) => {
+      if (userId === user?.id) return;
+      setReactions((prev) => {
+        const next = new Map(prev);
+        const existing = next.get(messageId) || [];
+        next.set(
+          messageId,
+          existing.filter((r) => !(r.emoji === emoji && r.userId === userId))
+        );
+        return next;
+      });
+    },
+    [user?.id]
   );
 
   // Handle real-time read receipt updates
@@ -290,6 +397,8 @@ export function MessageList({ chatId, onMessagesLoaded, onlineUsers, memberCount
   MessageList.confirmMessage = confirmMessage;
   MessageList.failMessage = failMessage;
   MessageList.removeOptimisticMessage = removeOptimisticMessage;
+  MessageList.handleReactionAdded = handleReactionAdded;
+  MessageList.handleReactionRemoved = handleReactionRemoved;
 
   if (isLoading) {
     return (
@@ -342,6 +451,10 @@ export function MessageList({ chatId, onMessagesLoaded, onlineUsers, memberCount
             );
             const senderInfo = senderMap.get(message.senderId);
             const readInfo = isOwn ? readStatuses.get(message.id) : undefined;
+            const messageReactions = reactions.get(message.id) || [];
+            const reactionGroups = user?.id
+              ? groupReactions(messageReactions, user.id)
+              : [];
 
             return (
               <MessageBubble
@@ -354,6 +467,8 @@ export function MessageList({ chatId, onMessagesLoaded, onlineUsers, memberCount
                 readInfo={readInfo}
                 totalMembers={totalMembers}
                 senderMap={senderMap}
+                reactionGroups={reactionGroups}
+                onReactionToggle={handleReactionToggle}
               />
             );
           })}
@@ -371,6 +486,8 @@ MessageList.confirmMessage = (_tempId: string, _realMessage: Message) => {};
 MessageList.failMessage = (_tempId: string) => {};
 MessageList.removeOptimisticMessage = (_tempId: string) => {};
 MessageList.handleReadReceipt = (_userId: string, _lastMessageId: string) => {};
+MessageList.handleReactionAdded = (_messageId: string, _emoji: string, _userId: string) => {};
+MessageList.handleReactionRemoved = (_messageId: string, _emoji: string, _userId: string) => {};
 
 interface MessageBubbleProps {
   message: OptimisticMessage;
@@ -381,6 +498,8 @@ interface MessageBubbleProps {
   readInfo?: ReadStatusInfo;
   totalMembers: number;
   senderMap?: SenderMap;
+  reactionGroups: ReactionGroup[];
+  onReactionToggle: (messageId: string, emoji: string, add: boolean) => void;
 }
 
 function MessageBubble({
@@ -392,7 +511,10 @@ function MessageBubble({
   readInfo,
   totalMembers,
   senderMap,
+  reactionGroups,
+  onReactionToggle,
 }: MessageBubbleProps) {
+  const [showPicker, setShowPicker] = useState(false);
   const isRecalled = !!message.recalledAt;
   const isEdited = !!message.editedAt;
   const isPending = !!message._pending;
@@ -414,64 +536,101 @@ function MessageBubble({
     return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   };
 
+  const handleReactionSelect = useCallback(
+    (messageId: string, emoji: string, add: boolean) => {
+      onReactionToggle(messageId, emoji, add);
+      setShowPicker(false);
+    },
+    [onReactionToggle]
+  );
+
   return (
     <div
       className={cn(
-        "flex",
+        "group relative flex",
         isOwn ? "justify-end" : "justify-start"
       )}
+      onMouseLeave={() => setShowPicker(false)}
     >
-      <div
-        className={cn(
-          "max-w-[70%] rounded-lg px-4 py-2",
-          isOwn
-            ? "bg-blue-600 text-white"
-            : "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100",
-          isRecalled && "opacity-50",
-          isPending && "opacity-70",
-          isFailed && "border-2 border-red-400"
-        )}
-      >
-        {showSender && (
-          <div className="text-xs font-medium mb-1 opacity-70 flex items-center gap-1">
-            {isOnline && (
-              <span className="inline-block w-2 h-2 bg-green-500 rounded-full flex-shrink-0" />
+      <div className="relative max-w-[70%]">
+        {/* Quick reaction picker on hover */}
+        {!isRecalled && !isPending && !isFailed && (
+          <div
+            className={cn(
+              "absolute -top-8 z-10",
+              isOwn ? "right-0" : "left-0",
+              showPicker ? "visible" : "invisible group-hover:visible"
             )}
-            {senderName || `User ${message.senderId.slice(0, 8)}`}
+          >
+            <ReactionPicker
+              messageId={message.id}
+              existingReactions={reactionGroups}
+              currentUserId=""
+              onReactionToggle={handleReactionSelect}
+            />
           </div>
         )}
-        <div className="text-sm whitespace-pre-wrap break-words">
-          {getMessageContent()}
-        </div>
+
         <div
           className={cn(
-            "text-xs mt-1 flex items-center gap-1",
-            isOwn ? "text-blue-100" : "text-gray-500 dark:text-gray-400"
+            "rounded-lg px-4 py-2",
+            isOwn
+              ? "bg-blue-600 text-white"
+              : "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100",
+            isRecalled && "opacity-50",
+            isPending && "opacity-70",
+            isFailed && "border-2 border-red-400"
           )}
         >
-          {isPending ? (
-            <Clock className="h-3 w-3 animate-pulse" />
-          ) : isFailed ? (
-            <AlertCircle className="h-3 w-3 text-red-400" />
-          ) : (
-            <span>{formatTime(message.createdAt)}</span>
+          {showSender && (
+            <div className="text-xs font-medium mb-1 opacity-70 flex items-center gap-1">
+              {isOnline && (
+                <span className="inline-block w-2 h-2 bg-green-500 rounded-full flex-shrink-0" />
+              )}
+              {senderName || `User ${message.senderId.slice(0, 8)}`}
+            </div>
           )}
-          {isEdited && !isRecalled && !isPending && !isFailed && (
-            <span className="italic">(edited)</span>
-          )}
-          {isFailed && (
-            <span className="text-red-400 text-xs">Failed to send</span>
-          )}
-          {isOwn && !isPending && !isFailed && !isRecalled && readInfo && (
-            <ReadReceiptIndicator
-              messageId={message.id}
-              readStatus={readInfo.readStatus}
-              readCount={readInfo.readCount}
-              totalMembers={Math.max(totalMembers - 1, 1)}
-              senderMap={senderMap}
-            />
-          )}
+          <div className="text-sm whitespace-pre-wrap break-words">
+            {getMessageContent()}
+          </div>
+          <div
+            className={cn(
+              "text-xs mt-1 flex items-center gap-1",
+              isOwn ? "text-blue-100" : "text-gray-500 dark:text-gray-400"
+            )}
+          >
+            {isPending ? (
+              <Clock className="h-3 w-3 animate-pulse" />
+            ) : isFailed ? (
+              <AlertCircle className="h-3 w-3 text-red-400" />
+            ) : (
+              <span>{formatTime(message.createdAt)}</span>
+            )}
+            {isEdited && !isRecalled && !isPending && !isFailed && (
+              <span className="italic">(edited)</span>
+            )}
+            {isFailed && (
+              <span className="text-red-400 text-xs">Failed to send</span>
+            )}
+            {isOwn && !isPending && !isFailed && !isRecalled && readInfo && (
+              <ReadReceiptIndicator
+                messageId={message.id}
+                readStatus={readInfo.readStatus}
+                readCount={readInfo.readCount}
+                totalMembers={Math.max(totalMembers - 1, 1)}
+                senderMap={senderMap}
+              />
+            )}
+          </div>
         </div>
+
+        {/* Reaction display below message */}
+        <ReactionDisplay
+          reactions={reactionGroups}
+          messageId={message.id}
+          onReactionToggle={onReactionToggle}
+          senderMap={senderMap}
+        />
       </div>
     </div>
   );
