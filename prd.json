@@ -1759,8 +1759,8 @@
         "Typecheck passes"
       ],
       "priority": 104,
-      "passes": false,
-      "notes": "This enables bots to send Lark-style interactive message cards."
+      "passes": true,
+      "notes": "Created apps/api/src/routes/bot-messaging.ts. POST /auth/app_access_token for client_credentials grant (app_id + app_secret → app_access_token, 2h TTL). POST /api/v1/messages/send with Bearer app_access_token auth, supports msg_type: text, rich_text, interactive (card JSON with header, elements: text/image/divider/action blocks, action buttons with action_id and value). POST /api/v1/messages/update to update previously sent card messages. POST /api/v1/card/action for card action callbacks — dispatches signed payload to app's webhook_url with HMAC-SHA256 signature. Bot messages use deterministic sender ID derived from app ID. Typecheck passes."
     },
     {
       "id": "US-105",
