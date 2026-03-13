@@ -1474,8 +1474,8 @@
         "Typecheck passes"
       ],
       "priority": 87,
-      "passes": false,
-      "notes": "Default to LibreTranslate (self-hosted, free). Add cloud providers as optional backends."
+      "passes": true,
+      "notes": "Created translation service (lib/translation.ts) with pluggable backends: LibreTranslate (default), DeepL, Google Translate. Backend selected via TRANSLATION_BACKEND env var. Created translation_preferences table (db/schema/translations.ts) with user_id (unique), auto_translate_enabled, target_language. Routes (routes/translations.ts): POST /translate with auto-detect source language, GET/PATCH /users/me/translation-preferences with upsert. Rate limiting via Redis: 100 translations per user per hour using INCR with 3600s TTL. Typecheck passes."
     },
     {
       "id": "US-088",
