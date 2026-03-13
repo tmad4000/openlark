@@ -62,6 +62,18 @@ const SlideEditor = dynamic(
   }
 );
 
+const MindNoteEditor = dynamic(
+  () => import("@/components/MindNoteEditor"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-full flex items-center justify-center">
+        <div className="text-gray-500">Loading mind map...</div>
+      </div>
+    ),
+  }
+);
+
 interface DocumentData {
   id: string;
   title: string;
@@ -635,6 +647,15 @@ export default function DocumentEditorPage() {
             />
           ) : document.type === "slide" ? (
             <SlideEditor
+              documentId={document.id}
+              yjsDocId={document.yjsDocId}
+              token={token}
+              userName={user.displayName || user.email}
+              onSyncStatusChange={handleSyncStatusChange}
+              onCollaboratorsChange={handleCollaboratorsChange}
+            />
+          ) : document.type === "mindnote" ? (
+            <MindNoteEditor
               documentId={document.id}
               yjsDocId={document.yjsDocId}
               token={token}
