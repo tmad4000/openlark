@@ -747,6 +747,57 @@ class ApiClient {
       }
     );
   }
+
+  // Wiki endpoints
+  async getWikiSpaces() {
+    return this.request<{ spaces: WikiSpace[] }>("/wiki/spaces");
+  }
+
+  async createWikiSpace(data: {
+    name: string;
+    description?: string;
+    icon?: string;
+    type?: "private" | "public";
+  }) {
+    return this.request<{ space: WikiSpace }>("/wiki/spaces", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getWikiSpace(spaceId: string) {
+    return this.request<{ space: WikiSpace }>(`/wiki/spaces/${spaceId}`);
+  }
+
+  async getWikiPages(spaceId: string) {
+    return this.request<{ pages: WikiPage[] }>(`/wiki/spaces/${spaceId}/pages`);
+  }
+
+  async createWikiPage(
+    spaceId: string,
+    data: { title: string; parentPageId?: string | null; position?: number }
+  ) {
+    return this.request<{ page: WikiPage }>(`/wiki/spaces/${spaceId}/pages`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateWikiPage(
+    pageId: string,
+    data: { parentPageId?: string | null; position?: number }
+  ) {
+    return this.request<{ page: WikiPage }>(`/wiki/pages/${pageId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteWikiPage(pageId: string) {
+    return this.request<void>(`/wiki/pages/${pageId}`, {
+      method: "DELETE",
+    });
+  }
 }
 
 // Types
@@ -1015,6 +1066,34 @@ export interface BuzzNotification {
   createdAt: string;
   deliveredAt: string | null;
   readAt: string | null;
+}
+
+// Wiki types
+export interface WikiSpace {
+  id: string;
+  orgId: string;
+  name: string;
+  description: string | null;
+  icon: string | null;
+  type: "private" | "public";
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WikiPage {
+  id: string;
+  spaceId: string;
+  documentId: string;
+  parentPageId: string | null;
+  position: number;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  document: {
+    id: string;
+    title: string;
+  };
 }
 
 export const api = new ApiClient();

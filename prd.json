@@ -1024,8 +1024,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 61,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Wiki page at /app/wiki with space cards grid, page tree sidebar with expand/collapse, breadcrumb navigation, create page as child or root, drag-and-drop reorder/reparent. Reuses DocumentEditor for page content. API client methods added for wiki endpoints."
     },
     {
       "id": "US-062",

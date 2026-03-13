@@ -48,3 +48,4 @@
 [2026-03-13 10:00] US-058 — Document version management — PASS
 [2026-03-13 11:00] US-059 — Documents list page — PASS
 [2026-03-13 12:00] US-060 — Wiki space schema and API — PASS
+[2026-03-13 13:00] US-061 — Wiki UI - space list and page tree navigation — PASS
