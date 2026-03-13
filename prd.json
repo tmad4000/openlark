@@ -454,8 +454,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 28,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Backend: POST /chats/:chatId/read batch-inserts read receipts between old and new read position, updates lastReadMessageId, broadcasts message:read via WebSocket. GET /chats/:chatId/read-status returns batch read counts. Frontend: MessageBubble shows gray circle (unread), partial green (some read), green check (all read) on own messages. Click icon opens popover showing who read and when. Auto-marks chat as read on open and incoming messages."
     },
     {
       "id": "US-029",

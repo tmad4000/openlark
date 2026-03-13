@@ -142,3 +142,10 @@ export const updateAnnouncementSchema = z.object({
 });
 
 export type UpdateAnnouncementInput = z.infer<typeof updateAnnouncementSchema>;
+
+// Mark chat as read schema (FR-2.8: batch read receipts)
+export const markChatReadSchema = z.object({
+  lastMessageId: z.string().uuid(),
+});
+
+export type MarkChatReadInput = z.infer<typeof markChatReadSchema>;

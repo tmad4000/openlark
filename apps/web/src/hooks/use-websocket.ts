@@ -34,6 +34,12 @@ export interface TypingEvent {
   isTyping: boolean;
 }
 
+export interface ReadReceiptEvent {
+  chatId: string;
+  userId: string;
+  lastMessageId: string;
+}
+
 export interface PresenceEvent {
   userId: string;
   status: "online" | "offline";
@@ -43,6 +49,7 @@ interface UseWebSocketOptions {
   onMessage?: (event: NewMessageEvent) => void;
   onMessageEdited?: (event: MessageEditedEvent) => void;
   onMessageRecalled?: (event: MessageRecalledEvent) => void;
+  onReadReceipt?: (event: ReadReceiptEvent) => void;
   onTyping?: (event: TypingEvent) => void;
   onPresence?: (event: PresenceEvent) => void;
   onConnected?: () => void;
@@ -114,6 +121,16 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
           messageId: data.messageId as string,
         };
         optionsRef.current.onMessageRecalled?.(event);
+        break;
+      }
+
+      case "message:read": {
+        const event: ReadReceiptEvent = {
+          chatId: data.chatId as string,
+          userId: data.userId as string,
+          lastMessageId: data.lastMessageId as string,
+        };
+        optionsRef.current.onReadReceipt?.(event);
         break;
       }
 

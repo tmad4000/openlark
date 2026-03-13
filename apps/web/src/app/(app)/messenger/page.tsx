@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import { useWebSocket, type NewMessageEvent, type MessageEditedEvent, type MessageRecalledEvent, type TypingEvent, type PresenceEvent } from "@/hooks/use-websocket";
+import { useWebSocket, type NewMessageEvent, type MessageEditedEvent, type MessageRecalledEvent, type ReadReceiptEvent, type TypingEvent, type PresenceEvent } from "@/hooks/use-websocket";
 import { ChatList } from "@/components/messenger/chat-list";
 import { MessageList } from "@/components/messenger/message-list";
 import { MessageInput } from "@/components/messenger/message-input";
@@ -114,6 +114,11 @@ export default function MessengerPage() {
         MessageList.removeMessage(event.messageId);
       }
     }, [selectedChatId]),
+    onReadReceipt: useCallback((event: ReadReceiptEvent) => {
+      if (event.chatId === selectedChatId && event.userId !== user?.id) {
+        MessageList.handleReadReceipt(event.userId, event.lastMessageId);
+      }
+    }, [selectedChatId, user?.id]),
     onTyping: handleTyping,
     onPresence: handlePresence,
   });

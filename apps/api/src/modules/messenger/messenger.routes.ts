@@ -15,6 +15,7 @@ import {
   updateChatTabSchema,
   createAnnouncementSchema,
   updateAnnouncementSchema,
+  markChatReadSchema,
 } from "./messenger.schemas.js";
 import { authenticate } from "../auth/middleware.js";
 import { formatZodError } from "../../utils/validation.js";
@@ -526,6 +527,81 @@ export async function messengerRoutes(app: FastifyInstance) {
   );
 
   // ============ READ RECEIPT ENDPOINTS ============
+
+  // POST /messenger/chats/:chatId/read - Mark chat as read up to last_message_id (batch)
+  app.post<{ Params: { chatId: string } }>(
+    "/chats/:chatId/read",
+    async (req, reply) => {
+      try {
+        const input = markChatReadSchema.parse(req.body);
+
+        const isMember = await messengerService.isChatMember(
+          req.params.chatId,
+          req.user!.id
+        );
+        if (!isMember) {
+          return reply.status(403).send({
+            code: "NOT_A_MEMBER",
+            message: "You are not a member of this chat",
+          });
+        }
+
+        const result = await messengerService.markChatAsRead(
+          req.params.chatId,
+          input.lastMessageId,
+          req.user!.id
+        );
+
+        // Broadcast read receipt event to chat members
+        await publishMessageEvent(req.params.chatId, {
+          type: "message:read",
+          chatId: req.params.chatId,
+          userId: req.user!.id,
+          lastMessageId: input.lastMessageId,
+        });
+
+        return reply.send({ data: { success: true, readCount: result.readCount } });
+      } catch (error) {
+        if (error instanceof ZodError) {
+          return reply.status(400).send(formatZodError(error));
+        }
+        throw error;
+      }
+    }
+  );
+
+  // GET /messenger/chats/:chatId/read-status - Get read status for messages in a chat
+  app.get<{ Params: { chatId: string }; Querystring: { messageIds?: string } }>(
+    "/chats/:chatId/read-status",
+    async (req, reply) => {
+      const isMember = await messengerService.isChatMember(
+        req.params.chatId,
+        req.user!.id
+      );
+      if (!isMember) {
+        return reply.status(403).send({
+          code: "NOT_A_MEMBER",
+          message: "You are not a member of this chat",
+        });
+      }
+
+      const messageIdsParam = (req.query as { messageIds?: string }).messageIds;
+      if (!messageIdsParam) {
+        return reply.status(400).send({
+          code: "MISSING_PARAM",
+          message: "messageIds query parameter is required",
+        });
+      }
+
+      const messageIds = messageIdsParam.split(",").slice(0, 100); // Limit to 100
+      const statuses = await messengerService.getMessagesReadStatus(
+        messageIds,
+        req.params.chatId
+      );
+
+      return reply.send({ data: { statuses } });
+    }
+  );
 
   // POST /messenger/messages/:messageId/read - Mark as read
   app.post<{ Params: { messageId: string } }>(

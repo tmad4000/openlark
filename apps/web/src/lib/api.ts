@@ -161,6 +161,32 @@ class ApiClient {
     return this.request<{ members: ChatMember[] }>(`/messenger/chats/${chatId}/members`);
   }
 
+  async markChatRead(chatId: string, lastMessageId: string) {
+    return this.request<{ success: boolean; readCount: number }>(
+      `/messenger/chats/${chatId}/read`,
+      {
+        method: "POST",
+        body: JSON.stringify({ lastMessageId }),
+      }
+    );
+  }
+
+  async getReadStatus(chatId: string, messageIds: string[]) {
+    const params = new URLSearchParams({ messageIds: messageIds.join(",") });
+    return this.request<{
+      statuses: Array<{
+        messageId: string;
+        readBy: Array<{ userId: string; readAt: string }>;
+      }>;
+    }>(`/messenger/chats/${chatId}/read-status?${params.toString()}`);
+  }
+
+  async getReadReceipts(messageId: string) {
+    return this.request<{
+      receipts: Array<{ userId: string; readAt: string }>;
+    }>(`/messenger/messages/${messageId}/read-receipts`);
+  }
+
   // Calendar endpoints
   async getCalendars() {
     return this.request<{ calendars: Calendar[] }>("/calendar/calendars");

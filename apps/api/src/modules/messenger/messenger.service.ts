@@ -744,6 +744,117 @@ export class MessengerService {
       .where(eq(messageReadReceipts.messageId, messageId));
   }
 
+  /**
+   * Mark chat as read up to a given message (batch insert read receipts)
+   * FR-2.8: Batch read receipts for all messages between old and new position
+   */
+  async markChatAsRead(
+    chatId: string,
+    lastMessageId: string,
+    userId: string
+  ): Promise<{ readCount: number }> {
+    // Verify user is a member
+    const member = await this.getChatMember(chatId, userId);
+    if (!member) {
+      return { readCount: 0 };
+    }
+
+    // Verify the target message exists and belongs to this chat
+    const targetMessage = await this.getMessageById(lastMessageId);
+    if (!targetMessage || targetMessage.chatId !== chatId) {
+      return { readCount: 0 };
+    }
+
+    // Get all messages in this chat up to and including lastMessageId
+    // that the user hasn't read yet, excluding own messages
+    const oldReadPosition = member.lastReadMessageId;
+
+    // Build conditions: messages in this chat, up to target, not sent by user
+    const conditions = [
+      eq(messages.chatId, chatId),
+      sql`${messages.senderId} != ${userId}`,
+      sql`${messages.createdAt} <= ${targetMessage.createdAt}`,
+    ];
+
+    // If user had a previous read position, only insert receipts for messages after that
+    if (oldReadPosition) {
+      const oldMsg = await this.getMessageById(oldReadPosition);
+      if (oldMsg) {
+        conditions.push(gt(messages.createdAt, oldMsg.createdAt));
+      }
+    }
+
+    // Get unread message IDs
+    const unreadMessages = await db
+      .select({ id: messages.id })
+      .from(messages)
+      .where(and(...conditions));
+
+    if (unreadMessages.length > 0) {
+      // Batch insert read receipts (ignore conflicts for already-read messages)
+      await db
+        .insert(messageReadReceipts)
+        .values(unreadMessages.map((m) => ({ messageId: m.id, userId })))
+        .onConflictDoNothing();
+    }
+
+    // Update lastReadMessageId on chat member
+    await db
+      .update(chatMembers)
+      .set({ lastReadMessageId: lastMessageId })
+      .where(
+        and(
+          eq(chatMembers.chatId, chatId),
+          eq(chatMembers.userId, userId),
+          isNull(chatMembers.leftAt)
+        )
+      );
+
+    return { readCount: unreadMessages.length };
+  }
+
+  /**
+   * Get read status for multiple messages in a chat (batch query)
+   * Returns read count and total member count for each message
+   */
+  async getMessagesReadStatus(
+    messageIds: string[],
+    chatId: string
+  ): Promise<
+    Array<{
+      messageId: string;
+      readBy: Array<{ userId: string; readAt: Date }>;
+    }>
+  > {
+    if (messageIds.length === 0) return [];
+
+    const receipts = await db
+      .select({
+        messageId: messageReadReceipts.messageId,
+        userId: messageReadReceipts.userId,
+        readAt: messageReadReceipts.readAt,
+      })
+      .from(messageReadReceipts)
+      .where(inArray(messageReadReceipts.messageId, messageIds));
+
+    // Group by messageId
+    const receiptMap = new Map<
+      string,
+      Array<{ userId: string; readAt: Date }>
+    >();
+    for (const r of receipts) {
+      if (!receiptMap.has(r.messageId)) {
+        receiptMap.set(r.messageId, []);
+      }
+      receiptMap.get(r.messageId)!.push({ userId: r.userId, readAt: r.readAt });
+    }
+
+    return messageIds.map((id) => ({
+      messageId: id,
+      readBy: receiptMap.get(id) || [],
+    }));
+  }
+
   // ============ PIN OPERATIONS ============
 
   /**

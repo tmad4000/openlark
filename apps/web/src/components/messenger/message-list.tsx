@@ -5,6 +5,10 @@ import { cn } from "@/lib/utils";
 import { api, type Message } from "@/lib/api";
 import { useAuth } from "@/hooks/use-auth";
 import { Loader2, Clock, AlertCircle } from "lucide-react";
+import {
+  ReadReceiptIndicator,
+  type ReadStatus,
+} from "./read-receipt-indicator";
 
 // Extended message type for optimistic updates
 export interface OptimisticMessage extends Message {
@@ -16,13 +20,20 @@ export interface OptimisticMessage extends Message {
 // Map of userId to display name for sender lookup
 type SenderMap = Map<string, { displayName: string | null; avatarUrl: string | null }>;
 
+// Read status per message: messageId -> { readBy userId[], count }
+interface ReadStatusInfo {
+  readCount: number;
+  readStatus: ReadStatus;
+}
+
 interface MessageListProps {
   chatId: string;
   onMessagesLoaded?: (messages: Message[]) => void;
   onlineUsers?: Set<string>;
+  memberCount?: number;
 }
 
-export function MessageList({ chatId, onMessagesLoaded, onlineUsers }: MessageListProps) {
+export function MessageList({ chatId, onMessagesLoaded, onlineUsers, memberCount }: MessageListProps) {
   const { user } = useAuth();
   const [messages, setMessages] = useState<OptimisticMessage[]>([]);
   const [senderMap, setSenderMap] = useState<SenderMap>(new Map());
@@ -30,8 +41,11 @@ export function MessageList({ chatId, onMessagesLoaded, onlineUsers }: MessageLi
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [readStatuses, setReadStatuses] = useState<Map<string, ReadStatusInfo>>(new Map());
+  const [totalMembers, setTotalMembers] = useState(0);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const loadMoreTriggerRef = useRef<HTMLDivElement>(null);
+  const markReadTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Initial load - fetch both messages and members
   useEffect(() => {
@@ -41,6 +55,7 @@ export function MessageList({ chatId, onMessagesLoaded, onlineUsers }: MessageLi
         setError(null);
         setMessages([]);
         setSenderMap(new Map());
+        setReadStatuses(new Map());
 
         // Fetch messages and members in parallel
         const [messagesResponse, membersResponse] = await Promise.all([
@@ -56,10 +71,29 @@ export function MessageList({ chatId, onMessagesLoaded, onlineUsers }: MessageLi
           }
         }
         setSenderMap(newSenderMap);
+        setTotalMembers(membersResponse.members.length);
 
         setMessages(messagesResponse.messages);
         setHasMore(messagesResponse.messages.length === 50);
         onMessagesLoaded?.(messagesResponse.messages);
+
+        // Fetch read status for own messages
+        const ownMsgIds = messagesResponse.messages
+          .filter((m) => m.senderId === user?.id)
+          .map((m) => m.id);
+        if (ownMsgIds.length > 0) {
+          fetchReadStatuses(chatId, ownMsgIds, membersResponse.members.length);
+        }
+
+        // Auto-mark chat as read
+        if (messagesResponse.messages.length > 0) {
+          const latestMsg = messagesResponse.messages[messagesResponse.messages.length - 1];
+          if (latestMsg && latestMsg.senderId !== user?.id) {
+            markReadTimerRef.current = setTimeout(() => {
+              api.markChatRead(chatId, latestMsg.id).catch(() => {});
+            }, 500);
+          }
+        }
       } catch (err) {
         setError(
           err instanceof Error ? err.message : "Failed to load messages"
@@ -70,7 +104,66 @@ export function MessageList({ chatId, onMessagesLoaded, onlineUsers }: MessageLi
     }
 
     loadMessages();
-  }, [chatId, onMessagesLoaded]);
+
+    return () => {
+      if (markReadTimerRef.current) clearTimeout(markReadTimerRef.current);
+    };
+  }, [chatId, onMessagesLoaded, user?.id]);
+
+  // Fetch read statuses for a batch of message IDs
+  const fetchReadStatuses = useCallback(
+    async (cId: string, messageIds: string[], memberCt: number) => {
+      try {
+        const data = await api.getReadStatus(cId, messageIds);
+        setReadStatuses((prev) => {
+          const next = new Map(prev);
+          // Others = total members minus sender (1)
+          const othersCount = Math.max(memberCt - 1, 1);
+          for (const s of data.statuses) {
+            const readCount = s.readBy.length;
+            let readStatus: ReadStatus = "unread";
+            if (readCount >= othersCount) {
+              readStatus = "all_read";
+            } else if (readCount > 0) {
+              readStatus = "partial";
+            }
+            next.set(s.messageId, { readCount, readStatus });
+          }
+          return next;
+        });
+      } catch {
+        // Silently ignore read status errors
+      }
+    },
+    []
+  );
+
+  // Handle real-time read receipt updates
+  const handleReadReceipt = useCallback(
+    (userId: string, _lastMessageId: string) => {
+      // Increment read count for all own messages (simplified - the user read up to lastMessageId)
+      setReadStatuses((prev) => {
+        const next = new Map(prev);
+        const othersCount = Math.max(totalMembers - 1, 1);
+        for (const [msgId, info] of next) {
+          // Optimistically increment if this user might have read it
+          const newCount = info.readCount + 1;
+          let readStatus: ReadStatus = "unread";
+          if (newCount >= othersCount) {
+            readStatus = "all_read";
+          } else if (newCount > 0) {
+            readStatus = "partial";
+          }
+          next.set(msgId, { readCount: newCount, readStatus });
+        }
+        return next;
+      });
+    },
+    [totalMembers]
+  );
+
+  // Expose handleReadReceipt for parent
+  MessageList.handleReadReceipt = handleReadReceipt;
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
@@ -96,12 +189,20 @@ export function MessageList({ chatId, onMessagesLoaded, onlineUsers }: MessageLi
 
       setMessages((prev) => [...response.messages, ...prev]);
       setHasMore(response.messages.length === 50);
+
+      // Fetch read status for new own messages
+      const ownMsgIds = response.messages
+        .filter((m) => m.senderId === user?.id)
+        .map((m) => m.id);
+      if (ownMsgIds.length > 0) {
+        fetchReadStatuses(chatId, ownMsgIds, totalMembers);
+      }
     } catch (err) {
       console.error("Failed to load more messages:", err);
     } finally {
       setIsLoadingMore(false);
     }
-  }, [chatId, hasMore, isLoadingMore, messages]);
+  }, [chatId, hasMore, isLoadingMore, messages, user?.id, fetchReadStatuses, totalMembers]);
 
   // Intersection observer for infinite scroll
   useEffect(() => {
@@ -142,7 +243,12 @@ export function MessageList({ chatId, onMessagesLoaded, onlineUsers }: MessageLi
 
       return [...prev, message];
     });
-  }, []);
+
+    // Auto-mark as read for incoming messages from others
+    if (message.senderId !== user?.id && !message._pending) {
+      api.markChatRead(message.chatId, message.id).catch(() => {});
+    }
+  }, [user?.id]);
 
   // Update a message (for edits)
   const updateMessage = useCallback((updatedMessage: Message) => {
@@ -235,6 +341,7 @@ export function MessageList({ chatId, onMessagesLoaded, onlineUsers }: MessageLi
               index === 0 || messages[index - 1]?.senderId !== message.senderId
             );
             const senderInfo = senderMap.get(message.senderId);
+            const readInfo = isOwn ? readStatuses.get(message.id) : undefined;
 
             return (
               <MessageBubble
@@ -244,6 +351,9 @@ export function MessageList({ chatId, onMessagesLoaded, onlineUsers }: MessageLi
                 showSender={showSender}
                 senderName={senderInfo?.displayName}
                 isOnline={onlineUsers?.has(message.senderId) ?? false}
+                readInfo={readInfo}
+                totalMembers={totalMembers}
+                senderMap={senderMap}
               />
             );
           })}
@@ -260,6 +370,7 @@ MessageList.removeMessage = (_messageId: string) => {};
 MessageList.confirmMessage = (_tempId: string, _realMessage: Message) => {};
 MessageList.failMessage = (_tempId: string) => {};
 MessageList.removeOptimisticMessage = (_tempId: string) => {};
+MessageList.handleReadReceipt = (_userId: string, _lastMessageId: string) => {};
 
 interface MessageBubbleProps {
   message: OptimisticMessage;
@@ -267,9 +378,21 @@ interface MessageBubbleProps {
   showSender: boolean;
   senderName?: string | null;
   isOnline?: boolean;
+  readInfo?: ReadStatusInfo;
+  totalMembers: number;
+  senderMap?: SenderMap;
 }
 
-function MessageBubble({ message, isOwn, showSender, senderName, isOnline }: MessageBubbleProps) {
+function MessageBubble({
+  message,
+  isOwn,
+  showSender,
+  senderName,
+  isOnline,
+  readInfo,
+  totalMembers,
+  senderMap,
+}: MessageBubbleProps) {
   const isRecalled = !!message.recalledAt;
   const isEdited = !!message.editedAt;
   const isPending = !!message._pending;
@@ -338,6 +461,15 @@ function MessageBubble({ message, isOwn, showSender, senderName, isOnline }: Mes
           )}
           {isFailed && (
             <span className="text-red-400 text-xs">Failed to send</span>
+          )}
+          {isOwn && !isPending && !isFailed && !isRecalled && readInfo && (
+            <ReadReceiptIndicator
+              messageId={message.id}
+              readStatus={readInfo.readStatus}
+              readCount={readInfo.readCount}
+              totalMembers={Math.max(totalMembers - 1, 1)}
+              senderMap={senderMap}
+            />
           )}
         </div>
       </div>
