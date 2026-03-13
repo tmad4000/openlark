@@ -47,3 +47,54 @@ export const notificationsRelations = relations(notifications, ({ one }) => ({
     references: [users.id],
   }),
 }));
+
+// Buzz notification enums
+export const buzzTypeEnum = pgEnum("buzz_type", ["in_app", "sms", "phone"]);
+export const buzzStatusEnum = pgEnum("buzz_status", [
+  "pending",
+  "delivered",
+  "read",
+]);
+
+// Buzz notifications table — urgent notification on a specific message
+export const buzzNotifications = pgTable(
+  "buzz_notifications",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    messageId: uuid("message_id").notNull(),
+    senderId: uuid("sender_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    recipientId: uuid("recipient_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    type: buzzTypeEnum("type").notNull(),
+    status: buzzStatusEnum("status").notNull().default("pending"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+    readAt: timestamp("read_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("buzz_notifications_message_id_idx").on(table.messageId),
+    index("buzz_notifications_sender_id_idx").on(table.senderId),
+    index("buzz_notifications_recipient_id_idx").on(table.recipientId),
+  ]
+);
+
+export const buzzNotificationsRelations = relations(
+  buzzNotifications,
+  ({ one }) => ({
+    sender: one(users, {
+      fields: [buzzNotifications.senderId],
+      references: [users.id],
+      relationName: "buzzSender",
+    }),
+    recipient: one(users, {
+      fields: [buzzNotifications.recipientId],
+      references: [users.id],
+      relationName: "buzzRecipient",
+    }),
+  })
+);

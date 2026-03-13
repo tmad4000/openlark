@@ -679,8 +679,8 @@
         "Typecheck passes"
       ],
       "priority": 41,
-      "passes": false,
-      "notes": "SMS and phone call delivery require Twilio integration - implement in-app tier first, add Twilio later."
+      "passes": true,
+      "notes": "Implemented buzz_notifications table with in_app/sms/phone types. POST /messages/:id/buzz endpoint with sender-only auth, rate limits (3/msg, 10/hr), in-app notification creation, and WebSocket buzz:new event. Buzz marked read via markChatAsRead flow. SMS/phone delivery deferred to Twilio integration."
     },
     {
       "id": "US-042",

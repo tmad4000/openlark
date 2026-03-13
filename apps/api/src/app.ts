@@ -18,7 +18,7 @@ import {
 } from "./modules/messenger/index.js";
 import { calendarRoutes } from "./modules/calendar/index.js";
 import { docsRoutes } from "./modules/docs/index.js";
-import { notificationRoutes } from "./modules/notifications/index.js";
+import { notificationRoutes, buzzRoutes } from "./modules/notifications/index.js";
 
 export async function buildApp() {
   const app = Fastify({
@@ -81,6 +81,9 @@ export async function buildApp() {
 
       // Notifications module
       api.register(notificationRoutes, { prefix: "/notifications" });
+
+      // Buzz (urgent notifications) — POST /messages/:messageId/buzz
+      api.register(buzzRoutes, { prefix: "" });
     },
     { prefix: "/api/v1" }
   );

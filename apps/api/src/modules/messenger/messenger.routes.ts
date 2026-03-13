@@ -22,6 +22,7 @@ import { authenticate } from "../auth/middleware.js";
 import { formatZodError } from "../../utils/validation.js";
 import { publishMessageEvent, notifyUserJoinedChat } from "./websocket.js";
 import { notificationsService } from "../notifications/notifications.service.js";
+import { buzzService } from "../notifications/buzz.service.js";
 
 export async function messengerRoutes(app: FastifyInstance) {
   // All messenger routes require authentication
@@ -710,6 +711,12 @@ export async function messengerRoutes(app: FastifyInstance) {
           userId: req.user!.id,
           lastMessageId: input.lastMessageId,
         });
+
+        // Mark any buzz notifications as read when message is viewed
+        await buzzService.markBuzzReadByMessage(
+          input.lastMessageId,
+          req.user!.id
+        );
 
         return reply.send({ data: { success: true, readCount: result.readCount } });
       } catch (error) {
