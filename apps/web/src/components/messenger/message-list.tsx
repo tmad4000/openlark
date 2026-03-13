@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import { api, type Message, type MessageReaction } from "@/lib/api";
 import { useAuth } from "@/hooks/use-auth";
-import { Loader2, Clock, AlertCircle } from "lucide-react";
+import { Loader2, Clock, AlertCircle, MessageSquareText } from "lucide-react";
 import {
   ReadReceiptIndicator,
   type ReadStatus,
@@ -37,9 +37,10 @@ interface MessageListProps {
   onMessagesLoaded?: (messages: Message[]) => void;
   onlineUsers?: Set<string>;
   memberCount?: number;
+  onOpenThread?: (messageId: string) => void;
 }
 
-export function MessageList({ chatId, onMessagesLoaded, onlineUsers, memberCount }: MessageListProps) {
+export function MessageList({ chatId, onMessagesLoaded, onlineUsers, memberCount, onOpenThread }: MessageListProps) {
   const { user } = useAuth();
   const [messages, setMessages] = useState<OptimisticMessage[]>([]);
   const [senderMap, setSenderMap] = useState<SenderMap>(new Map());
@@ -469,6 +470,7 @@ export function MessageList({ chatId, onMessagesLoaded, onlineUsers, memberCount
                 senderMap={senderMap}
                 reactionGroups={reactionGroups}
                 onReactionToggle={handleReactionToggle}
+                onOpenThread={onOpenThread}
               />
             );
           })}
@@ -500,6 +502,7 @@ interface MessageBubbleProps {
   senderMap?: SenderMap;
   reactionGroups: ReactionGroup[];
   onReactionToggle: (messageId: string, emoji: string, add: boolean) => void;
+  onOpenThread?: (messageId: string) => void;
 }
 
 function MessageBubble({
@@ -513,6 +516,7 @@ function MessageBubble({
   senderMap,
   reactionGroups,
   onReactionToggle,
+  onOpenThread,
 }: MessageBubbleProps) {
   const [showPicker, setShowPicker] = useState(false);
   const isRecalled = !!message.recalledAt;
@@ -553,11 +557,11 @@ function MessageBubble({
       onMouseLeave={() => setShowPicker(false)}
     >
       <div className="relative max-w-[70%]">
-        {/* Quick reaction picker on hover */}
+        {/* Quick reaction picker + reply button on hover */}
         {!isRecalled && !isPending && !isFailed && (
           <div
             className={cn(
-              "absolute -top-8 z-10",
+              "absolute -top-8 z-10 flex items-center gap-1",
               isOwn ? "right-0" : "left-0",
               showPicker ? "visible" : "invisible group-hover:visible"
             )}
@@ -568,6 +572,13 @@ function MessageBubble({
               currentUserId=""
               onReactionToggle={handleReactionSelect}
             />
+            <button
+              onClick={() => onOpenThread?.(message.id)}
+              className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+              title="Reply in thread"
+            >
+              <MessageSquareText className="h-4 w-4" />
+            </button>
           </div>
         )}
 
@@ -623,6 +634,19 @@ function MessageBubble({
             )}
           </div>
         </div>
+
+        {/* Thread replies indicator */}
+        {(message.replyCount ?? 0) > 0 && (
+          <button
+            onClick={() => onOpenThread?.(message.id)}
+            className="flex items-center gap-1 mt-1 text-xs text-blue-600 dark:text-blue-400 hover:underline"
+          >
+            <MessageSquareText className="h-3 w-3" />
+            <span>
+              {message.replyCount} {message.replyCount === 1 ? "reply" : "replies"}
+            </span>
+          </button>
+        )}
 
         {/* Reaction display below message */}
         <ReactionDisplay

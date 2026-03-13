@@ -347,6 +347,35 @@ export async function messengerRoutes(app: FastifyInstance) {
     }
   );
 
+  // GET /messenger/messages/:messageId/thread - Get thread replies
+  app.get<{ Params: { messageId: string } }>(
+    "/messages/:messageId/thread",
+    async (req, reply) => {
+      const result = await messengerService.getThreadReplies(
+        req.params.messageId
+      );
+      if (!result) {
+        return reply.status(404).send({
+          code: "MESSAGE_NOT_FOUND",
+          message: "Parent message not found",
+        });
+      }
+
+      const isMember = await messengerService.isChatMember(
+        result.parentMessage.chatId,
+        req.user!.id
+      );
+      if (!isMember) {
+        return reply.status(403).send({
+          code: "NOT_A_MEMBER",
+          message: "You are not a member of this chat",
+        });
+      }
+
+      return reply.send({ data: result });
+    }
+  );
+
   // PATCH /messenger/messages/:messageId - Edit a message
   app.patch<{ Params: { messageId: string } }>(
     "/messages/:messageId",

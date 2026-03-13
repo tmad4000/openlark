@@ -8,6 +8,7 @@ import { MessageList } from "@/components/messenger/message-list";
 import { MessageInput } from "@/components/messenger/message-input";
 import { TypingIndicator } from "@/components/messenger/typing-indicator";
 import { CreateChatDialog } from "@/components/messenger/create-chat-dialog";
+import { ThreadPanel } from "@/components/messenger/thread-panel";
 import { AppShell } from "@/components/layout/app-shell";
 import { cn } from "@/lib/utils";
 import { MessageSquare, Wifi, WifiOff, Loader2 } from "lucide-react";
@@ -17,6 +18,10 @@ export default function MessengerPage() {
   const { user, organization } = useAuth();
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+
+  // Sender map ref for thread panel
+  const senderMapRef = useRef<Map<string, { displayName: string | null; avatarUrl: string | null }>>(new Map());
 
   // Typing indicator state: chatId -> Map<userId, displayName>
   const [typingUsers, setTypingUsers] = useState<Map<string, Map<string, string>>>(new Map());
@@ -99,9 +104,15 @@ export default function MessengerPage() {
   // WebSocket for real-time updates
   const { status: wsStatus, isConnected, sendTyping } = useWebSocket({
     onMessage: useCallback((event: NewMessageEvent) => {
-      // Add message to list if viewing this chat
-      if (event.chatId === selectedChatId) {
-        MessageList.addMessage(event.message);
+      const msg = event.message;
+      // Route thread replies to the thread panel
+      if (msg.threadId && msg.threadId === ThreadPanel.currentThreadId) {
+        ThreadPanel.addReply(msg);
+        return;
+      }
+      // Add message to main list if viewing this chat (skip thread replies)
+      if (event.chatId === selectedChatId && !msg.threadId) {
+        MessageList.addMessage(msg);
       }
     }, [selectedChatId]),
     onMessageEdited: useCallback((event: MessageEditedEvent) => {
@@ -142,6 +153,7 @@ export default function MessengerPage() {
 
   const handleSelectChat = useCallback((chatId: string) => {
     setSelectedChatId(chatId);
+    setActiveThreadId(null);
   }, []);
 
   const handleCreateChat = useCallback(() => {
@@ -171,49 +183,66 @@ export default function MessengerPage() {
     <>
     <AppShell sidebar={sidebar}>
       {selectedChatId ? (
-        <div className="flex flex-col h-full">
-          {/* Chat header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-800">
-            <div className="flex items-center gap-3">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                Chat
-              </h2>
-            </div>
-            <div className="flex items-center gap-2">
-              {/* WebSocket status indicator */}
-              <div
-                className={cn(
-                  "flex items-center gap-1 text-xs",
-                  isConnected
-                    ? "text-green-600 dark:text-green-400"
-                    : wsStatus === "reconnecting"
-                      ? "text-yellow-500 dark:text-yellow-400"
-                      : "text-gray-400 dark:text-gray-500"
-                )}
-                title={isConnected ? "Connected" : `Status: ${wsStatus}`}
-              >
-                {isConnected ? (
-                  <Wifi className="h-3 w-3" />
-                ) : wsStatus === "reconnecting" ? (
-                  <>
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                    <span>Reconnecting</span>
-                  </>
-                ) : (
-                  <WifiOff className="h-3 w-3" />
-                )}
+        <div className="flex h-full">
+          <div className="flex flex-col flex-1 min-w-0">
+            {/* Chat header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-800">
+              <div className="flex items-center gap-3">
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                  Chat
+                </h2>
+              </div>
+              <div className="flex items-center gap-2">
+                {/* WebSocket status indicator */}
+                <div
+                  className={cn(
+                    "flex items-center gap-1 text-xs",
+                    isConnected
+                      ? "text-green-600 dark:text-green-400"
+                      : wsStatus === "reconnecting"
+                        ? "text-yellow-500 dark:text-yellow-400"
+                        : "text-gray-400 dark:text-gray-500"
+                  )}
+                  title={isConnected ? "Connected" : `Status: ${wsStatus}`}
+                >
+                  {isConnected ? (
+                    <Wifi className="h-3 w-3" />
+                  ) : wsStatus === "reconnecting" ? (
+                    <>
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      <span>Reconnecting</span>
+                    </>
+                  ) : (
+                    <WifiOff className="h-3 w-3" />
+                  )}
+                </div>
               </div>
             </div>
+
+            {/* Messages */}
+            <MessageList
+              chatId={selectedChatId}
+              onlineUsers={onlineUsers}
+              onOpenThread={setActiveThreadId}
+            />
+
+            {/* Typing indicator */}
+            <TypingIndicator typingUsers={currentChatTypingUsers} />
+
+            {/* Input */}
+            <MessageInput chatId={selectedChatId} onTyping={handleInputTyping} />
           </div>
 
-          {/* Messages */}
-          <MessageList chatId={selectedChatId} onlineUsers={onlineUsers} />
-
-          {/* Typing indicator */}
-          <TypingIndicator typingUsers={currentChatTypingUsers} />
-
-          {/* Input */}
-          <MessageInput chatId={selectedChatId} onTyping={handleInputTyping} />
+          {/* Thread panel */}
+          {activeThreadId && (
+            <ThreadPanel
+              key={activeThreadId}
+              parentMessageId={activeThreadId}
+              chatId={selectedChatId}
+              senderMap={senderMapRef.current}
+              onClose={() => setActiveThreadId(null)}
+            />
+          )}
         </div>
       ) : (
         <div className="flex-1 flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-900">

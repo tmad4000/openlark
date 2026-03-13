@@ -142,6 +142,8 @@ export function MessageInput({
       senderId: user?.id || "",
       type: "text",
       contentJson: { text },
+      threadId: null,
+      replyToId: null,
       createdAt: new Date().toISOString(),
       editedAt: null,
       recalledAt: null,

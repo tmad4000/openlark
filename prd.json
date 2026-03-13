@@ -489,8 +489,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 30,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Backend: GET /messenger/messages/:messageId/thread endpoint returns parent + replies. getMessages excludes thread replies (threadId != null) from main timeline and includes replyCount. Frontend: Reply button on message hover, N replies indicator on parent messages, ThreadPanel component slides open on right side showing parent + chronological replies with inline reply input. Real-time thread replies routed via WebSocket."
     },
     {
       "id": "US-031",

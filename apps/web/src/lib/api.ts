@@ -150,11 +150,17 @@ class ApiClient {
     );
   }
 
-  async sendMessage(chatId: string, data: { content: string; type?: string }) {
+  async sendMessage(chatId: string, data: { content: string; type?: string; threadId?: string }) {
     return this.request<{ message: Message }>(`/messenger/chats/${chatId}/messages`, {
       method: "POST",
       body: JSON.stringify(data),
     });
+  }
+
+  async getThreadReplies(messageId: string) {
+    return this.request<{ parentMessage: Message; replies: Message[] }>(
+      `/messenger/messages/${messageId}/thread`
+    );
   }
 
   async getChatMembers(chatId: string) {
@@ -485,6 +491,9 @@ export interface Message {
   senderId: string;
   type: string;
   contentJson: { text?: string };
+  threadId: string | null;
+  replyToId: string | null;
+  replyCount?: number;
   createdAt: string;
   editedAt: string | null;
   recalledAt: string | null;

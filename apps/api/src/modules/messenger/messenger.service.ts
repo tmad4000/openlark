@@ -478,12 +478,17 @@ export class MessengerService {
 
   /**
    * Get messages in a chat with pagination
+   * Excludes thread replies (messages with threadId) from the main timeline.
+   * Includes replyCount for parent messages that have thread replies.
    */
   async getMessages(
     chatId: string,
     pagination: PaginationInput
-  ): Promise<Message[]> {
-    const conditions = [eq(messages.chatId, chatId)];
+  ): Promise<(Message & { replyCount?: number })[]> {
+    const conditions = [
+      eq(messages.chatId, chatId),
+      isNull(messages.threadId), // Exclude thread replies from main timeline
+    ];
 
     if (pagination.before) {
       const beforeMsg = await this.getMessageById(pagination.before);
@@ -499,12 +504,54 @@ export class MessengerService {
       }
     }
 
-    return db
+    const mainMessages = await db
       .select()
       .from(messages)
       .where(and(...conditions))
       .orderBy(desc(messages.createdAt))
       .limit(pagination.limit);
+
+    if (mainMessages.length === 0) return mainMessages;
+
+    // Get reply counts for these messages
+    const msgIds = mainMessages.map((m) => m.id);
+    const replyCounts = await db
+      .select({
+        threadId: messages.threadId,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(messages)
+      .where(inArray(messages.threadId, msgIds))
+      .groupBy(messages.threadId);
+
+    const replyCountMap = new Map<string, number>();
+    for (const rc of replyCounts) {
+      if (rc.threadId) replyCountMap.set(rc.threadId, rc.count);
+    }
+
+    return mainMessages.map((m) => ({
+      ...m,
+      replyCount: replyCountMap.get(m.id) || 0,
+    }));
+  }
+
+  /**
+   * Get thread replies for a parent message
+   * FR-2.5: Message threading
+   */
+  async getThreadReplies(
+    parentMessageId: string
+  ): Promise<{ parentMessage: Message; replies: Message[] } | null> {
+    const parent = await this.getMessageById(parentMessageId);
+    if (!parent) return null;
+
+    const replies = await db
+      .select()
+      .from(messages)
+      .where(eq(messages.threadId, parentMessageId))
+      .orderBy(messages.createdAt); // chronological order for threads
+
+    return { parentMessage: parent, replies };
   }
 
   /**
