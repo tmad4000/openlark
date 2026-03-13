@@ -20,6 +20,7 @@ import { automationsRoutes } from "./routes/automations";
 import { tasksRoutes } from "./routes/tasks";
 import { approvalsRoutes } from "./routes/approvals";
 import { okrsRoutes } from "./routes/okrs";
+import { attendanceRoutes } from "./routes/attendance";
 import { wsRoutes } from "./routes/ws";
 import { closeRedis } from "./lib/redis";
 import { startAutomationWorker, stopAutomationWorker } from "./lib/automation-worker";
@@ -56,6 +57,7 @@ await fastify.register(automationsRoutes);
 await fastify.register(tasksRoutes);
 await fastify.register(approvalsRoutes);
 await fastify.register(okrsRoutes);
+await fastify.register(attendanceRoutes);
 await fastify.register(wsRoutes);
 
 fastify.get("/", async () => {
