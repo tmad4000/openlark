@@ -1588,8 +1588,8 @@
         "Typecheck passes"
       ],
       "priority": 94,
-      "passes": false,
-      "notes": "Use openai-whisper or faster-whisper for transcription. LLM for summarization."
+      "passes": true,
+      "notes": "Created apps/api/src/lib/ai.ts with pluggable Whisper ASR (openai/local backends) and LLM summarization (openai/anthropic/ollama backends). Updated transcription-worker.ts with full pipeline: downloads audio from storage URL, runs Whisper ASR for transcript with speaker labels and timestamps, runs LLM to generate summary/action items/chapters, stores results in minutes table, and sends minutes_ready notifications to all meeting participants via createMinutesReadyNotification. Added minutes_ready notification type and meeting entity type to notification schema. Configurable via WHISPER_BACKEND, LLM_BACKEND, LLM_MODEL, OPENAI_API_KEY, ANTHROPIC_API_KEY, OLLAMA_URL env vars. BullMQ job tracks progress through pipeline stages. Typecheck passes."
     },
     {
       "id": "US-095",

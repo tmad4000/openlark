@@ -8,9 +8,10 @@ type NotificationType =
   | "thread_reply"
   | "task_assigned"
   | "approval_pending"
-  | "buzz";
+  | "buzz"
+  | "minutes_ready";
 
-type EntityType = "message" | "chat" | "task" | "approval" | "document";
+type EntityType = "message" | "chat" | "task" | "approval" | "document" | "meeting";
 
 interface CreateNotificationParams {
   userId: string;
@@ -237,4 +238,24 @@ export async function createBuzzNotification(params: {
   });
 
   return notification;
+}
+
+/**
+ * Create a minutes ready notification for a meeting participant
+ */
+export async function createMinutesReadyNotification(params: {
+  userId: string;
+  meetingId: string;
+  meetingTitle: string;
+}): Promise<typeof notifications.$inferSelect> {
+  const { userId, meetingId, meetingTitle } = params;
+
+  return createNotification({
+    userId,
+    type: "minutes_ready",
+    title: "Meeting minutes are ready",
+    body: meetingTitle,
+    entityType: "meeting",
+    entityId: meetingId,
+  });
 }
