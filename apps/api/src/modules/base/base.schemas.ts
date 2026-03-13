@@ -65,6 +65,21 @@ export const recordsQuerySchema = z.object({
   filter: z.string().optional(), // JSON-encoded filter object
 });
 
+// ============ VIEWS ============
+
+export const createViewSchema = z.object({
+  name: z.string().min(1, "Name is required").max(255),
+  type: z.enum(["grid", "kanban", "calendar", "gantt", "gallery", "form"]),
+  config: z.record(z.unknown()).optional(),
+  position: z.number().int().min(0).optional(),
+});
+
+export const updateViewSchema = z.object({
+  name: z.string().min(1).max(255).optional(),
+  config: z.record(z.unknown()).optional(),
+  position: z.number().int().min(0).optional(),
+});
+
 // ============ TYPE EXPORTS ============
 
 export type CreateBaseInput = z.infer<typeof createBaseSchema>;
@@ -75,3 +90,5 @@ export type CreateFieldInput = z.infer<typeof createFieldSchema>;
 export type UpdateFieldInput = z.infer<typeof updateFieldSchema>;
 export type CreateRecordInput = z.infer<typeof createRecordSchema>;
 export type UpdateRecordInput = z.infer<typeof updateRecordSchema>;
+export type CreateViewInput = z.infer<typeof createViewSchema>;
+export type UpdateViewInput = z.infer<typeof updateViewSchema>;

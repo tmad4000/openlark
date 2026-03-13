@@ -1094,8 +1094,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 65,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Kanban view with drag-and-drop between columns grouped by select field. Record detail panel on card click. View switching in base page with view tabs. Backend view CRUD API added."
     },
     {
       "id": "US-066",

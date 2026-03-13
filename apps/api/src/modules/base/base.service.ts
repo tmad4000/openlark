@@ -16,12 +16,15 @@ import type {
   UpdateFieldInput,
   CreateRecordInput,
   UpdateRecordInput,
+  CreateViewInput,
+  UpdateViewInput,
 } from "./base.schemas.js";
 import type {
   Base,
   BaseTable,
   BaseField,
   BaseRecord,
+  BaseView,
 } from "../../db/schema/index.js";
 
 export class BaseService {
@@ -363,6 +366,74 @@ export class BaseService {
   async getRecordTableId(recordId: string): Promise<string | null> {
     const record = await this.getRecordById(recordId);
     return record?.tableId ?? null;
+  }
+
+  // ============ VIEW CRUD ============
+
+  async getTableViews(tableId: string): Promise<BaseView[]> {
+    return db
+      .select()
+      .from(baseViews)
+      .where(and(eq(baseViews.tableId, tableId), isNull(baseViews.deletedAt)))
+      .orderBy(asc(baseViews.position));
+  }
+
+  async createView(
+    tableId: string,
+    input: CreateViewInput
+  ): Promise<BaseView> {
+    let position = input.position ?? 0;
+    if (input.position === undefined) {
+      const siblings = await db
+        .select()
+        .from(baseViews)
+        .where(
+          and(eq(baseViews.tableId, tableId), isNull(baseViews.deletedAt))
+        );
+      position = siblings.length;
+    }
+
+    const [view] = await db
+      .insert(baseViews)
+      .values({
+        tableId,
+        name: input.name,
+        type: input.type,
+        config: input.config ?? {},
+        position,
+      })
+      .returning();
+
+    if (!view) throw new Error("Failed to create view");
+    return view;
+  }
+
+  async updateView(
+    viewId: string,
+    input: UpdateViewInput
+  ): Promise<BaseView | null> {
+    const updateData: Record<string, unknown> = {};
+    if (input.name !== undefined) updateData.name = input.name;
+    if (input.config !== undefined) updateData.config = input.config;
+    if (input.position !== undefined) updateData.position = input.position;
+
+    if (Object.keys(updateData).length === 0) return null;
+
+    const [updated] = await db
+      .update(baseViews)
+      .set(updateData)
+      .where(and(eq(baseViews.id, viewId), isNull(baseViews.deletedAt)))
+      .returning();
+
+    return updated ?? null;
+  }
+
+  async getViewById(viewId: string): Promise<BaseView | null> {
+    const [view] = await db
+      .select()
+      .from(baseViews)
+      .where(and(eq(baseViews.id, viewId), isNull(baseViews.deletedAt)));
+    return view ?? null;
   }
 }
 

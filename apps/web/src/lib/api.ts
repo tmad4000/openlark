@@ -870,6 +870,25 @@ class ApiClient {
     });
   }
 
+  // View endpoints
+  async getTableViews(tableId: string) {
+    return this.request<{ views: BaseViewInfo[] }>(`/base/tables/${tableId}/views`);
+  }
+
+  async createView(tableId: string, data: { name: string; type: string; config?: Record<string, unknown> }) {
+    return this.request<{ view: BaseViewInfo }>(`/base/tables/${tableId}/views`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateView(viewId: string, data: { name?: string; config?: Record<string, unknown> }) {
+    return this.request<{ view: BaseViewInfo }>(`/base/views/${viewId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+
   async deleteRecord(recordId: string) {
     return this.request<void>(`/base/records/${recordId}`, {
       method: "DELETE",

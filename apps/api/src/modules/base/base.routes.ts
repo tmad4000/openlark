@@ -8,6 +8,8 @@ import {
   createRecordSchema,
   updateRecordSchema,
   recordsQuerySchema,
+  createViewSchema,
+  updateViewSchema,
 } from "./base.schemas.js";
 import { authenticate } from "../auth/middleware.js";
 import { formatZodError } from "../../utils/validation.js";
@@ -573,6 +575,132 @@ export async function baseRoutes(app: FastifyInstance) {
       }
 
       return reply.status(204).send();
+    }
+  );
+
+  // ============ VIEW ROUTES ============
+
+  // List views for a table
+  app.get<{ Params: { id: string } }>(
+    "/tables/:id/views",
+    async (req, reply) => {
+      const baseId = await baseService.getTableBaseId(req.params.id);
+      if (!baseId) {
+        return reply.status(404).send({
+          statusCode: 404,
+          error: "Not Found",
+          message: "Table not found",
+        });
+      }
+
+      const canAccess = await baseService.canAccessBase(
+        baseId,
+        req.user!.orgId
+      );
+      if (!canAccess) {
+        return reply.status(403).send({
+          statusCode: 403,
+          error: "Forbidden",
+          message: "You do not have access to this base",
+        });
+      }
+
+      const views = await baseService.getTableViews(req.params.id);
+      return { data: { views } };
+    }
+  );
+
+  // Create view for a table
+  app.post<{ Params: { id: string } }>(
+    "/tables/:id/views",
+    async (req, reply) => {
+      try {
+        const baseId = await baseService.getTableBaseId(req.params.id);
+        if (!baseId) {
+          return reply.status(404).send({
+            statusCode: 404,
+            error: "Not Found",
+            message: "Table not found",
+          });
+        }
+
+        const canAccess = await baseService.canAccessBase(
+          baseId,
+          req.user!.orgId
+        );
+        if (!canAccess) {
+          return reply.status(403).send({
+            statusCode: 403,
+            error: "Forbidden",
+            message: "You do not have access to this base",
+          });
+        }
+
+        const input = createViewSchema.parse(req.body);
+        const view = await baseService.createView(req.params.id, input);
+        return reply.status(201).send({ data: { view } });
+      } catch (error) {
+        if (error instanceof ZodError) {
+          return reply.status(400).send(formatZodError(error));
+        }
+        throw error;
+      }
+    }
+  );
+
+  // Update view
+  app.patch<{ Params: { id: string } }>(
+    "/views/:id",
+    async (req, reply) => {
+      try {
+        const view = await baseService.getViewById(req.params.id);
+        if (!view) {
+          return reply.status(404).send({
+            statusCode: 404,
+            error: "Not Found",
+            message: "View not found",
+          });
+        }
+
+        const baseId = await baseService.getTableBaseId(view.tableId);
+        if (!baseId) {
+          return reply.status(404).send({
+            statusCode: 404,
+            error: "Not Found",
+            message: "Table not found",
+          });
+        }
+
+        const canAccess = await baseService.canAccessBase(
+          baseId,
+          req.user!.orgId
+        );
+        if (!canAccess) {
+          return reply.status(403).send({
+            statusCode: 403,
+            error: "Forbidden",
+            message: "You do not have access to this base",
+          });
+        }
+
+        const input = updateViewSchema.parse(req.body);
+        const updated = await baseService.updateView(req.params.id, input);
+
+        if (!updated) {
+          return reply.status(404).send({
+            statusCode: 404,
+            error: "Not Found",
+            message: "View not found",
+          });
+        }
+
+        return { data: { view: updated } };
+      } catch (error) {
+        if (error instanceof ZodError) {
+          return reply.status(400).send(formatZodError(error));
+        }
+        throw error;
+      }
     }
   );
 }

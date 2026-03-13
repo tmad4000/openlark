@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { AppShell } from "@/components/layout/app-shell";
-import { BaseGridView } from "@/components/base";
+import { BaseGridView, BaseKanbanView } from "@/components/base";
 import { api, type BaseInfo, type BaseTableInfo, type BaseViewInfo } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import {
@@ -40,6 +40,7 @@ export default function BasePage() {
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [newBaseName, setNewBaseName] = useState("");
+  const [addingView, setAddingView] = useState(false);
 
   // Load bases
   useEffect(() => {
@@ -78,6 +79,27 @@ export default function BasePage() {
     loadTables();
   }, [selectedBase]);
 
+  // Load views when table is selected
+  useEffect(() => {
+    if (!selectedTable) {
+      setViews([]);
+      setSelectedView(null);
+      return;
+    }
+    async function loadViews() {
+      try {
+        const result = await api.getTableViews(selectedTable!.id);
+        setViews(result.views);
+        if (result.views.length > 0) {
+          setSelectedView(result.views[0]);
+        }
+      } catch {
+        // Silently handle
+      }
+    }
+    loadViews();
+  }, [selectedTable]);
+
   const handleCreateBase = useCallback(async () => {
     if (!newBaseName.trim()) return;
     try {
@@ -97,6 +119,39 @@ export default function BasePage() {
     setViews([]);
     setSelectedView(null);
   }, []);
+
+  const handleAddKanbanView = useCallback(async () => {
+    if (!selectedTable) return;
+    try {
+      const result = await api.createView(selectedTable.id, {
+        name: "Kanban View",
+        type: "kanban",
+        config: {},
+      });
+      setViews((prev) => [...prev, result.view]);
+      setSelectedView(result.view);
+      setAddingView(false);
+    } catch {
+      // Silently handle
+    }
+  }, [selectedTable]);
+
+  const handleViewConfigChange = useCallback(
+    async (viewId: string, config: Record<string, unknown>) => {
+      try {
+        const result = await api.updateView(viewId, { config });
+        setViews((prev) =>
+          prev.map((v) => (v.id === result.view.id ? result.view : v))
+        );
+        setSelectedView((prev) =>
+          prev?.id === result.view.id ? result.view : prev
+        );
+      } catch {
+        // Silently handle
+      }
+    },
+    []
+  );
 
   // Hub view: list of bases
   if (!selectedBase) {
@@ -247,6 +302,8 @@ export default function BasePage() {
     </div>
   );
 
+  const viewConfig = (selectedView?.config as Record<string, unknown>) || {};
+
   return (
     <AppShell sidebar={sidebar}>
       <div className="flex flex-col h-full">
@@ -270,18 +327,76 @@ export default function BasePage() {
 
         {/* View tabs bar */}
         <div className="flex items-center gap-1 px-3 py-1 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
-          <div className="flex items-center gap-1">
-            <Grid3X3 className="w-3.5 h-3.5 text-blue-600" />
-            <span className="text-xs font-medium text-blue-600">Grid View</span>
+          {views.map((view) => {
+            const ViewIcon = viewTypeIcons[view.type] || Grid3X3;
+            return (
+              <button
+                key={view.id}
+                onClick={() => setSelectedView(view)}
+                className={cn(
+                  "flex items-center gap-1 px-2 py-0.5 rounded text-xs transition-colors",
+                  selectedView?.id === view.id
+                    ? "text-blue-600 font-medium"
+                    : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                )}
+              >
+                <ViewIcon className="w-3.5 h-3.5" />
+                <span>{view.name}</span>
+              </button>
+            );
+          })}
+          {/* Add view button */}
+          <div className="relative">
+            <button
+              onClick={() => setAddingView(!addingView)}
+              className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
+            {addingView && (
+              <div className="absolute top-full left-0 mt-1 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg py-1 z-20 w-40">
+                <button
+                  onClick={handleAddKanbanView}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-800"
+                >
+                  <Kanban className="w-3.5 h-3.5" />
+                  Kanban View
+                </button>
+                <button
+                  onClick={() => setAddingView(false)}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-gray-400"
+                  disabled
+                >
+                  <Calendar className="w-3.5 h-3.5" />
+                  Calendar (soon)
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Grid content */}
+        {/* View content */}
         {selectedTable ? (
-          <BaseGridView
-            tableId={selectedTable.id}
-            tableName={selectedTable.name}
-          />
+          selectedView?.type === "kanban" ? (
+            <BaseKanbanView
+              tableId={selectedTable.id}
+              tableName={selectedTable.name}
+              groupByFieldId={(viewConfig.groupByFieldId as string) || null}
+              onGroupByChange={(fieldId) => {
+                if (selectedView) {
+                  handleViewConfigChange(selectedView.id, {
+                    ...viewConfig,
+                    groupByFieldId: fieldId,
+                  });
+                }
+              }}
+            />
+          ) : (
+            <BaseGridView
+              tableId={selectedTable.id}
+              tableName={selectedTable.name}
+            />
+          )
         ) : (
           <div className="flex-1 flex items-center justify-center">
             <p className="text-gray-500 text-sm">
