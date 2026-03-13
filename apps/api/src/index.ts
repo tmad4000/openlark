@@ -29,6 +29,7 @@ import { meetingsRoutes } from "./routes/meetings";
 import { formsRoutes } from "./routes/forms";
 import { adminRoutes } from "./routes/admin";
 import { dashboardRoutes } from "./routes/dashboard";
+import { oauthRoutes } from "./routes/oauth";
 import { wsRoutes } from "./routes/ws";
 import { auditLogPlugin } from "./middleware/audit";
 import { closeRedis } from "./lib/redis";
@@ -79,6 +80,7 @@ await fastify.register(meetingsRoutes);
 await fastify.register(formsRoutes);
 await fastify.register(adminRoutes);
 await fastify.register(dashboardRoutes);
+await fastify.register(oauthRoutes);
 await fastify.register(wsRoutes);
 
 fastify.get("/", async () => {

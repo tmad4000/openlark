@@ -1727,8 +1727,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 102,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created oauth_apps table (id, org_id, name, description, app_id unique, app_secret_hash, redirect_uris text[], scopes text[], bot_enabled, webhook_url, created_at) and event_subscriptions table (id, app_id fk, event_type, callback_url, status, created_at). OAuth routes: GET/POST/PATCH/DELETE /apps for app CRUD, POST /apps/:appId/regenerate-secret, POST/DELETE /apps/:appId/subscriptions for event subscriptions, GET /auth/oauth/authorize (authorization code grant), POST /auth/oauth/token (code exchange). Developer console page at /app/admin/developers with app list, create form, detail view with credentials, edit, event subscriptions management, and OAuth endpoint docs. app_id format: cli_<hex>, app_secret format: sec_<hex>. Secrets hashed with SHA-256 before storage. Authorization codes valid 10 minutes, single-use. Typecheck passes."
     },
     {
       "id": "US-103",
