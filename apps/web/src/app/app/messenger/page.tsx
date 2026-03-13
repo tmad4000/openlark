@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
-import { Search, Plus, MessageCircle, Users, Bell, BellOff, AtSign, Info, Wifi, WifiOff, Loader2, Check, CheckCheck, Circle, MoreHorizontal, Reply, X, MessageSquare, Pin, Star, Pencil, Trash2, Forward, Square, CheckSquare, Tag, FileText, File, FolderOpen, ExternalLink, GripVertical, Shield, Crown, UserPlus, UserMinus, Settings, Globe, Lock, ChevronDown, ChevronRight, LogOut, Megaphone, Zap, ListTodo, Calendar } from "lucide-react";
+import { Search, Plus, MessageCircle, Users, Bell, BellOff, AtSign, Info, Wifi, WifiOff, Loader2, Check, CheckCheck, Circle, MoreHorizontal, Reply, X, MessageSquare, Pin, Star, Pencil, Trash2, Forward, Square, CheckSquare, Tag, FileText, File, FolderOpen, ExternalLink, GripVertical, Shield, Crown, UserPlus, UserMinus, Settings, Globe, Lock, ChevronDown, ChevronRight, LogOut, Megaphone, Zap, ListTodo, Calendar, Languages } from "lucide-react";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as ContextMenu from "@radix-ui/react-context-menu";
 import MessageInput, { MentionUser } from "@/components/MessageInput";
@@ -451,13 +451,16 @@ function QuickReactionPicker({
   onRecall,
   onBuzz,
   onCreateTask,
+  onTranslate,
   isPinned,
   isFavorited,
+  isTranslated,
   canEdit,
   canRecall,
   canForward,
   canBuzz,
   canCreateTask,
+  canTranslate,
 }: {
   onSelect: (emoji: string) => void;
   onOpenFull: () => void;
@@ -469,13 +472,16 @@ function QuickReactionPicker({
   onRecall?: () => void;
   onBuzz?: () => void;
   onCreateTask?: () => void;
+  onTranslate?: () => void;
   isPinned?: boolean;
   isFavorited?: boolean;
+  isTranslated?: boolean;
   canEdit?: boolean;
   canRecall?: boolean;
   canForward?: boolean;
   canBuzz?: boolean;
   canCreateTask?: boolean;
+  canTranslate?: boolean;
 }) {
   return (
     <div className="flex items-center gap-0.5 bg-white border border-gray-200 rounded-full shadow-lg px-1.5 py-0.5">
@@ -551,6 +557,17 @@ function QuickReactionPicker({
           title="Recall message"
         >
           <Trash2 className="w-4 h-4" />
+        </button>
+      )}
+      {canTranslate && onTranslate && (
+        <button
+          onClick={onTranslate}
+          className={`w-7 h-7 flex items-center justify-center hover:bg-blue-50 rounded-full transition-colors ${
+            isTranslated ? "text-blue-600" : "text-gray-500 hover:text-blue-600"
+          }`}
+          title={isTranslated ? "Hide translation" : "Translate message"}
+        >
+          <Languages className="w-4 h-4" />
         </button>
       )}
       {canCreateTask && onCreateTask && (
@@ -818,12 +835,15 @@ function MessageBubble({
   onForward,
   onBuzz,
   onCreateTask,
+  onTranslate,
   isPinned,
   isFavorited,
   isBuzzed,
   isSelectionMode,
   isSelected,
   onToggleSelect,
+  translation,
+  isTranslating,
 }: {
   message: Message;
   isCurrentUser: boolean;
@@ -839,12 +859,15 @@ function MessageBubble({
   onForward?: (messageId: string) => void;
   onBuzz?: (messageId: string) => void;
   onCreateTask?: (messageId: string) => void;
+  onTranslate?: (messageId: string) => void;
   isPinned?: boolean;
   isFavorited?: boolean;
   isBuzzed?: boolean;
   isSelectionMode?: boolean;
   isSelected?: boolean;
   onToggleSelect?: (messageId: string) => void;
+  translation?: { text: string; detectedLanguage?: string } | null;
+  isTranslating?: boolean;
 }) {
   const [showReactionPicker, setShowReactionPicker] = useState(false);
   const [showFullPicker, setShowFullPicker] = useState(false);
@@ -1024,13 +1047,19 @@ function MessageBubble({
                   setShowReactionPicker(false);
                   onCreateTask(message.id);
                 } : undefined}
+                onTranslate={onTranslate ? () => {
+                  setShowReactionPicker(false);
+                  onTranslate(message.id);
+                } : undefined}
                 isPinned={isPinned}
                 isFavorited={isFavorited}
+                isTranslated={!!translation}
                 canEdit={isCurrentUser && !message.recalledAt && (message.type === "text" || message.type === "rich_text")}
                 canRecall={isCurrentUser && !message.recalledAt}
                 canForward={!message.recalledAt && message.type !== "system"}
                 canBuzz={isCurrentUser && !message.recalledAt && message.type !== "system"}
                 canCreateTask={!message.recalledAt && message.type !== "system"}
+                canTranslate={!message.recalledAt && (message.type === "text" || message.type === "rich_text")}
               />
             </div>
           )}
@@ -1062,6 +1091,25 @@ function MessageBubble({
             reactions={message.reactions}
             onToggleReaction={(emoji) => handleReaction(emoji)}
           />
+        )}
+
+        {/* Translation display */}
+        {isTranslating && (
+          <div className="flex items-center gap-1.5 px-2 py-1 mt-1 text-xs text-gray-400">
+            <Loader2 className="w-3 h-3 animate-spin" />
+            <span>Translating...</span>
+          </div>
+        )}
+        {translation && !isTranslating && (
+          <div className={`mt-1 px-3 py-1.5 rounded-lg text-sm ${
+            isCurrentUser ? "bg-blue-50 text-blue-900" : "bg-gray-50 text-gray-800"
+          }`}>
+            <div className="text-[10px] text-gray-400 mb-0.5 flex items-center gap-1">
+              <Languages className="w-3 h-3" />
+              Translated{translation.detectedLanguage ? ` from ${translation.detectedLanguage}` : ""}
+            </div>
+            <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: translation.text }} />
+          </div>
         )}
 
         {/* Thread reply indicator */}
@@ -1493,6 +1541,14 @@ function ChatView({
   const [showAnnouncementBanner, setShowAnnouncementBanner] = useState(true);
   const [currentUserRole, setCurrentUserRole] = useState<"owner" | "admin" | "member">("member");
 
+  // Translation state
+  const [messageTranslations, setMessageTranslations] = useState<Record<string, { text: string; detectedLanguage?: string }>>({});
+  const [translatingMessageIds, setTranslatingMessageIds] = useState<Set<string>>(new Set());
+  const [translationPrefs, setTranslationPrefs] = useState<{ autoTranslateEnabled: boolean; targetLanguage: string }>({
+    autoTranslateEnabled: false,
+    targetLanguage: "en",
+  });
+
   // Chat members for @mention autocomplete
   const [chatMembers, setChatMembers] = useState<MentionUser[]>([]);
 
@@ -1845,6 +1901,111 @@ function ChatView({
       alert(err instanceof Error ? err.message : "Failed to recall message");
     }
   }, []);
+
+  // Translate a message (toggle: translate or remove translation)
+  const translateMessage = useCallback(async (messageId: string) => {
+    // If already translated, remove translation
+    if (messageTranslations[messageId]) {
+      setMessageTranslations((prev) => {
+        const next = { ...prev };
+        delete next[messageId];
+        return next;
+      });
+      return;
+    }
+
+    const token = getCookie("session_token");
+    if (!token) return;
+
+    const message = messages.find(m => m.id === messageId);
+    if (!message) return;
+
+    const text = typeof message.content.text === "string" ? message.content.text :
+      typeof message.content.html === "string" ? message.content.html : null;
+    if (!text) return;
+
+    setTranslatingMessageIds((prev) => new Set(prev).add(messageId));
+
+    try {
+      const res = await fetch("/api/translate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          text,
+          target_lang: translationPrefs.targetLanguage,
+        }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Translation failed");
+      }
+
+      const data = await res.json();
+      setMessageTranslations((prev) => ({
+        ...prev,
+        [messageId]: {
+          text: data.translated_text,
+          detectedLanguage: data.detected_language,
+        },
+      }));
+    } catch (err) {
+      console.error("Translation failed:", err);
+    } finally {
+      setTranslatingMessageIds((prev) => {
+        const next = new Set(prev);
+        next.delete(messageId);
+        return next;
+      });
+    }
+  }, [messages, messageTranslations, translationPrefs.targetLanguage]);
+
+  // Load translation preferences
+  const loadTranslationPrefs = useCallback(async () => {
+    const token = getCookie("session_token");
+    if (!token) return;
+
+    try {
+      const res = await fetch("/api/users/me/translation-preferences", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setTranslationPrefs({
+          autoTranslateEnabled: data.auto_translate_enabled ?? false,
+          targetLanguage: data.target_language ?? "en",
+        });
+      }
+    } catch {
+      // Silent fail - use defaults
+    }
+  }, []);
+
+  // Toggle auto-translate setting
+  const toggleAutoTranslate = useCallback(async () => {
+    const token = getCookie("session_token");
+    if (!token) return;
+
+    const newValue = !translationPrefs.autoTranslateEnabled;
+    setTranslationPrefs((prev) => ({ ...prev, autoTranslateEnabled: newValue }));
+
+    try {
+      await fetch("/api/users/me/translation-preferences", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ auto_translate_enabled: newValue }),
+      });
+    } catch {
+      // Revert on error
+      setTranslationPrefs((prev) => ({ ...prev, autoTranslateEnabled: !newValue }));
+    }
+  }, [translationPrefs.autoTranslateEnabled]);
 
   // Forward message state
   const [forwardingMessageId, setForwardingMessageId] = useState<string | null>(null);
@@ -2254,7 +2415,10 @@ function ChatView({
     loadFavorites();
     loadTabs();
     loadAnnouncements();
-  }, [chat.id, loadMessages, loadPinnedMessages, loadFavorites, loadTabs, loadAnnouncements]);
+    loadTranslationPrefs();
+    setMessageTranslations({});
+    setTranslatingMessageIds(new Set());
+  }, [chat.id, loadMessages, loadPinnedMessages, loadFavorites, loadTabs, loadAnnouncements, loadTranslationPrefs]);
 
   // Extract shared files and docs when messages change
   useEffect(() => {
@@ -2352,7 +2516,16 @@ function ChatView({
     if (incomingMessage.senderId !== currentUserId) {
       markAsRead(incomingMessage.id);
     }
-  }, [incomingMessage, chat.id, scrollToBottom, currentUserId, markAsRead]);
+
+    // Auto-translate incoming messages from others if enabled
+    if (
+      translationPrefs.autoTranslateEnabled &&
+      incomingMessage.senderId !== currentUserId &&
+      (incomingMessage.type === "text" || incomingMessage.type === "rich_text")
+    ) {
+      translateMessage(incomingMessage.id);
+    }
+  }, [incomingMessage, chat.id, scrollToBottom, currentUserId, markAsRead, translationPrefs.autoTranslateEnabled, translateMessage]);
 
   // Scroll to bottom on initial load and mark as read
   useEffect(() => {
@@ -2625,6 +2798,16 @@ function ChatView({
             title={isSelectionMode ? "Exit selection mode" : "Select messages"}
           >
             <CheckSquare className="w-5 h-5" />
+          </button>
+          {/* Auto-translate toggle */}
+          <button
+            onClick={toggleAutoTranslate}
+            className={`p-2 rounded-full hover:bg-gray-100 transition-colors ${
+              translationPrefs.autoTranslateEnabled ? "bg-blue-100 text-blue-600" : "text-gray-500"
+            }`}
+            title={translationPrefs.autoTranslateEnabled ? "Disable auto-translate" : "Enable auto-translate"}
+          >
+            <Languages className="w-5 h-5" />
           </button>
           {/* Pins button */}
           <button
@@ -2981,12 +3164,15 @@ function ChatView({
                         onForward={openForwardModal}
                         onBuzz={openBuzzDialog}
                         onCreateTask={openCreateTaskDialog}
+                        onTranslate={translateMessage}
                         isPinned={pinnedMessageIds.has(message.id)}
                         isFavorited={favoritedMessageIds.has(message.id)}
                         isBuzzed={buzzedMessageIds.has(message.id)}
                         isSelectionMode={isSelectionMode}
                         isSelected={selectedMessageIds.has(message.id)}
                         onToggleSelect={toggleMessageSelection}
+                        translation={messageTranslations[message.id]}
+                        isTranslating={translatingMessageIds.has(message.id)}
                       />
                       {/* Read receipts popover */}
                       {selectedMessageForReceipts === message.id && (

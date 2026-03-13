@@ -1490,8 +1490,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 88,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added translation UI to messenger. QuickReactionPicker gets a Languages button (visible on hover for text/rich_text messages) that toggles translation. MessageBubble displays translated text below original with 'Translated from [language]' label and loading spinner during translation. ChatView manages translation state (messageTranslations map, translatingMessageIds set), loads user translation preferences on mount via GET /users/me/translation-preferences, and calls POST /translate API. Auto-translate toggle button in chat header (Languages icon) persists preference via PATCH /users/me/translation-preferences; when enabled, incoming messages from others are auto-translated. Clicking translate again on an already-translated message removes the translation. Typecheck passes."
     },
     {
       "id": "US-089",
