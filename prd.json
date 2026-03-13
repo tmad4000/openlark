@@ -1041,8 +1041,8 @@
         "Typecheck passes"
       ],
       "priority": 62,
-      "passes": false,
-      "notes": "Records use JSONB data column keyed by field_id. This allows flexible schema per table."
+      "passes": true,
+      "notes": "Created apps/api/src/db/schema/base.ts with bases, base_tables, base_fields, base_records, base_views tables. Uses JSONB data column for flexible record schema. Includes base_view_type enum (grid/kanban/calendar/gantt/gallery/form). Relations, indexes, and type exports follow existing patterns."
     },
     {
       "id": "US-063",
