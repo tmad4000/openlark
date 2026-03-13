@@ -405,8 +405,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 25,
-      "passes": false,
-      "notes": "Use a lightweight rich text input (TipTap instance) for the message composer."
+      "passes": true,
+      "notes": "Replaced plain textarea with TipTap rich text editor. Expandable formatting toolbar with bold, italic, strikethrough, underline, bullet list, ordered list, blockquote, inline code, and link. Send on Enter, Shift+Enter for newline. Emoji picker with common emojis. Attachment button placeholder. Installed @tiptap/extension-underline and @tiptap/extension-link."
     },
     {
       "id": "US-026",
