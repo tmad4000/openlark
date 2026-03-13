@@ -50,6 +50,18 @@ const SheetEditor = dynamic(
   }
 );
 
+const SlideEditor = dynamic(
+  () => import("@/components/SlideEditor"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-full flex items-center justify-center">
+        <div className="text-gray-500">Loading presentation...</div>
+      </div>
+    ),
+  }
+);
+
 interface DocumentData {
   id: string;
   title: string;
@@ -614,6 +626,15 @@ export default function DocumentEditorPage() {
         <div className={`flex-1 overflow-hidden ${showCommentsPanel ? "" : ""}`}>
           {document.type === "sheet" ? (
             <SheetEditor
+              documentId={document.id}
+              yjsDocId={document.yjsDocId}
+              token={token}
+              userName={user.displayName || user.email}
+              onSyncStatusChange={handleSyncStatusChange}
+              onCollaboratorsChange={handleCollaboratorsChange}
+            />
+          ) : document.type === "slide" ? (
+            <SlideEditor
               documentId={document.id}
               yjsDocId={document.yjsDocId}
               token={token}
