@@ -798,6 +798,83 @@ class ApiClient {
       method: "DELETE",
     });
   }
+
+  // Base endpoints
+  async getBases() {
+    return this.request<{ bases: BaseInfo[] }>("/base/bases");
+  }
+
+  async getBase(baseId: string) {
+    return this.request<{ base: BaseInfo }>(`/base/bases/${baseId}`);
+  }
+
+  async createBase(data: { name: string; icon?: string }) {
+    return this.request<{ base: BaseInfo }>("/base/bases", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getBaseTables(baseId: string) {
+    return this.request<{ tables: BaseTableInfo[] }>(`/base/bases/${baseId}/tables`);
+  }
+
+  async createBaseTable(baseId: string, data: { name: string }) {
+    return this.request<{ table: BaseTableInfo }>(`/base/bases/${baseId}/tables`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getTableFields(tableId: string) {
+    return this.request<{ fields: BaseField[] }>(`/base/tables/${tableId}/fields`);
+  }
+
+  async createField(tableId: string, data: { name: string; type: string; config?: Record<string, unknown> }) {
+    return this.request<{ field: BaseField }>(`/base/tables/${tableId}/fields`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateField(fieldId: string, data: { name?: string; type?: string; config?: Record<string, unknown> }) {
+    return this.request<{ field: BaseField }>(`/base/fields/${fieldId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getTableRecords(tableId: string, params?: { page?: number; limit?: number; sort?: string; order?: "asc" | "desc" }) {
+    const searchParams = new URLSearchParams();
+    if (params?.page) searchParams.set("page", params.page.toString());
+    if (params?.limit) searchParams.set("limit", params.limit.toString());
+    if (params?.sort) searchParams.set("sort", params.sort);
+    if (params?.order) searchParams.set("order", params.order);
+    const query = searchParams.toString();
+    return this.request<{ records: BaseRecord[]; pagination: { page: number; limit: number; total: number; totalPages: number } }>(
+      `/base/tables/${tableId}/records${query ? `?${query}` : ""}`
+    );
+  }
+
+  async createRecord(tableId: string, data: Record<string, unknown>) {
+    return this.request<{ record: BaseRecord }>(`/base/tables/${tableId}/records`, {
+      method: "POST",
+      body: JSON.stringify({ data }),
+    });
+  }
+
+  async updateRecord(recordId: string, data: Record<string, unknown>) {
+    return this.request<{ record: BaseRecord }>(`/base/records/${recordId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ data }),
+    });
+  }
+
+  async deleteRecord(recordId: string) {
+    return this.request<void>(`/base/records/${recordId}`, {
+      method: "DELETE",
+    });
+  }
 }
 
 // Types
@@ -1094,6 +1171,54 @@ export interface WikiPage {
     id: string;
     title: string;
   };
+}
+
+// Base types
+export interface BaseInfo {
+  id: string;
+  orgId: string;
+  name: string;
+  icon: string | null;
+  ownerId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BaseTableInfo {
+  id: string;
+  baseId: string;
+  name: string;
+  position: number;
+  createdAt: string;
+}
+
+export interface BaseField {
+  id: string;
+  tableId: string;
+  name: string;
+  type: string;
+  config: unknown;
+  position: number;
+  createdAt: string;
+}
+
+export interface BaseRecord {
+  id: string;
+  tableId: string;
+  data: unknown;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BaseViewInfo {
+  id: string;
+  tableId: string;
+  type: "grid" | "kanban" | "calendar" | "gantt" | "gallery" | "form";
+  name: string;
+  config: unknown;
+  position: number;
+  createdAt: string;
 }
 
 export const api = new ApiClient();

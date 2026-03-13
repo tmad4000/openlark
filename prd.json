@@ -1077,8 +1077,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 64,
-      "passes": false,
-      "notes": "Use a virtualized table component for performance with many records."
+      "passes": true,
+      "notes": "Base page at /app/base with hub view (base cards) and grid view. Grid uses HTML table with inline cell editing per field type (text, number, date, checkbox, select, url, email). Checkbox column for row selection. Add row/field buttons. Column header click to rename. API methods added to api.ts."
     },
     {
       "id": "US-065",
