@@ -1287,8 +1287,8 @@
         "Typecheck passes"
       ],
       "priority": 76,
-      "passes": false,
-      "notes": "Workflow JSON defines steps: [{approver_type: 'user|role|department', approver_id, type: 'sequential|parallel'}]"
+      "passes": true,
+      "notes": "Created approval_templates table (id, org_id, name, form_schema jsonb, workflow jsonb, category, created_at) with org_id index. Created approval_requests table (id, template_id, requester_id, form_data jsonb, status enum pending/approved/rejected/cancelled, created_at) with indexes on template_id, requester_id, status. Created approval_steps table (id, request_id, step_index, approver_ids uuid[], type enum sequential/parallel, status enum pending/approved/rejected, decided_by, decided_at, comment) with request_id index. Routes: POST /approvals/templates creates template with validation. POST /approvals/requests submits request and auto-creates steps from workflow. POST /approvals/requests/:id/steps/:stepId/decide handles approve/reject with cascading status updates. GET /approvals/requests?status= returns requests where user is requester or approver. Typecheck passes."
     },
     {
       "id": "US-077",

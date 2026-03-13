@@ -15,3 +15,4 @@ export * from "./wiki";
 export * from "./base";
 export * from "./automations";
 export * from "./tasks";
+export * from "./approvals";
