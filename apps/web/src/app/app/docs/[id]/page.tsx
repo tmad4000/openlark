@@ -74,6 +74,18 @@ const MindNoteEditor = dynamic(
   }
 );
 
+const BoardEditor = dynamic(
+  () => import("@/components/BoardEditor"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-full flex items-center justify-center">
+        <div className="text-gray-500">Loading whiteboard...</div>
+      </div>
+    ),
+  }
+);
+
 interface DocumentData {
   id: string;
   title: string;
@@ -656,6 +668,15 @@ export default function DocumentEditorPage() {
             />
           ) : document.type === "mindnote" ? (
             <MindNoteEditor
+              documentId={document.id}
+              yjsDocId={document.yjsDocId}
+              token={token}
+              userName={user.displayName || user.email}
+              onSyncStatusChange={handleSyncStatusChange}
+              onCollaboratorsChange={handleCollaboratorsChange}
+            />
+          ) : document.type === "board" ? (
+            <BoardEditor
               documentId={document.id}
               yjsDocId={document.yjsDocId}
               token={token}

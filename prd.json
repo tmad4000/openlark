@@ -1848,8 +1848,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 109,
-      "passes": false,
-      "notes": "Can use tldraw (open source) as the whiteboard engine."
+      "passes": true,
+      "notes": "Created BoardEditor.tsx with infinite canvas whiteboard. Tools: select, rectangle, circle, line/arrow, sticky note, text, freeform draw. Drag-to-create shapes with resize handles on selection. Connectors (line/arrow) with endpoint selection. Zoom (scroll wheel, zoom toward cursor) and pan (alt+drag or middle mouse). Real-time collaboration via Yjs (HocuspocusProvider) with awareness-based collaborator cursors and labels. Canvas renders shapes, grid background, selection outlines, and remote cursors. Text editing via double-click overlay. Keyboard shortcuts for all tools. Added dynamic import in docs/[id]/page.tsx for board type. Typecheck passes."
     },
     {
       "id": "US-110",
