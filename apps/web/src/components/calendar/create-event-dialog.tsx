@@ -17,12 +17,14 @@ interface CreateEventDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onEventCreated?: (event: CalendarEvent) => void;
+  defaultStartTime?: Date;
 }
 
 export function CreateEventDialog({
   open,
   onOpenChange,
   onEventCreated,
+  defaultStartTime,
 }: CreateEventDialogProps) {
   const [calendars, setCalendars] = useState<Calendar[]>([]);
   const [selectedCalendarId, setSelectedCalendarId] = useState<string>("");
@@ -181,18 +183,22 @@ export function CreateEventDialog({
     }
   }
 
-  // Set default times (next hour, +1 hour)
+  // Set default times (next hour, +1 hour) or use prefilled date
   useEffect(() => {
     if (open && !startTime) {
-      const now = new Date();
-      now.setHours(now.getHours() + 1, 0, 0, 0);
-      const start = now.toISOString().slice(0, 16);
-      now.setHours(now.getHours() + 1);
-      const end = now.toISOString().slice(0, 16);
+      const base = defaultStartTime ? new Date(defaultStartTime) : new Date();
+      if (!defaultStartTime) {
+        base.setHours(base.getHours() + 1, 0, 0, 0);
+      } else {
+        base.setHours(9, 0, 0, 0);
+      }
+      const start = base.toISOString().slice(0, 16);
+      base.setHours(base.getHours() + 1);
+      const end = base.toISOString().slice(0, 16);
       setStartTime(start);
       setEndTime(end);
     }
-  }, [open, startTime]);
+  }, [open, startTime, defaultStartTime]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

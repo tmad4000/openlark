@@ -798,8 +798,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 48,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Monthly calendar grid view with mini calendar sidebar, event popover on click, create event on date click, prev/next month navigation with today button. Events displayed as colored blocks."
     },
     {
       "id": "US-049",
