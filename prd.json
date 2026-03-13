@@ -988,8 +988,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 59,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Docs hub page with grid cards (type icon, title, relative time, owner avatar), search bar, filter tabs (All/My docs/Shared), sort dropdown (Last modified/Created date/Title). Create new button opens existing CreateDocumentDialog. Clicking a card navigates to editor view with back button."
     },
     {
       "id": "US-060",
