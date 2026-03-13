@@ -7,6 +7,7 @@ import {
   Network,
   Shield,
   Lock,
+  Key,
   Plus,
   Search,
   Trash2,
@@ -145,7 +146,20 @@ interface AuditLogEntry {
   createdAt: string;
 }
 
-type TabId = "org" | "members" | "departments" | "roles" | "security" | "audit";
+interface SsoConfigData {
+  id: string;
+  orgId: string;
+  provider: string;
+  metadataUrl: string | null;
+  entityId: string;
+  ssoUrl: string;
+  certificate: string;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+type TabId = "org" | "members" | "departments" | "roles" | "security" | "sso" | "audit";
 
 const TABS: { id: TabId; label: string; icon: any }[] = [
   { id: "org", label: "Organization", icon: Building2 },
@@ -153,6 +167,7 @@ const TABS: { id: TabId; label: string; icon: any }[] = [
   { id: "departments", label: "Departments", icon: Network },
   { id: "roles", label: "Roles", icon: Shield },
   { id: "security", label: "Security", icon: Lock },
+  { id: "sso", label: "SSO", icon: Key },
   { id: "audit", label: "Audit Logs", icon: FileText },
 ];
 
@@ -196,6 +211,19 @@ export default function AdminPage() {
   // Security state
   const [security, setSecurity] = useState<SecuritySettings>({ ...DEFAULT_SECURITY });
   const [securitySaving, setSecuritySaving] = useState(false);
+
+  // SSO state
+  const [ssoConfigs, setSsoConfigs] = useState<SsoConfigData[]>([]);
+  const [ssoLoading, setSsoLoading] = useState(false);
+  const [ssoSaving, setSsoSaving] = useState(false);
+  const [ssoEditing, setSsoEditing] = useState<string | null>(null); // config id or "new"
+  const [ssoForm, setSsoForm] = useState({
+    metadata_url: "",
+    entity_id: "",
+    sso_url: "",
+    certificate: "",
+    enabled: false,
+  });
 
   // Audit log state
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
@@ -324,6 +352,19 @@ export default function AdminPage() {
     }
   }, [apiFetch]);
 
+  const fetchSsoConfigs = useCallback(async () => {
+    setSsoLoading(true);
+    try {
+      const res = await apiFetch("/api/admin/sso");
+      if (res?.ok) {
+        const data = await res.json();
+        setSsoConfigs(data.configs || []);
+      }
+    } finally {
+      setSsoLoading(false);
+    }
+  }, [apiFetch]);
+
   const fetchAuditLogs = useCallback(async (append = false, cursor?: string | null) => {
     setAuditLoading(true);
     try {
@@ -377,8 +418,9 @@ export default function AdminPage() {
     if (activeTab === "departments") fetchDepts();
     if (activeTab === "roles") fetchRoles();
     if (activeTab === "security") fetchSecurity();
+    if (activeTab === "sso") fetchSsoConfigs();
     if (activeTab === "audit") { fetchAuditLogs(); fetchAuditFilterOptions(); }
-  }, [activeTab, error, isLoading, fetchOrg, fetchMembers, fetchDepts, fetchRoles, fetchSecurity, fetchAuditLogs, fetchAuditFilterOptions]);
+  }, [activeTab, error, isLoading, fetchOrg, fetchMembers, fetchDepts, fetchRoles, fetchSecurity, fetchSsoConfigs, fetchAuditLogs, fetchAuditFilterOptions]);
 
   // ── Org handlers ──────────────────────────────────────────────────
 
@@ -412,6 +454,48 @@ export default function AdminPage() {
     } finally {
       setSecuritySaving(false);
     }
+  };
+
+  // ── SSO handlers ────────────────────────────────────────────────
+
+  const handleSsoSave = async () => {
+    setSsoSaving(true);
+    try {
+      if (ssoEditing === "new") {
+        await apiFetch("/api/admin/sso", {
+          method: "POST",
+          body: JSON.stringify(ssoForm),
+        });
+      } else if (ssoEditing) {
+        await apiFetch(`/api/admin/sso/${ssoEditing}`, {
+          method: "PUT",
+          body: JSON.stringify(ssoForm),
+        });
+      }
+      setSsoEditing(null);
+      await fetchSsoConfigs();
+    } finally {
+      setSsoSaving(false);
+    }
+  };
+
+  const handleSsoDelete = async (id: string) => {
+    await apiFetch(`/api/admin/sso/${id}`, { method: "DELETE" });
+    await fetchSsoConfigs();
+  };
+
+  const handleSsoToggle = async (config: SsoConfigData) => {
+    await apiFetch(`/api/admin/sso/${config.id}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        entity_id: config.entityId,
+        sso_url: config.ssoUrl,
+        certificate: config.certificate,
+        metadata_url: config.metadataUrl,
+        enabled: !config.enabled,
+      }),
+    });
+    await fetchSsoConfigs();
   };
 
   // ── Member handlers ───────────────────────────────────────────────
@@ -1308,6 +1392,230 @@ export default function AdminPage() {
             >
               {securitySaving ? "Saving..." : "Save Security Settings"}
             </button>
+          </div>
+        )}
+
+        {/* ── SSO Tab ────────────────────────────────────────── */}
+        {activeTab === "sso" && (
+          <div className="max-w-2xl">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-semibold text-gray-900">
+                Single Sign-On (SAML 2.0)
+              </h3>
+              {!ssoEditing && (
+                <button
+                  onClick={() => {
+                    setSsoEditing("new");
+                    setSsoForm({
+                      metadata_url: "",
+                      entity_id: "",
+                      sso_url: "",
+                      certificate: "",
+                      enabled: false,
+                    });
+                  }}
+                  className="flex items-center gap-2 px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add SAML Configuration
+                </button>
+              )}
+            </div>
+
+            {ssoEditing && (
+              <div className="border border-gray-200 rounded-lg p-5 mb-6 bg-gray-50">
+                <h4 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-4">
+                  {ssoEditing === "new" ? "New SAML Configuration" : "Edit SAML Configuration"}
+                </h4>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Metadata URL (optional)
+                    </label>
+                    <input
+                      type="url"
+                      value={ssoForm.metadata_url}
+                      onChange={(e) =>
+                        setSsoForm((f) => ({ ...f, metadata_url: e.target.value }))
+                      }
+                      placeholder="https://idp.example.com/saml/metadata"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      URL to fetch IdP metadata automatically
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      IdP Entity ID *
+                    </label>
+                    <input
+                      type="text"
+                      value={ssoForm.entity_id}
+                      onChange={(e) =>
+                        setSsoForm((f) => ({ ...f, entity_id: e.target.value }))
+                      }
+                      placeholder="https://idp.example.com/saml"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      IdP SSO URL *
+                    </label>
+                    <input
+                      type="url"
+                      value={ssoForm.sso_url}
+                      onChange={(e) =>
+                        setSsoForm((f) => ({ ...f, sso_url: e.target.value }))
+                      }
+                      placeholder="https://idp.example.com/saml/sso"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      IdP X.509 Certificate *
+                    </label>
+                    <textarea
+                      value={ssoForm.certificate}
+                      onChange={(e) =>
+                        setSsoForm((f) => ({ ...f, certificate: e.target.value }))
+                      }
+                      rows={6}
+                      placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  <label className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      checked={ssoForm.enabled}
+                      onChange={(e) =>
+                        setSsoForm((f) => ({ ...f, enabled: e.target.checked }))
+                      }
+                      className="rounded"
+                    />
+                    <span className="text-sm text-gray-700">
+                      Enable this SSO configuration
+                    </span>
+                  </label>
+                  <div className="flex gap-2 pt-2">
+                    <button
+                      onClick={handleSsoSave}
+                      disabled={ssoSaving || !ssoForm.entity_id || !ssoForm.sso_url || !ssoForm.certificate}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm"
+                    >
+                      {ssoSaving ? "Saving..." : "Save Configuration"}
+                    </button>
+                    <button
+                      onClick={() => setSsoEditing(null)}
+                      className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-sm"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {ssoLoading && ssoConfigs.length === 0 && (
+              <div className="text-center py-12 text-gray-400">
+                Loading SSO configurations...
+              </div>
+            )}
+
+            {!ssoLoading && ssoConfigs.length === 0 && !ssoEditing && (
+              <div className="text-center py-12 border border-dashed border-gray-300 rounded-lg">
+                <Key className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+                <p className="text-gray-500 text-sm">
+                  No SSO configurations yet. Add a SAML 2.0 configuration to enable single sign-on.
+                </p>
+              </div>
+            )}
+
+            {ssoConfigs.map((config) => (
+              <div
+                key={config.id}
+                className="border border-gray-200 rounded-lg p-4 mb-3"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-3">
+                    <span
+                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                        config.enabled
+                          ? "bg-green-50 text-green-700"
+                          : "bg-gray-100 text-gray-500"
+                      }`}
+                    >
+                      {config.enabled ? "Enabled" : "Disabled"}
+                    </span>
+                    <span className="text-sm font-medium text-gray-900">
+                      SAML 2.0
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleSsoToggle(config)}
+                      className="text-xs text-blue-600 hover:text-blue-700"
+                    >
+                      {config.enabled ? "Disable" : "Enable"}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setSsoEditing(config.id);
+                        setSsoForm({
+                          metadata_url: config.metadataUrl || "",
+                          entity_id: config.entityId,
+                          sso_url: config.ssoUrl,
+                          certificate: config.certificate,
+                          enabled: config.enabled,
+                        });
+                      }}
+                      className="text-xs text-gray-500 hover:text-gray-700"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleSsoDelete(config.id)}
+                      className="text-xs text-red-500 hover:text-red-700"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+                <div className="space-y-1 text-xs text-gray-500">
+                  <div>
+                    <span className="font-medium text-gray-600">Entity ID:</span>{" "}
+                    {config.entityId}
+                  </div>
+                  <div>
+                    <span className="font-medium text-gray-600">SSO URL:</span>{" "}
+                    {config.ssoUrl}
+                  </div>
+                  {config.metadataUrl && (
+                    <div>
+                      <span className="font-medium text-gray-600">Metadata:</span>{" "}
+                      {config.metadataUrl}
+                    </div>
+                  )}
+                  <div>
+                    <span className="font-medium text-gray-600">SP Login URL:</span>{" "}
+                    <code className="bg-gray-100 px-1 py-0.5 rounded">
+                      /auth/saml/login?org_id={config.orgId}
+                    </code>
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            <p className="text-xs text-gray-400 mt-6">
+              Configure SAML 2.0 SSO to allow members to sign in with your
+              identity provider. The SP ACS URL is{" "}
+              <code className="bg-gray-100 px-1 py-0.5 rounded">
+                /auth/saml/callback
+              </code>
+            </p>
           </div>
         )}
 

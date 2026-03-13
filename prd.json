@@ -1899,8 +1899,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 112,
-      "passes": false,
-      "notes": "Use passport-saml or saml2-js library."
+      "passes": true,
+      "notes": "Created sso_configs table (id, org_id, provider enum, metadata_url, entity_id, sso_url, certificate, enabled, timestamps) with org_id index. Admin CRUD API: GET/POST /admin/sso, PUT/DELETE /admin/sso/:configId — all require admin role. SP-initiated flow: GET /auth/saml/login?org_id builds SAML AuthnRequest and redirects to IdP SSO URL via HTTP-Redirect binding. IdP callback: POST /auth/saml/callback decodes base64 SAML response, extracts email from NameID or attributes, matches org via RelayState or issuer entity ID, auto-creates user (no password) or links existing user to org, creates session, redirects to /auth/sso-callback with token. Admin console SSO tab with full SAML config form (metadata URL, entity ID, SSO URL, certificate, enable toggle), config list with enable/disable/edit/delete, SP info display. SSO callback page stores token in cookie and redirects to app. Lightweight XML parsing — no external SAML library dependency. Typecheck passes."
     },
     {
       "id": "US-113",

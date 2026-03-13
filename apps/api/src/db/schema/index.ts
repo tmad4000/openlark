@@ -30,3 +30,4 @@ export * from "./event-subscriptions";
 export * from "./webhook-deliveries";
 export * from "./notification-bots";
 export * from "./ai-jobs";
+export * from "./sso-configs";
