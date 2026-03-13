@@ -296,6 +296,52 @@ class ApiClient {
     );
   }
 
+  async getChat(chatId: string) {
+    return this.request<{ chat: Chat; members: ChatMember[] }>(
+      `/messenger/chats/${chatId}`
+    );
+  }
+
+  async updateChat(
+    chatId: string,
+    data: { name?: string; avatarUrl?: string | null; isPublic?: boolean; maxMembers?: number | null; settingsJson?: Record<string, unknown> }
+  ) {
+    return this.request<{ chat: Chat }>(
+      `/messenger/chats/${chatId}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      }
+    );
+  }
+
+  async addChatMember(chatId: string, userId: string, role?: "admin" | "member") {
+    return this.request<{ member: ChatMember }>(
+      `/messenger/chats/${chatId}/members`,
+      {
+        method: "POST",
+        body: JSON.stringify({ userId, role }),
+      }
+    );
+  }
+
+  async updateChatMember(chatId: string, userId: string, data: { role?: "owner" | "admin" | "member" }) {
+    return this.request<{ member: ChatMember }>(
+      `/messenger/chats/${chatId}/members/${userId}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      }
+    );
+  }
+
+  async removeChatMember(chatId: string, userId: string) {
+    return this.request<{ success: boolean }>(
+      `/messenger/chats/${chatId}/members/${userId}`,
+      { method: "DELETE" }
+    );
+  }
+
   // Calendar endpoints
   async getCalendars() {
     return this.request<{ calendars: Calendar[] }>("/calendar/calendars");
@@ -548,6 +594,12 @@ export interface ChatMemberSettings {
   label: string | null;
 }
 
+export interface ChatSettings {
+  whoCanSendMessages?: "all" | "admins_only";
+  whoCanAddMembers?: "all" | "admins_only";
+  historyVisibleToNewMembers?: boolean;
+}
+
 export interface Chat {
   id: string;
   orgId: string;
@@ -558,6 +610,7 @@ export interface Chat {
   createdAt: string;
   updatedAt: string;
   memberSettings?: ChatMemberSettings;
+  settingsJson?: ChatSettings;
 }
 
 export interface ChatMember {

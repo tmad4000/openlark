@@ -610,8 +610,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 37,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created GroupSettingsPanel component with: info button in chat header (non-DM chats), right panel showing group name (editable by owner), public/private toggle, searchable member list with role badges (Crown for owner, ShieldCheck for admin), owner can promote/demote/remove members via hover action menu, settings section with dropdowns for who can send messages (all/admins only), who can add members (all/admins only), and toggle for history visible to new members. Added API methods: getChat, updateChat, addChatMember, updateChatMember, removeChatMember. ChatSettings type added to Chat interface using settingsJson JSONB column."
     },
     {
       "id": "US-038",

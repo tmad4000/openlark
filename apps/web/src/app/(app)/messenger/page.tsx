@@ -12,9 +12,10 @@ import { ThreadPanel } from "@/components/messenger/thread-panel";
 import { AppShell } from "@/components/layout/app-shell";
 import { ChatTabs, type CustomTab } from "@/components/messenger/chat-tabs";
 import { cn } from "@/lib/utils";
-import { MessageSquare, Wifi, WifiOff, Loader2, Pin, X, Star, FileText, File } from "lucide-react";
+import { MessageSquare, Wifi, WifiOff, Loader2, Pin, X, Star, FileText, File, Info } from "lucide-react";
 import { api, type Chat, type Pin as PinType, type Favorite, type Message } from "@/lib/api";
 import { ForwardDialog } from "@/components/messenger/forward-dialog";
+import { GroupSettingsPanel } from "@/components/messenger/group-settings-panel";
 
 export default function MessengerPage() {
   const { user, organization } = useAuth();
@@ -32,6 +33,8 @@ export default function MessengerPage() {
   const [customTabs, setCustomTabs] = useState<Map<string, CustomTab[]>>(new Map());
   const [sharedDocs, setSharedDocs] = useState<Array<{ id: string; title: string; url: string; sharedAt: string; sharedBy: string }>>([]);
   const [sharedFiles, setSharedFiles] = useState<Array<{ id: string; name: string; url: string; size: number; sharedAt: string; sharedBy: string }>>([]);
+  const [showGroupSettings, setShowGroupSettings] = useState(false);
+  const [selectedChatType, setSelectedChatType] = useState<string | null>(null);
 
   // Sender map ref for thread panel
   const senderMapRef = useRef<Map<string, { displayName: string | null; avatarUrl: string | null }>>(new Map());
@@ -324,10 +327,12 @@ export default function MessengerPage() {
     } catch { /* ignore */ }
   }, []);
 
-  const handleSelectChat = useCallback((chatId: string) => {
+  const handleSelectChat = useCallback((chatId: string, chatType?: string) => {
     setSelectedChatId(chatId);
+    setSelectedChatType(chatType || null);
     setActiveThreadId(null);
     setShowFavorites(false);
+    setShowGroupSettings(false);
   }, []);
 
   const handleCreateChat = useCallback(() => {
@@ -370,6 +375,21 @@ export default function MessengerPage() {
                   </h2>
                 </div>
                 <div className="flex items-center gap-2">
+                  {/* Group info button */}
+                  {selectedChatType && selectedChatType !== "dm" && (
+                    <button
+                      onClick={() => setShowGroupSettings(!showGroupSettings)}
+                      className={cn(
+                        "p-1.5 rounded-md transition-colors",
+                        showGroupSettings
+                          ? "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400"
+                          : "text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                      )}
+                      title="Group info"
+                    >
+                      <Info className="h-4 w-4" />
+                    </button>
+                  )}
                   {/* WebSocket status indicator */}
                   <div
                     className={cn(
@@ -454,6 +474,21 @@ export default function MessengerPage() {
               senderMap={senderMapRef.current}
               onClose={() => setActiveThreadId(null)}
             />
+          )}
+
+          {/* Group settings panel */}
+          {showGroupSettings && selectedChatId && (
+            <div className="w-80 border-l border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 flex-shrink-0">
+              <GroupSettingsPanel
+                key={selectedChatId}
+                chatId={selectedChatId}
+                currentUserId={user?.id || ""}
+                onClose={() => setShowGroupSettings(false)}
+                onChatUpdated={(updatedChat) => {
+                  ChatList.updateChatName(updatedChat.id, updatedChat.name || "");
+                }}
+              />
+            </div>
           )}
         </div>
       ) : showFavorites ? (

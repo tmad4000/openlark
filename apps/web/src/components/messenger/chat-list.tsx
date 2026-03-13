@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 
 interface ChatListProps {
   selectedChatId: string | null;
-  onSelectChat: (chatId: string) => void;
+  onSelectChat: (chatId: string, chatType?: string) => void;
   onCreateChat?: () => void;
   onOpenFavorites?: () => void;
   showFavorites?: boolean;
@@ -116,6 +116,13 @@ export function ChatList({
           ? { ...c, memberSettings: { ...c.memberSettings, done: false } }
           : c
       )
+    );
+  };
+
+  // Update chat name from group settings panel
+  ChatList.updateChatName = (chatId: string, name: string) => {
+    setChats((prev) =>
+      prev.map((c) => (c.id === chatId ? { ...c, name } : c))
     );
   };
 
@@ -269,7 +276,7 @@ export function ChatList({
                 key={chat.id}
                 chat={chat}
                 isSelected={chat.id === selectedChatId}
-                onClick={() => onSelectChat(chat.id)}
+                onClick={() => onSelectChat(chat.id, chat.type)}
                 onContextMenu={(e) => handleContextMenu(e, chat.id)}
               />
             ))}
@@ -391,6 +398,9 @@ ChatList.addChat = (_chat: Chat) => {
   // Will be overwritten when component mounts
 };
 ChatList.reactivateChat = (_chatId: string) => {
+  // Will be overwritten when component mounts
+};
+ChatList.updateChatName = (_chatId: string, _name: string) => {
   // Will be overwritten when component mounts
 };
 
