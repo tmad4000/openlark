@@ -107,6 +107,16 @@ export default function MessengerPage() {
     }
   }, []);
 
+  const handleEditMessage = useCallback(async (messageId: string, content: string) => {
+    const result = await api.editMessage(messageId, content);
+    MessageList.updateMessage(result.message);
+  }, []);
+
+  const handleRecallMessage = useCallback(async (messageId: string) => {
+    await api.recallMessage(messageId);
+    MessageList.markRecalled(messageId);
+  }, []);
+
   // Handle typing events
   const handleTyping = useCallback((event: TypingEvent) => {
     // Don't show own typing indicator
@@ -199,7 +209,7 @@ export default function MessengerPage() {
     }, [selectedChatId]),
     onMessageRecalled: useCallback((event: MessageRecalledEvent) => {
       if (event.chatId === selectedChatId) {
-        MessageList.removeMessage(event.messageId);
+        MessageList.markRecalled(event.messageId);
       }
     }, [selectedChatId]),
     onReadReceipt: useCallback((event: ReadReceiptEvent) => {
@@ -353,6 +363,8 @@ export default function MessengerPage() {
                 onUnpinMessage={handleUnpinMessage}
                 onFavoriteMessage={handleFavoriteMessage}
                 onUnfavoriteMessage={handleUnfavoriteMessage}
+                onEditMessage={handleEditMessage}
+                onRecallMessage={handleRecallMessage}
               />
             ) : (
               <PinnedMessagesView

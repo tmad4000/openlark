@@ -255,6 +255,24 @@ class ApiClient {
     );
   }
 
+  // Edit/Recall endpoints
+  async editMessage(messageId: string, content: string | Record<string, unknown>) {
+    return this.request<{ message: Message }>(
+      `/messenger/messages/${messageId}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ content }),
+      }
+    );
+  }
+
+  async recallMessage(messageId: string) {
+    return this.request<{ success: boolean }>(
+      `/messenger/messages/${messageId}`,
+      { method: "DELETE" }
+    );
+  }
+
   // Calendar endpoints
   async getCalendars() {
     return this.request<{ calendars: Calendar[] }>("/calendar/calendars");

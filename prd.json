@@ -540,8 +540,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 33,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "API client editMessage/recallMessage methods added. MessageBubble hover menu has Edit (pencil) and Recall (trash) buttons for own messages within 24h. Inline textarea editor with save/cancel. Recall shows confirmation dialog. WebSocket recall handler marks message as recalled instead of removing it, showing Message recalled placeholder."
     },
     {
       "id": "US-034",

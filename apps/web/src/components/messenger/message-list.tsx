@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import { api, type Message, type MessageReaction } from "@/lib/api";
 import { useAuth } from "@/hooks/use-auth";
-import { Loader2, Clock, AlertCircle, MessageSquareText, Pin, Star } from "lucide-react";
+import { Loader2, Clock, AlertCircle, MessageSquareText, Pin, Star, Pencil, Trash2, Check, X } from "lucide-react";
 import {
   ReadReceiptIndicator,
   type ReadStatus,
@@ -44,9 +44,11 @@ interface MessageListProps {
   onUnpinMessage?: (messageId: string) => void;
   onFavoriteMessage?: (messageId: string) => void;
   onUnfavoriteMessage?: (messageId: string) => void;
+  onEditMessage?: (messageId: string, content: string) => Promise<void>;
+  onRecallMessage?: (messageId: string) => Promise<void>;
 }
 
-export function MessageList({ chatId, onMessagesLoaded, onlineUsers, memberCount, onOpenThread, pinnedMessageIds, favoritedMessageIds, onPinMessage, onUnpinMessage, onFavoriteMessage, onUnfavoriteMessage }: MessageListProps) {
+export function MessageList({ chatId, onMessagesLoaded, onlineUsers, memberCount, onOpenThread, pinnedMessageIds, favoritedMessageIds, onPinMessage, onUnpinMessage, onFavoriteMessage, onUnfavoriteMessage, onEditMessage, onRecallMessage }: MessageListProps) {
   const { user } = useAuth();
   const [messages, setMessages] = useState<OptimisticMessage[]>([]);
   const [senderMap, setSenderMap] = useState<SenderMap>(new Map());
@@ -376,6 +378,13 @@ export function MessageList({ chatId, onMessagesLoaded, onlineUsers, memberCount
     setMessages((prev) => prev.filter((m) => m.id !== messageId));
   }, []);
 
+  // Mark a message as recalled (shows "Message recalled" placeholder)
+  const markRecalled = useCallback((messageId: string) => {
+    setMessages((prev) =>
+      prev.map((m) => m.id === messageId ? { ...m, recalledAt: new Date().toISOString() } : m)
+    );
+  }, []);
+
   // Replace an optimistic message with the confirmed one from API
   const confirmMessage = useCallback((tempId: string, realMessage: Message) => {
     setMessages((prev) =>
@@ -401,6 +410,7 @@ export function MessageList({ chatId, onMessagesLoaded, onlineUsers, memberCount
   MessageList.addMessage = addMessage;
   MessageList.updateMessage = updateMessage;
   MessageList.removeMessage = removeMessage;
+  MessageList.markRecalled = markRecalled;
   MessageList.confirmMessage = confirmMessage;
   MessageList.failMessage = failMessage;
   MessageList.removeOptimisticMessage = removeOptimisticMessage;
@@ -483,6 +493,8 @@ export function MessageList({ chatId, onMessagesLoaded, onlineUsers, memberCount
                 onUnpin={onUnpinMessage}
                 onFavorite={onFavoriteMessage}
                 onUnfavorite={onUnfavoriteMessage}
+                onEdit={onEditMessage}
+                onRecall={onRecallMessage}
               />
             );
           })}
@@ -496,6 +508,7 @@ export function MessageList({ chatId, onMessagesLoaded, onlineUsers, memberCount
 MessageList.addMessage = (_message: OptimisticMessage) => {};
 MessageList.updateMessage = (_message: Message) => {};
 MessageList.removeMessage = (_messageId: string) => {};
+MessageList.markRecalled = (_messageId: string) => {};
 MessageList.confirmMessage = (_tempId: string, _realMessage: Message) => {};
 MessageList.failMessage = (_tempId: string) => {};
 MessageList.removeOptimisticMessage = (_tempId: string) => {};
@@ -521,7 +534,11 @@ interface MessageBubbleProps {
   onUnpin?: (messageId: string) => void;
   onFavorite?: (messageId: string) => void;
   onUnfavorite?: (messageId: string) => void;
+  onEdit?: (messageId: string, content: string) => Promise<void>;
+  onRecall?: (messageId: string) => Promise<void>;
 }
+
+const EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 function MessageBubble({
   message,
@@ -541,8 +558,15 @@ function MessageBubble({
   onUnpin,
   onFavorite,
   onUnfavorite,
+  onEdit,
+  onRecall,
 }: MessageBubbleProps) {
   const [showPicker, setShowPicker] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editText, setEditText] = useState("");
+  const [editLoading, setEditLoading] = useState(false);
+  const [recallLoading, setRecallLoading] = useState(false);
+  const editInputRef = useRef<HTMLTextAreaElement>(null);
   const isRecalled = !!message.recalledAt;
   const isEdited = !!message.editedAt;
   const isPending = !!message._pending;
@@ -571,6 +595,49 @@ function MessageBubble({
     },
     [onReactionToggle]
   );
+
+  const canEdit = isOwn && !isRecalled && !isPending && !isFailed
+    && (Date.now() - new Date(message.createdAt).getTime()) < EDIT_WINDOW_MS;
+  const canRecall = (isOwn && !isRecalled && !isPending && !isFailed
+    && (Date.now() - new Date(message.createdAt).getTime()) < EDIT_WINDOW_MS);
+
+  const handleStartEdit = useCallback(() => {
+    setEditText(message.contentJson?.text || "");
+    setIsEditing(true);
+    setTimeout(() => editInputRef.current?.focus(), 0);
+  }, [message.contentJson?.text]);
+
+  const handleCancelEdit = useCallback(() => {
+    setIsEditing(false);
+    setEditText("");
+  }, []);
+
+  const handleSaveEdit = useCallback(async () => {
+    if (!editText.trim() || editLoading) return;
+    setEditLoading(true);
+    try {
+      await onEdit?.(message.id, editText.trim());
+      setIsEditing(false);
+      setEditText("");
+    } catch {
+      // stay in edit mode on failure
+    } finally {
+      setEditLoading(false);
+    }
+  }, [editText, editLoading, onEdit, message.id]);
+
+  const handleRecall = useCallback(async () => {
+    if (recallLoading) return;
+    if (!window.confirm("Recall this message? It will be removed for everyone.")) return;
+    setRecallLoading(true);
+    try {
+      await onRecall?.(message.id);
+    } catch {
+      // ignore
+    } finally {
+      setRecallLoading(false);
+    }
+  }, [recallLoading, onRecall, message.id]);
 
   return (
     <div
@@ -627,6 +694,25 @@ function MessageBubble({
             >
               <Star className={cn("h-4 w-4", isFavorited && "fill-current")} />
             </button>
+            {canEdit && (
+              <button
+                onClick={handleStartEdit}
+                className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                title="Edit message"
+              >
+                <Pencil className="h-4 w-4" />
+              </button>
+            )}
+            {canRecall && (
+              <button
+                onClick={handleRecall}
+                disabled={recallLoading}
+                className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 hover:text-red-600 dark:hover:text-red-400"
+                title="Recall message"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            )}
           </div>
         )}
 
@@ -656,9 +742,47 @@ function MessageBubble({
               {senderName || `User ${message.senderId.slice(0, 8)}`}
             </div>
           )}
-          <div className="text-sm whitespace-pre-wrap break-words">
-            {getMessageContent()}
-          </div>
+          {isEditing ? (
+            <div className="flex flex-col gap-1">
+              <textarea
+                ref={editInputRef}
+                value={editText}
+                onChange={(e) => setEditText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSaveEdit();
+                  }
+                  if (e.key === "Escape") handleCancelEdit();
+                }}
+                className="text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 resize-none min-h-[2rem] focus:outline-none focus:ring-1 focus:ring-blue-500"
+                rows={1}
+                disabled={editLoading}
+              />
+              <div className="flex items-center gap-1 justify-end">
+                <button
+                  onClick={handleCancelEdit}
+                  className="p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500"
+                  title="Cancel"
+                  disabled={editLoading}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  onClick={handleSaveEdit}
+                  className="p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-green-600 dark:text-green-400"
+                  title="Save edit"
+                  disabled={editLoading || !editText.trim()}
+                >
+                  <Check className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="text-sm whitespace-pre-wrap break-words">
+              {getMessageContent()}
+            </div>
+          )}
           <div
             className={cn(
               "text-xs mt-1 flex items-center gap-1",
