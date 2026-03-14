@@ -542,6 +542,7 @@ export async function wikiRoutes(fastify: FastifyInstance) {
         documentId: newDoc.id,
         principalId: currentUserId,
         principalType: "user",
+        createdBy: currentUserId,
         role: "owner",
       });
 

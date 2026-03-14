@@ -2468,6 +2468,7 @@ export async function messagesRoutes(fastify: FastifyInstance) {
         principalId: currentUserId,
         principalType: "user",
         role: "owner",
+        createdBy: currentUserId,
       });
 
       return reply.status(201).send({
