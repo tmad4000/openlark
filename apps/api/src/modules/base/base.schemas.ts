@@ -80,6 +80,18 @@ export const updateViewSchema = z.object({
   position: z.number().int().min(0).optional(),
 });
 
+// ============ DASHBOARDS ============
+
+export const createDashboardSchema = z.object({
+  name: z.string().min(1, "Name is required").max(255),
+  layout: z.array(z.record(z.unknown())).optional().default([]),
+});
+
+export const updateDashboardSchema = z.object({
+  name: z.string().min(1).max(255).optional(),
+  layout: z.array(z.record(z.unknown())).optional(),
+});
+
 // ============ TYPE EXPORTS ============
 
 export type CreateBaseInput = z.infer<typeof createBaseSchema>;
@@ -92,3 +104,5 @@ export type CreateRecordInput = z.infer<typeof createRecordSchema>;
 export type UpdateRecordInput = z.infer<typeof updateRecordSchema>;
 export type CreateViewInput = z.infer<typeof createViewSchema>;
 export type UpdateViewInput = z.infer<typeof updateViewSchema>;
+export type CreateDashboardInput = z.infer<typeof createDashboardSchema>;
+export type UpdateDashboardInput = z.infer<typeof updateDashboardSchema>;

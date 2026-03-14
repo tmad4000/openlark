@@ -1179,8 +1179,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 70,
-      "passes": false,
-      "notes": "Use Recharts or Chart.js for chart rendering."
+      "passes": true,
+      "notes": "Added base_dashboards table (id, base_id, name, layout jsonb, created_at). Dashboard CRUD API with access control. Dashboard builder UI with drag-and-drop chart blocks (position + resize). Chart types: bar (horizontal), column (vertical), line, pie, metric. Each chart configured with data source table, x-axis field, y-axis aggregation (count/sum/avg/min/max), grouping. Charts render from live record data. Layout auto-saved on changes."
     },
     {
       "id": "US-071",

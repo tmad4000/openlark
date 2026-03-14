@@ -145,6 +145,7 @@ export const basesRelations = relations(bases, ({ one, many }) => ({
     references: [users.id],
   }),
   tables: many(baseTables),
+  dashboards: many(baseDashboards),
 }));
 
 export const baseTablesRelations = relations(baseTables, ({ one, many }) => ({
@@ -181,6 +182,33 @@ export const baseViewsRelations = relations(baseViews, ({ one }) => ({
     references: [baseTables.id],
   }),
 }));
+
+// Dashboards table
+export const baseDashboards = pgTable(
+  "base_dashboards",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    baseId: uuid("base_id")
+      .notNull()
+      .references(() => bases.id, { onDelete: "cascade" }),
+    name: varchar("name", { length: 255 }).notNull(),
+    layout: jsonb("layout").notNull().default([]),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [index("base_dashboards_base_id_idx").on(table.baseId)]
+);
+
+export const baseDashboardsRelations = relations(baseDashboards, ({ one }) => ({
+  base: one(bases, {
+    fields: [baseDashboards.baseId],
+    references: [bases.id],
+  }),
+}));
+
+export type BaseDashboard = typeof baseDashboards.$inferSelect;
+export type NewBaseDashboard = typeof baseDashboards.$inferInsert;
 
 // Automation enums
 export const automationTypeEnum = pgEnum("automation_type", [

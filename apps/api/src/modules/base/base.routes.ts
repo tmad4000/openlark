@@ -10,6 +10,8 @@ import {
   recordsQuerySchema,
   createViewSchema,
   updateViewSchema,
+  createDashboardSchema,
+  updateDashboardSchema,
 } from "./base.schemas.js";
 import { authenticate } from "../auth/middleware.js";
 import { formatZodError } from "../../utils/validation.js";
@@ -777,6 +779,178 @@ export async function baseRoutes(app: FastifyInstance) {
         }
         throw error;
       }
+    }
+  );
+
+  // ============ DASHBOARD ROUTES ============
+
+  // List dashboards for a base
+  app.get<{ Params: { id: string } }>(
+    "/bases/:id/dashboards",
+    async (req, reply) => {
+      const canAccess = await baseService.canAccessBase(
+        req.params.id,
+        req.user!.orgId
+      );
+      if (!canAccess) {
+        return reply.status(403).send({
+          statusCode: 403,
+          error: "Forbidden",
+          message: "You do not have access to this base",
+        });
+      }
+
+      const dashboards = await baseService.getBaseDashboards(req.params.id);
+      return { data: { dashboards } };
+    }
+  );
+
+  // Create dashboard
+  app.post<{ Params: { id: string } }>(
+    "/bases/:id/dashboards",
+    async (req, reply) => {
+      try {
+        const canAccess = await baseService.canAccessBase(
+          req.params.id,
+          req.user!.orgId
+        );
+        if (!canAccess) {
+          return reply.status(403).send({
+            statusCode: 403,
+            error: "Forbidden",
+            message: "You do not have access to this base",
+          });
+        }
+
+        const input = createDashboardSchema.parse(req.body);
+        const dashboard = await baseService.createDashboard(
+          req.params.id,
+          input
+        );
+        return reply.status(201).send({ data: { dashboard } });
+      } catch (error) {
+        if (error instanceof ZodError) {
+          return reply.status(400).send(formatZodError(error));
+        }
+        throw error;
+      }
+    }
+  );
+
+  // Get dashboard
+  app.get<{ Params: { id: string } }>(
+    "/dashboards/:id",
+    async (req, reply) => {
+      const dashboard = await baseService.getDashboardById(req.params.id);
+      if (!dashboard) {
+        return reply.status(404).send({
+          statusCode: 404,
+          error: "Not Found",
+          message: "Dashboard not found",
+        });
+      }
+
+      const canAccess = await baseService.canAccessBase(
+        dashboard.baseId,
+        req.user!.orgId
+      );
+      if (!canAccess) {
+        return reply.status(403).send({
+          statusCode: 403,
+          error: "Forbidden",
+          message: "You do not have access to this base",
+        });
+      }
+
+      return { data: { dashboard } };
+    }
+  );
+
+  // Update dashboard
+  app.patch<{ Params: { id: string } }>(
+    "/dashboards/:id",
+    async (req, reply) => {
+      try {
+        const dashboard = await baseService.getDashboardById(req.params.id);
+        if (!dashboard) {
+          return reply.status(404).send({
+            statusCode: 404,
+            error: "Not Found",
+            message: "Dashboard not found",
+          });
+        }
+
+        const canAccess = await baseService.canAccessBase(
+          dashboard.baseId,
+          req.user!.orgId
+        );
+        if (!canAccess) {
+          return reply.status(403).send({
+            statusCode: 403,
+            error: "Forbidden",
+            message: "You do not have access to this base",
+          });
+        }
+
+        const input = updateDashboardSchema.parse(req.body);
+        const updated = await baseService.updateDashboard(
+          req.params.id,
+          input
+        );
+
+        if (!updated) {
+          return reply.status(404).send({
+            statusCode: 404,
+            error: "Not Found",
+            message: "Dashboard not found",
+          });
+        }
+
+        return { data: { dashboard: updated } };
+      } catch (error) {
+        if (error instanceof ZodError) {
+          return reply.status(400).send(formatZodError(error));
+        }
+        throw error;
+      }
+    }
+  );
+
+  // Delete dashboard
+  app.delete<{ Params: { id: string } }>(
+    "/dashboards/:id",
+    async (req, reply) => {
+      const dashboard = await baseService.getDashboardById(req.params.id);
+      if (!dashboard) {
+        return reply.status(404).send({
+          statusCode: 404,
+          error: "Not Found",
+          message: "Dashboard not found",
+        });
+      }
+
+      const canAccess = await baseService.canAccessBase(
+        dashboard.baseId,
+        req.user!.orgId
+      );
+      if (!canAccess) {
+        return reply.status(403).send({
+          statusCode: 403,
+          error: "Forbidden",
+          message: "You do not have access to this base",
+        });
+      }
+
+      const deleted = await baseService.deleteDashboard(req.params.id);
+      if (!deleted) {
+        return reply.status(404).send({
+          statusCode: 404,
+          error: "Not Found",
+          message: "Dashboard not found",
+        });
+      }
+
+      return reply.status(204).send();
     }
   );
 }

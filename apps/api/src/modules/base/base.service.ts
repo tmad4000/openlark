@@ -5,6 +5,7 @@ import {
   baseFields,
   baseRecords,
   baseViews,
+  baseDashboards,
 } from "../../db/schema/index.js";
 import { eq, and, isNull, asc, desc, sql } from "drizzle-orm";
 import type {
@@ -18,6 +19,8 @@ import type {
   UpdateRecordInput,
   CreateViewInput,
   UpdateViewInput,
+  CreateDashboardInput,
+  UpdateDashboardInput,
 } from "./base.schemas.js";
 import type {
   Base,
@@ -25,6 +28,7 @@ import type {
   BaseField,
   BaseRecord,
   BaseView,
+  BaseDashboard,
 } from "../../db/schema/index.js";
 
 export class BaseService {
@@ -434,6 +438,69 @@ export class BaseService {
       .from(baseViews)
       .where(and(eq(baseViews.id, viewId), isNull(baseViews.deletedAt)));
     return view ?? null;
+  }
+
+  // ============ DASHBOARD CRUD ============
+
+  async getBaseDashboards(baseId: string): Promise<BaseDashboard[]> {
+    return db
+      .select()
+      .from(baseDashboards)
+      .where(eq(baseDashboards.baseId, baseId))
+      .orderBy(asc(baseDashboards.createdAt));
+  }
+
+  async getDashboardById(dashboardId: string): Promise<BaseDashboard | null> {
+    const [dashboard] = await db
+      .select()
+      .from(baseDashboards)
+      .where(eq(baseDashboards.id, dashboardId));
+    return dashboard ?? null;
+  }
+
+  async createDashboard(
+    baseId: string,
+    input: CreateDashboardInput
+  ): Promise<BaseDashboard> {
+    const [dashboard] = await db
+      .insert(baseDashboards)
+      .values({
+        baseId,
+        name: input.name,
+        layout: input.layout,
+      })
+      .returning();
+
+    if (!dashboard) throw new Error("Failed to create dashboard");
+    return dashboard;
+  }
+
+  async updateDashboard(
+    dashboardId: string,
+    input: UpdateDashboardInput
+  ): Promise<BaseDashboard | null> {
+    const updateData: Record<string, unknown> = {};
+    if (input.name !== undefined) updateData.name = input.name;
+    if (input.layout !== undefined) updateData.layout = input.layout;
+
+    if (Object.keys(updateData).length === 0) return null;
+
+    const [updated] = await db
+      .update(baseDashboards)
+      .set(updateData)
+      .where(eq(baseDashboards.id, dashboardId))
+      .returning();
+
+    return updated ?? null;
+  }
+
+  async deleteDashboard(dashboardId: string): Promise<boolean> {
+    const result = await db
+      .delete(baseDashboards)
+      .where(eq(baseDashboards.id, dashboardId))
+      .returning({ id: baseDashboards.id });
+
+    return result.length > 0;
   }
 }
 

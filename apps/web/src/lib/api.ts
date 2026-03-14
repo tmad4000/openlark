@@ -950,6 +950,39 @@ class ApiClient {
       `/base/automations/${automationId}/runs`
     );
   }
+
+  // Dashboard endpoints
+  async getDashboards(baseId: string) {
+    return this.request<{ dashboards: BaseDashboard[] }>(
+      `/base/bases/${baseId}/dashboards`
+    );
+  }
+
+  async createDashboard(baseId: string, data: { name: string; layout?: DashboardChartBlock[] }) {
+    return this.request<{ dashboard: BaseDashboard }>(
+      `/base/bases/${baseId}/dashboards`,
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+      }
+    );
+  }
+
+  async updateDashboard(dashboardId: string, data: { name?: string; layout?: DashboardChartBlock[] }) {
+    return this.request<{ dashboard: BaseDashboard }>(
+      `/base/dashboards/${dashboardId}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      }
+    );
+  }
+
+  async deleteDashboard(dashboardId: string) {
+    return this.request<void>(`/base/dashboards/${dashboardId}`, {
+      method: "DELETE",
+    });
+  }
 }
 
 // Types
@@ -1343,6 +1376,32 @@ export interface AutomationRun {
   error: string | null;
   startedAt: string;
   completedAt: string | null;
+}
+
+// Dashboard types
+export interface DashboardChartBlock {
+  id: string;
+  type: "bar" | "column" | "line" | "pie" | "metric";
+  title: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  config: {
+    tableId: string;
+    xAxisFieldId?: string;
+    yAxisAggregation: "count" | "sum" | "avg" | "min" | "max";
+    yAxisFieldId?: string;
+    groupByFieldId?: string;
+  };
+}
+
+export interface BaseDashboard {
+  id: string;
+  baseId: string;
+  name: string;
+  layout: DashboardChartBlock[];
+  createdAt: string;
 }
 
 export const api = new ApiClient();

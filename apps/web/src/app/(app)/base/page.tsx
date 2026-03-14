@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { AppShell } from "@/components/layout/app-shell";
-import { BaseGridView, BaseKanbanView, BaseAutomationsPanel } from "@/components/base";
+import { BaseGridView, BaseKanbanView, BaseAutomationsPanel, BaseDashboardView } from "@/components/base";
 import { BaseFormView, type FormViewConfig } from "@/components/base/base-form-view";
 import type { ViewConfig } from "@/components/base/base-view-toolbar";
 import { api, type BaseInfo, type BaseTableInfo, type BaseViewInfo } from "@/lib/api";
@@ -19,6 +19,7 @@ import {
   FileInput,
   ChevronLeft,
   Zap,
+  BarChart3,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,6 +46,7 @@ export default function BasePage() {
   const [newBaseName, setNewBaseName] = useState("");
   const [addingView, setAddingView] = useState(false);
   const [showAutomations, setShowAutomations] = useState(false);
+  const [showDashboard, setShowDashboard] = useState(false);
 
   // Load bases
   useEffect(() => {
@@ -316,6 +318,7 @@ export default function BasePage() {
             onClick={() => {
               setSelectedTable(table);
               setShowAutomations(false);
+              setShowDashboard(false);
             }}
             className={cn(
               "w-full flex items-center gap-2 px-3 py-1.5 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors",
@@ -335,7 +338,7 @@ export default function BasePage() {
           </span>
         </div>
         <button
-          onClick={() => setShowAutomations(true)}
+          onClick={() => { setShowAutomations(true); setShowDashboard(false); }}
           className={cn(
             "w-full flex items-center gap-2 px-3 py-1.5 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors",
             showAutomations &&
@@ -344,6 +347,17 @@ export default function BasePage() {
         >
           <Zap className="w-3.5 h-3.5 flex-shrink-0" />
           <span className="truncate">Automations</span>
+        </button>
+        <button
+          onClick={() => { setShowDashboard(true); setShowAutomations(false); }}
+          className={cn(
+            "w-full flex items-center gap-2 px-3 py-1.5 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors",
+            showDashboard &&
+              "bg-purple-50 dark:bg-purple-950/30 text-purple-600 dark:text-purple-400"
+          )}
+        >
+          <BarChart3 className="w-3.5 h-3.5 flex-shrink-0" />
+          <span className="truncate">Dashboards</span>
         </button>
       </div>
     </div>
@@ -430,7 +444,9 @@ export default function BasePage() {
         </div>
 
         {/* View content */}
-        {showAutomations ? (
+        {showDashboard ? (
+          <BaseDashboardView baseId={selectedBase.id} tables={tables} />
+        ) : showAutomations ? (
           <BaseAutomationsPanel baseId={selectedBase.id} tables={tables} />
         ) : selectedTable ? (
           selectedView?.type === "form" ? (
