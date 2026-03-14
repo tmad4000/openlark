@@ -10,3 +10,4 @@ export * from "./docs";
 export * from "./notifications";
 export * from "./wiki";
 export * from "./base";
+export * from "./tasks";
