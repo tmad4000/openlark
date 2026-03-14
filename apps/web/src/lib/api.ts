@@ -1259,6 +1259,27 @@ class ApiClient {
       body: JSON.stringify(data),
     });
   }
+
+  // Attendance
+  async clockInOut(data: {
+    type: "clock_in" | "clock_out";
+    method: "gps" | "wifi" | "manual";
+    location?: { latitude: number; longitude: number };
+    notes?: string;
+  }) {
+    return this.request<{ record: ClockRecord }>("/attendance/clock", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getMyAttendanceRecords(month: string) {
+    return this.request<{ records: ClockRecord[] }>(`/attendance/my-records?month=${month}`);
+  }
+
+  async getAttendanceStats(month: string) {
+    return this.request<{ stats: AttendanceStats }>(`/attendance/stats?month=${month}`);
+  }
 }
 
 // Types
@@ -1814,6 +1835,30 @@ export interface OkrAlignment {
   alignedToObjectiveId: string;
   confirmed: boolean;
   createdAt: string;
+}
+
+// Attendance types
+export interface ClockRecord {
+  id: string;
+  userId: string;
+  orgId: string;
+  type: "clock_in" | "clock_out";
+  method: "gps" | "wifi" | "manual";
+  clockTime: string;
+  latitude: string | null;
+  longitude: string | null;
+  isLate: boolean;
+  notes: string | null;
+  createdAt: string;
+}
+
+export interface AttendanceStats {
+  workingDays: number;
+  daysPresent: number;
+  daysLate: number;
+  daysAbsent: number;
+  leaveDays: number;
+  overtimeHours: number;
 }
 
 export const api = new ApiClient();
