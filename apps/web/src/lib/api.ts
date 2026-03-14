@@ -1420,6 +1420,36 @@ class ApiClient {
       method: "POST",
     });
   }
+
+  // Minutes
+  async getMinutes(minutesId: string) {
+    return this.request<{ minutes: MinutesInfo; meeting: MeetingInfo | null; recording: RecordingInfo | null }>(
+      `/minutes/${minutesId}`
+    );
+  }
+
+  async getMinutesComments(minutesId: string) {
+    return this.request<{ comments: MinutesComment[] }>(
+      `/minutes/${minutesId}/comments`
+    );
+  }
+
+  async addMinutesComment(minutesId: string, paragraphIndex: number, content: string) {
+    return this.request<{ comment: MinutesComment }>(
+      `/minutes/${minutesId}/comments`,
+      {
+        method: "POST",
+        body: JSON.stringify({ paragraphIndex, content }),
+      }
+    );
+  }
+
+  async deleteMinutesComment(minutesId: string, commentId: string) {
+    return this.request<{ comment: MinutesComment }>(
+      `/minutes/${minutesId}/comments/${commentId}`,
+      { method: "DELETE" }
+    );
+  }
 }
 
 // Types
@@ -2088,6 +2118,68 @@ export interface TranslationResult {
 export interface TranslationPreferences {
   auto_translate_enabled: boolean;
   target_language: string;
+}
+
+// Minutes types
+export interface TranscriptSegment {
+  speaker: string;
+  text: string;
+  start: number; // seconds
+  end: number; // seconds
+}
+
+export interface MeetingSummary {
+  title: string;
+  overview: string;
+  keyPoints: string[];
+  decisions: string[];
+}
+
+export interface Chapter {
+  title: string;
+  start: number;
+  end: number;
+  summary: string;
+}
+
+export interface ActionItem {
+  description: string;
+  assignee?: string;
+  dueDate?: string;
+}
+
+export interface MinutesInfo {
+  id: string;
+  meetingId: string;
+  recordingId: string | null;
+  transcript: TranscriptSegment[] | null;
+  summary: MeetingSummary | null;
+  chapters: Chapter[] | null;
+  actionItems: ActionItem[] | null;
+  language: string | null;
+  status: "pending" | "processing" | "ready" | "failed";
+  createdAt: string;
+}
+
+export interface RecordingInfo {
+  id: string;
+  meetingId: string;
+  storageUrl: string;
+  duration: number | null;
+  size: number | null;
+  transcriptionStatus: string;
+  createdAt: string;
+}
+
+export interface MinutesComment {
+  id: string;
+  minutesId: string;
+  userId: string;
+  paragraphIndex: number;
+  content: string;
+  createdAt: string;
+  userName: string | null;
+  userAvatar: string | null;
 }
 
 // Meeting types
