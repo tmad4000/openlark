@@ -4,9 +4,11 @@ import { db } from "../../db/index.js";
 import {
   meetings,
   meetingParticipants,
+  meetingRecordings,
 } from "../../db/schema/meetings.js";
 import { config } from "../../config.js";
 import type { CreateMeetingInput } from "./meetings.schemas.js";
+import { enqueueTranscription } from "./meetings.worker.js";
 
 function generateRoomId(): string {
   const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
@@ -84,6 +86,14 @@ class MeetingsService {
     return meeting ?? null;
   }
 
+  async getMeetingByRoomId(roomId: string) {
+    const [meeting] = await db
+      .select()
+      .from(meetings)
+      .where(eq(meetings.roomId, roomId));
+    return meeting ?? null;
+  }
+
   async joinMeeting(meetingId: string, userId: string, userName: string) {
     const meeting = await this.getMeeting(meetingId);
     if (!meeting) return null;
@@ -147,6 +157,43 @@ class MeetingsService {
       .returning();
 
     return updated;
+  }
+
+  async handleRecordingComplete(
+    meetingId: string,
+    storageUrl: string,
+    duration?: number,
+    size?: number
+  ) {
+    const meeting = await this.getMeeting(meetingId);
+    if (!meeting) return null;
+
+    const [recording] = await db
+      .insert(meetingRecordings)
+      .values({
+        meetingId,
+        storageUrl,
+        duration: duration ?? null,
+        size: size ?? null,
+        transcriptionStatus: "pending",
+      })
+      .returning();
+
+    // Queue transcription job
+    await enqueueTranscription({
+      recordingId: recording!.id,
+      meetingId,
+      storageUrl,
+    });
+
+    return recording;
+  }
+
+  async getRecordings(meetingId: string) {
+    return db
+      .select()
+      .from(meetingRecordings)
+      .where(eq(meetingRecordings.meetingId, meetingId));
   }
 }
 

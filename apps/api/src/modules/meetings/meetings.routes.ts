@@ -7,6 +7,48 @@ import { formatZodError } from "../../utils/validation.js";
 import { messengerService } from "../messenger/messenger.service.js";
 import { publishMessageEvent } from "../messenger/websocket.js";
 
+// LiveKit recording webhook — no auth (verified by LiveKit signature in production)
+export async function meetingsWebhookRoutes(app: FastifyInstance) {
+  app.post("/livekit/recording", async (req, reply) => {
+    const body = req.body as {
+      event?: string;
+      egressInfo?: {
+        roomName?: string;
+        fileResults?: Array<{
+          filename?: string;
+          duration?: number;
+          size?: number;
+        }>;
+      };
+    };
+
+    if (body.event !== "egress_ended" || !body.egressInfo) {
+      return reply.status(200).send({ ok: true });
+    }
+
+    const { roomName, fileResults } = body.egressInfo;
+    if (!roomName || !fileResults?.length) {
+      return reply.status(200).send({ ok: true });
+    }
+
+    // Find meeting by room ID
+    const meeting = await meetingsService.getMeetingByRoomId(roomName);
+    if (!meeting) {
+      return reply.status(200).send({ ok: true, skipped: "meeting_not_found" });
+    }
+
+    const file = fileResults[0]!;
+    await meetingsService.handleRecordingComplete(
+      meeting.id,
+      file.filename ?? roomName,
+      file.duration ? Math.round(file.duration) : undefined,
+      file.size ? Number(file.size) : undefined
+    );
+
+    return reply.status(200).send({ ok: true });
+  });
+}
+
 export async function meetingsRoutes(app: FastifyInstance) {
   app.addHook("preHandler", authenticate);
 

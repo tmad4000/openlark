@@ -1573,8 +1573,8 @@
         "Typecheck passes"
       ],
       "priority": 93,
-      "passes": false,
-      "notes": "LiveKit Egress handles recording. Transcription is a BullMQ background job."
+      "passes": true,
+      "notes": "Added meeting_recordings, minutes, minutes_comments tables to meetings schema. LiveKit Egress webhook at POST /api/v1/webhooks/livekit/recording creates recording entries and queues BullMQ transcription jobs. Transcription worker processes jobs and creates minutes entries."
     },
     {
       "id": "US-094",

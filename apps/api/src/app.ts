@@ -29,7 +29,7 @@ import { attendanceRoutes } from "./modules/attendance/index.js";
 import { emailRoutes } from "./modules/email/index.js";
 import { searchRoutes } from "./modules/search/index.js";
 import { translationRoutes } from "./modules/translation/index.js";
-import { meetingsRoutes } from "./modules/meetings/index.js";
+import { meetingsRoutes, meetingsWebhookRoutes } from "./modules/meetings/index.js";
 
 export async function buildApp() {
   const app = Fastify({
@@ -128,6 +128,9 @@ export async function buildApp() {
 
       // Meetings module (video meetings via LiveKit)
       api.register(meetingsRoutes, { prefix: "/meetings" });
+
+      // LiveKit webhooks (no auth — verified by LiveKit in production)
+      api.register(meetingsWebhookRoutes, { prefix: "/webhooks" });
     },
     { prefix: "/api/v1" }
   );
