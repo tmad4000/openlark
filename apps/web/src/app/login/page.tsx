@@ -16,6 +16,17 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
+
+const DEMO_ACCOUNTS = [
+  { email: "jacob@openlark.dev", name: "Jacob", role: "Admin" },
+  { email: "alice@openlark.dev", name: "Alice", role: "Engineer" },
+  { email: "bob@openlark.dev", name: "Bob", role: "Designer" },
+  { email: "carol@openlark.dev", name: "Carol", role: "PM" },
+  { email: "david@openlark.dev", name: "David", role: "Sales" },
+  { email: "emma@openlark.dev", name: "Emma", role: "Support" },
+];
+const DEMO_PASSWORD = "demo1234";
+
 export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuth();
@@ -99,6 +110,40 @@ export default function LoginPage() {
           </CardFooter>
         </form>
       </Card>
+    
+      {/* Quick Login - Demo Accounts */}
+      <div className="fixed bottom-4 left-4 group">
+        <button className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors opacity-60 hover:opacity-100">
+          Demo accounts
+        </button>
+        <div className="hidden group-hover:block absolute bottom-6 left-0 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-2 min-w-[200px] z-50">
+          <p className="text-[10px] text-gray-400 px-2 py-1 uppercase tracking-wider">Quick Login</p>
+          {DEMO_ACCOUNTS.map((account) => (
+            <button
+              key={account.email}
+              type="button"
+              onClick={() => {
+                setEmail(account.email);
+                setPassword(DEMO_PASSWORD);
+                setTimeout(() => {
+                  const form = document.querySelector("form");
+                  if (form) form.requestSubmit();
+                }, 50);
+              }}
+              className="w-full text-left px-2 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-gray-800 rounded flex items-center gap-2 transition-colors"
+            >
+              <span className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 flex items-center justify-center text-xs font-medium">
+                {account.name[0]}
+              </span>
+              <div>
+                <div className="text-gray-700 dark:text-gray-200 text-xs font-medium">{account.name}</div>
+                <div className="text-gray-400 text-[10px]">{account.role}</div>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+
     </div>
   );
 }
