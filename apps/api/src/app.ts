@@ -28,6 +28,7 @@ import { okrRoutes } from "./modules/okrs/index.js";
 import { attendanceRoutes } from "./modules/attendance/index.js";
 import { emailRoutes } from "./modules/email/index.js";
 import { searchRoutes } from "./modules/search/index.js";
+import { translationRoutes } from "./modules/translation/index.js";
 
 export async function buildApp() {
   const app = Fastify({
@@ -120,6 +121,9 @@ export async function buildApp() {
 
       // Global search module
       api.register(searchRoutes, { prefix: "/search" });
+
+      // Translation module
+      api.register(translationRoutes, { prefix: "/translate" });
     },
     { prefix: "/api/v1" }
   );

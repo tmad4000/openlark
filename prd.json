@@ -1474,8 +1474,8 @@
         "Typecheck passes"
       ],
       "priority": 87,
-      "passes": false,
-      "notes": "Default to LibreTranslate (self-hosted, free). Add cloud providers as optional backends."
+      "passes": true,
+      "notes": "Translation module with pluggable backend (LibreTranslate default, stub for dev). POST /api/v1/translate/translate endpoint with auto-detect source language. translation_preferences and translation_usage tables. GET/PATCH /users/me/translation-preferences on user routes. Rate limit: 100 translations per user per hour tracked via translation_usage table with hourly buckets."
     },
     {
       "id": "US-088",

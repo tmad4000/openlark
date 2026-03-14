@@ -4,6 +4,8 @@ import { authService } from "./auth.service.js";
 import { updateProfileSchema } from "./auth.schemas.js";
 import { ZodError } from "zod";
 import { formatZodError } from "../../utils/validation.js";
+import { translationService } from "../translation/translation.service.js";
+import { updatePreferencesSchema } from "../translation/translation.schemas.js";
 
 export async function userRoutes(app: FastifyInstance) {
   // All user routes require authentication
@@ -33,6 +35,29 @@ export async function userRoutes(app: FastifyInstance) {
         });
       }
       return reply.send({ data: { user } });
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return reply.status(400).send(formatZodError(error));
+      }
+      throw error;
+    }
+  });
+
+  // GET /users/me/translation-preferences
+  app.get("/me/translation-preferences", async (req, reply) => {
+    const preferences = await translationService.getPreferences(req.user!.id);
+    return reply.send({ data: { preferences } });
+  });
+
+  // PATCH /users/me/translation-preferences
+  app.patch("/me/translation-preferences", async (req, reply) => {
+    try {
+      const input = updatePreferencesSchema.parse(req.body);
+      const preferences = await translationService.updatePreferences(
+        input,
+        req.user!.id
+      );
+      return reply.send({ data: { preferences } });
     } catch (error) {
       if (error instanceof ZodError) {
         return reply.status(400).send(formatZodError(error));
