@@ -23,6 +23,7 @@ import { wikiRoutes } from "./modules/wiki/index.js";
 import { baseRoutes } from "./modules/base/index.js";
 import { automationRoutes } from "./modules/automations/index.js";
 import { taskRoutes } from "./modules/tasks/index.js";
+import { approvalsRoutes } from "./modules/approvals/index.js";
 
 export async function buildApp() {
   const app = Fastify({
@@ -100,6 +101,9 @@ export async function buildApp() {
 
       // Tasks module (task management)
       api.register(taskRoutes, { prefix: "/tasks" });
+
+      // Approvals module (approval workflows)
+      api.register(approvalsRoutes, { prefix: "/approvals" });
     },
     { prefix: "/api/v1" }
   );

@@ -11,3 +11,4 @@ export * from "./notifications";
 export * from "./wiki";
 export * from "./base";
 export * from "./tasks";
+export * from "./approvals";

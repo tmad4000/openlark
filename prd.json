@@ -1287,8 +1287,8 @@
         "Typecheck passes"
       ],
       "priority": 76,
-      "passes": false,
-      "notes": "Workflow JSON defines steps: [{approver_type: 'user|role|department', approver_id, type: 'sequential|parallel'}]"
+      "passes": true,
+      "notes": "Schema: approval_templates, approval_requests, approval_steps tables with enums. API: CRUD for templates, submit/list requests, decide steps with sequential/parallel workflow support. Routes registered under /api/v1/approvals."
     },
     {
       "id": "US-077",
