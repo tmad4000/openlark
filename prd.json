@@ -1812,8 +1812,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 107,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Slides editor component for type=slide documents. Thumbnail sidebar with add/delete/reorder slides. Canvas with text boxes, images, rectangles, circles, and arrows. Drag to move elements, resize handles shown on selection. Presenter view with fullscreen slideshow and keyboard navigation (arrow keys, escape). Elements rendered proportionally in presenter view."
     },
     {
       "id": "US-108",
