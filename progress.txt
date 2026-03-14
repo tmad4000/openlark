@@ -83,3 +83,4 @@
 [2026-03-14 23:30] US-093 — Meeting recording and Minutes schema — PASS
 [2026-03-14 23:45] US-094 — AI meeting transcription and summary — PASS
 [2026-03-14 23:59] US-095 — Minutes viewer UI — PASS
+[2026-03-14 23:59] US-096 — Forms module - schema and builder API — PASS

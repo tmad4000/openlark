@@ -31,6 +31,7 @@ import { searchRoutes } from "./modules/search/index.js";
 import { translationRoutes } from "./modules/translation/index.js";
 import { meetingsRoutes, meetingsWebhookRoutes } from "./modules/meetings/index.js";
 import { minutesRoutes } from "./modules/minutes/index.js";
+import { formsRoutes } from "./modules/forms/index.js";
 
 export async function buildApp() {
   const app = Fastify({
@@ -132,6 +133,9 @@ export async function buildApp() {
 
       // Minutes module (meeting minutes viewer)
       api.register(minutesRoutes, { prefix: "/minutes" });
+
+      // Forms module (form builder and responses)
+      api.register(formsRoutes, { prefix: "/forms" });
 
       // LiveKit webhooks (no auth — verified by LiveKit in production)
       api.register(meetingsWebhookRoutes, { prefix: "/webhooks" });

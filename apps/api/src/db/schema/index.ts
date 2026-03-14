@@ -17,3 +17,4 @@ export * from "./attendance";
 export * from "./email";
 export * from "./translation";
 export * from "./meetings";
+export * from "./forms";
