@@ -18,6 +18,7 @@ export const notificationTypeEnum = pgEnum("notification_type", [
   "approval_pending",
   "event_invite",
   "event_updated",
+  "minutes_ready",
 ]);
 
 export const notifications = pgTable(

@@ -1588,8 +1588,8 @@
         "Typecheck passes"
       ],
       "priority": 94,
-      "passes": false,
-      "notes": "Use openai-whisper or faster-whisper for transcription. LLM for summarization."
+      "passes": true,
+      "notes": "BullMQ worker downloads audio via fetch, runs Whisper ASR for transcript with speaker labels/timestamps, then calls configurable LLM (OpenAI/Anthropic/Ollama) to generate summary, action items, and chapters. Results stored in minutes table. Notifications sent to all meeting participants when minutes are ready. Added minutes_ready notification type."
     },
     {
       "id": "US-095",

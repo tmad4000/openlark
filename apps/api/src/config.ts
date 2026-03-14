@@ -38,6 +38,16 @@ const envSchema = z.object({
   LIVEKIT_API_KEY: z.string().default("devkey"),
   LIVEKIT_API_SECRET: z.string().default("devsecret1234567890devsecret1234567890"),
   LIVEKIT_URL: z.string().default("ws://localhost:7880"),
+
+  // AI transcription & summarization
+  AI_PROVIDER: z.enum(["openai", "anthropic", "ollama"]).default("openai"),
+  OPENAI_API_KEY: z.string().default(""),
+  OPENAI_BASE_URL: z.string().default("https://api.openai.com/v1"),
+  ANTHROPIC_API_KEY: z.string().default(""),
+  OLLAMA_URL: z.string().default("http://localhost:11434"),
+  WHISPER_URL: z.string().default("https://api.openai.com/v1/audio/transcriptions"),
+  WHISPER_MODEL: z.string().default("whisper-1"),
+  AI_SUMMARY_MODEL: z.string().default("gpt-4o-mini"),
 });
 
 export type Env = z.infer<typeof envSchema>;

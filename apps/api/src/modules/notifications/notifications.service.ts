@@ -70,7 +70,7 @@ export class NotificationsService {
 
   async createNotification(data: {
     userId: string;
-    type: "dm_received" | "mentioned" | "thread_reply" | "task_assigned" | "approval_pending" | "event_invite" | "event_updated";
+    type: "dm_received" | "mentioned" | "thread_reply" | "task_assigned" | "approval_pending" | "event_invite" | "event_updated" | "minutes_ready";
     title: string;
     body?: string;
     entityType?: string;
