@@ -1304,8 +1304,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 77,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Approvals page at /approvals with 3-tab sidebar (My Requests, Pending Review, Completed). Submit form with template selection and dynamic form fields. Detail panel with form data, status timeline, and approve/reject buttons with comment. Navigation rail updated with ClipboardCheck icon. API client methods added for templates, requests, and step decisions."
     },
     {
       "id": "US-078",

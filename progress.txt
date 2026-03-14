@@ -64,3 +64,4 @@
 [2026-03-14 05:00] US-074 — Tasks - Gantt chart view — PASS
 [2026-03-14 06:00] US-075 — Task creation from chat message — PASS
 [2026-03-14 07:00] US-076 — Approval workflow schema and API — PASS
+[2026-03-14 08:00] US-077 — Approval workflow UI - submit and review — PASS

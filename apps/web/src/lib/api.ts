@@ -1105,6 +1105,66 @@ class ApiClient {
       body: JSON.stringify(data),
     });
   }
+
+  // Approval endpoints
+  async getApprovalTemplates() {
+    return this.request<{ templates: ApprovalTemplate[] }>("/approvals/templates");
+  }
+
+  async createApprovalTemplate(data: {
+    name: string;
+    formSchema?: Record<string, unknown>;
+    workflow?: Array<{ approverIds: string[]; type: "sequential" | "parallel" }>;
+    category?: string;
+  }) {
+    return this.request<{ template: ApprovalTemplate }>("/approvals/templates", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getApprovalRequests(query?: {
+    status?: "pending" | "approved" | "rejected" | "cancelled";
+    limit?: number;
+    offset?: number;
+  }) {
+    const params = new URLSearchParams();
+    if (query?.status) params.set("status", query.status);
+    if (query?.limit) params.set("limit", String(query.limit));
+    if (query?.offset) params.set("offset", String(query.offset));
+    const qs = params.toString();
+    return this.request<{ requests: ApprovalRequest[] }>(
+      `/approvals/requests${qs ? `?${qs}` : ""}`
+    );
+  }
+
+  async getApprovalRequest(requestId: string) {
+    return this.request<{ request: ApprovalRequest }>(`/approvals/requests/${requestId}`);
+  }
+
+  async createApprovalRequest(data: {
+    templateId: string;
+    formData?: Record<string, unknown>;
+  }) {
+    return this.request<{ request: ApprovalRequest }>("/approvals/requests", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async decideApprovalStep(
+    requestId: string,
+    stepId: string,
+    data: { decision: "approve" | "reject"; comment?: string }
+  ) {
+    return this.request<{ step: ApprovalStep }>(
+      `/approvals/requests/${requestId}/steps/${stepId}/decide`,
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+      }
+    );
+  }
 }
 
 // Types
@@ -1560,6 +1620,41 @@ export interface TaskDependency {
   taskId: string;
   dependsOnTaskId: string;
   type: "fs" | "ss" | "ff" | "sf";
+}
+
+// Approval types
+export interface ApprovalTemplate {
+  id: string;
+  orgId: string;
+  name: string;
+  formSchema: Record<string, unknown>;
+  workflow: Array<{ approverIds: string[]; type: "sequential" | "parallel" }>;
+  category: string | null;
+  createdAt: string;
+}
+
+export interface ApprovalRequest {
+  id: string;
+  templateId: string;
+  requesterId: string;
+  orgId: string;
+  formData: Record<string, unknown>;
+  status: "pending" | "approved" | "rejected" | "cancelled";
+  createdAt: string;
+  template?: ApprovalTemplate;
+  steps?: ApprovalStep[];
+}
+
+export interface ApprovalStep {
+  id: string;
+  requestId: string;
+  stepIndex: number;
+  approverIds: string[];
+  type: "sequential" | "parallel";
+  status: "pending" | "approved" | "rejected";
+  decidedBy: string | null;
+  decidedAt: string | null;
+  comment: string | null;
 }
 
 export const api = new ApiClient();

@@ -12,6 +12,7 @@ import {
   Database,
   BookOpen,
   Home,
+  ClipboardCheck,
   Settings,
   Bell,
   type LucideIcon,
@@ -35,6 +36,7 @@ const navItems: NavItem[] = [
   { icon: Database, label: "Base", href: "/base" },
   { icon: BookOpen, label: "Wiki", href: "/wiki" },
   { icon: Home, label: "Workplace", href: "/workplace" },
+  { icon: ClipboardCheck, label: "Approvals", href: "/approvals" },
 ];
 
 export function NavigationRail() {
