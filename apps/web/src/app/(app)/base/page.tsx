@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { AppShell } from "@/components/layout/app-shell";
-import { BaseGridView, BaseKanbanView, BaseAutomationsPanel, BaseDashboardView } from "@/components/base";
+import { BaseGridView, BaseKanbanView, BaseCalendarView, BaseGanttView, BaseGalleryView, BaseAutomationsPanel, BaseDashboardView } from "@/components/base";
 import { BaseFormView, type FormViewConfig } from "@/components/base/base-form-view";
 import type { ViewConfig } from "@/components/base/base-view-toolbar";
 import { api, type BaseInfo, type BaseTableInfo, type BaseViewInfo } from "@/lib/api";
@@ -132,6 +132,54 @@ export default function BasePage() {
       const result = await api.createView(selectedTable.id, {
         name: "Kanban View",
         type: "kanban",
+        config: {},
+      });
+      setViews((prev) => [...prev, result.view]);
+      setSelectedView(result.view);
+      setAddingView(false);
+    } catch {
+      // Silently handle
+    }
+  }, [selectedTable]);
+
+  const handleAddCalendarView = useCallback(async () => {
+    if (!selectedTable) return;
+    try {
+      const result = await api.createView(selectedTable.id, {
+        name: "Calendar View",
+        type: "calendar",
+        config: { dateFieldId: null },
+      });
+      setViews((prev) => [...prev, result.view]);
+      setSelectedView(result.view);
+      setAddingView(false);
+    } catch {
+      // Silently handle
+    }
+  }, [selectedTable]);
+
+  const handleAddGanttView = useCallback(async () => {
+    if (!selectedTable) return;
+    try {
+      const result = await api.createView(selectedTable.id, {
+        name: "Gantt View",
+        type: "gantt",
+        config: { startFieldId: null, endFieldId: null },
+      });
+      setViews((prev) => [...prev, result.view]);
+      setSelectedView(result.view);
+      setAddingView(false);
+    } catch {
+      // Silently handle
+    }
+  }, [selectedTable]);
+
+  const handleAddGalleryView = useCallback(async () => {
+    if (!selectedTable) return;
+    try {
+      const result = await api.createView(selectedTable.id, {
+        name: "Gallery View",
+        type: "gallery",
         config: {},
       });
       setViews((prev) => [...prev, result.view]);
@@ -431,12 +479,25 @@ export default function BasePage() {
                   Form View
                 </button>
                 <button
-                  onClick={() => setAddingView(false)}
-                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-gray-400"
-                  disabled
+                  onClick={handleAddCalendarView}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-800"
                 >
                   <Calendar className="w-3.5 h-3.5" />
-                  Calendar (soon)
+                  Calendar View
+                </button>
+                <button
+                  onClick={handleAddGanttView}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-800"
+                >
+                  <GanttChart className="w-3.5 h-3.5" />
+                  Gantt View
+                </button>
+                <button
+                  onClick={handleAddGalleryView}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-gray-100 dark:hover:bg-gray-800"
+                >
+                  <LayoutGrid className="w-3.5 h-3.5" />
+                  Gallery View
                 </button>
               </div>
             )}
@@ -455,6 +516,68 @@ export default function BasePage() {
               tableName={selectedTable.name}
               viewId={selectedView.id}
               viewConfig={viewConfig as FormViewConfig}
+              onViewConfigChange={(newConfig) => {
+                if (selectedView) {
+                  handleViewConfigChange(selectedView.id, {
+                    ...viewConfig,
+                    ...newConfig,
+                  });
+                }
+              }}
+            />
+          ) : selectedView?.type === "calendar" ? (
+            <BaseCalendarView
+              tableId={selectedTable.id}
+              tableName={selectedTable.name}
+              dateFieldId={(viewConfig.dateFieldId as string) || null}
+              onDateFieldChange={(fieldId) => {
+                if (selectedView) {
+                  handleViewConfigChange(selectedView.id, {
+                    ...viewConfig,
+                    dateFieldId: fieldId,
+                  });
+                }
+              }}
+              viewConfig={viewConfig as ViewConfig}
+              onViewConfigChange={(newConfig) => {
+                if (selectedView) {
+                  handleViewConfigChange(selectedView.id, {
+                    ...viewConfig,
+                    ...newConfig,
+                  });
+                }
+              }}
+            />
+          ) : selectedView?.type === "gantt" ? (
+            <BaseGanttView
+              tableId={selectedTable.id}
+              tableName={selectedTable.name}
+              startFieldId={(viewConfig.startFieldId as string) || null}
+              endFieldId={(viewConfig.endFieldId as string) || null}
+              onFieldMapping={(startId, endId) => {
+                if (selectedView) {
+                  handleViewConfigChange(selectedView.id, {
+                    ...viewConfig,
+                    startFieldId: startId,
+                    endFieldId: endId,
+                  });
+                }
+              }}
+              viewConfig={viewConfig as ViewConfig}
+              onViewConfigChange={(newConfig) => {
+                if (selectedView) {
+                  handleViewConfigChange(selectedView.id, {
+                    ...viewConfig,
+                    ...newConfig,
+                  });
+                }
+              }}
+            />
+          ) : selectedView?.type === "gallery" ? (
+            <BaseGalleryView
+              tableId={selectedTable.id}
+              tableName={selectedTable.name}
+              viewConfig={viewConfig as ViewConfig}
               onViewConfigChange={(newConfig) => {
                 if (selectedView) {
                   handleViewConfigChange(selectedView.id, {

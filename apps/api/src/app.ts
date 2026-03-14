@@ -34,6 +34,9 @@ import { meetingsRoutes, meetingsWebhookRoutes } from "./modules/meetings/index.
 import { minutesRoutes } from "./modules/minutes/index.js";
 import { formsRoutes } from "./modules/forms/index.js";
 import { aiRoutes } from "./modules/ai/index.js";
+import { ssoRoutes, samlCallbackRoutes } from "./modules/sso/index.js";
+import { filesRoutes } from "./modules/files/index.js";
+import { statusRoutes } from "./modules/status/index.js";
 import { auditRoutes, registerAuditMiddleware } from "./modules/audit/index.js";
 import {
   platformRoutes,
@@ -173,6 +176,18 @@ export async function buildApp() {
 
       // LiveKit webhooks (no auth — verified by LiveKit in production)
       api.register(meetingsWebhookRoutes, { prefix: "/webhooks" });
+
+      // SSO configuration (admin)
+      api.register(ssoRoutes, { prefix: "/admin/sso" });
+
+      // SAML callback (public, under auth)
+      api.register(samlCallbackRoutes, { prefix: "/auth" });
+
+      // File upload service
+      api.register(filesRoutes, { prefix: "/files" });
+
+      // User status and working hours
+      api.register(statusRoutes, { prefix: "/users/me/status" });
 
       // Audit middleware — logs all state-changing API calls
       registerAuditMiddleware(api);

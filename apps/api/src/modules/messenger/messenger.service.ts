@@ -1744,6 +1744,111 @@ export class MessengerService {
       // ignore
     }
   }
+
+  /**
+   * Export chat messages to a document-like structure
+   */
+  async exportChatToDocument(
+    chatId: string,
+    userId: string,
+    orgId: string,
+    title?: string
+  ) {
+    // Get chat info
+    const [chat] = await db
+      .select()
+      .from(chats)
+      .where(eq(chats.id, chatId))
+      .limit(1);
+
+    // Get all messages
+    const chatMessages = await db
+      .select({
+        id: messages.id,
+        senderId: messages.senderId,
+        type: messages.type,
+        contentJson: messages.contentJson,
+        createdAt: messages.createdAt,
+        senderName: users.displayName,
+      })
+      .from(messages)
+      .leftJoin(users, eq(messages.senderId, users.id))
+      .where(
+        and(
+          eq(messages.chatId, chatId),
+          isNull(messages.recalledAt),
+          isNull(messages.scheduledFor)
+        )
+      )
+      .orderBy(messages.createdAt);
+
+    const docTitle = title || `Export: ${chat?.name || "Chat"} - ${new Date().toISOString().split("T")[0]}`;
+
+    return {
+      title: docTitle,
+      chatId,
+      exportedBy: userId,
+      exportedAt: new Date().toISOString(),
+      messageCount: chatMessages.length,
+      messages: chatMessages.map((m) => ({
+        id: m.id,
+        sender: m.senderName || "Unknown",
+        content: m.contentJson,
+        timestamp: m.createdAt?.toISOString() || null,
+      })),
+    };
+  }
+
+  /**
+   * Get scheduled messages for a user
+   */
+  async getScheduledMessages(userId: string, chatId?: string) {
+    const conditions = [
+      eq(messages.senderId, userId),
+      gt(messages.scheduledFor, new Date()),
+    ];
+
+    if (chatId) {
+      conditions.push(eq(messages.chatId, chatId));
+    }
+
+    const scheduled = await db
+      .select()
+      .from(messages)
+      .where(and(...conditions))
+      .orderBy(messages.scheduledFor);
+
+    return scheduled;
+  }
+
+  /**
+   * Cancel a scheduled message
+   */
+  async cancelScheduledMessage(messageId: string, userId: string) {
+    // First verify it's the sender's message and is scheduled
+    const [msg] = await db
+      .select()
+      .from(messages)
+      .where(
+        and(
+          eq(messages.id, messageId),
+          eq(messages.senderId, userId)
+        )
+      )
+      .limit(1);
+
+    if (!msg || !msg.scheduledFor || msg.scheduledFor <= new Date()) {
+      return null;
+    }
+
+    // Delete the scheduled message
+    const [deleted] = await db
+      .delete(messages)
+      .where(eq(messages.id, messageId))
+      .returning();
+
+    return deleted || null;
+  }
 }
 
 export const messengerService = new MessengerService();

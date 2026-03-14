@@ -1375,4 +1375,65 @@ export async function messengerRoutes(app: FastifyInstance) {
       }
     }
   );
+
+  // POST /messenger/chats/:chatId/export - Export chat messages to a document
+  app.post<{ Params: { chatId: string }; Body: { title?: string } }>(
+    "/chats/:chatId/export",
+    async (req, reply) => {
+      const { chatId } = req.params;
+      const { title } = (req.body || {}) as { title?: string };
+
+      // Verify membership
+      const isMember = await messengerService.isChatMember(
+        chatId,
+        req.user!.id
+      );
+      if (!isMember) {
+        return reply.status(403).send({
+          code: "FORBIDDEN",
+          message: "You are not a member of this chat",
+        });
+      }
+
+      const result = await messengerService.exportChatToDocument(
+        chatId,
+        req.user!.id,
+        req.user!.orgId,
+        title
+      );
+      return reply.status(201).send({ data: result });
+    }
+  );
+
+  // GET /messenger/scheduled - List scheduled messages for current user
+  app.get<{ Querystring: { chatId?: string } }>(
+    "/scheduled",
+    async (req, reply) => {
+      const { chatId } = req.query;
+      const messages = await messengerService.getScheduledMessages(
+        req.user!.id,
+        chatId
+      );
+      return reply.send({ data: { messages } });
+    }
+  );
+
+  // DELETE /messenger/scheduled/:messageId - Cancel a scheduled message
+  app.delete<{ Params: { messageId: string } }>(
+    "/scheduled/:messageId",
+    async (req, reply) => {
+      const { messageId } = req.params;
+      const result = await messengerService.cancelScheduledMessage(
+        messageId,
+        req.user!.id
+      );
+      if (!result) {
+        return reply.status(404).send({
+          code: "NOT_FOUND",
+          message: "Scheduled message not found",
+        });
+      }
+      return reply.send({ data: { message: result } });
+    }
+  );
 }

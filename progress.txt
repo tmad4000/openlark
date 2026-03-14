@@ -99,3 +99,12 @@
 [2026-03-14 23:59] US-109 — Board - collaborative whiteboard — PASS
 [2026-03-14 23:59] US-110 — AI features - smart compose and document AI — PASS
 [2026-03-14 23:59] US-111 — Docker Compose production deployment — PASS
+[2026-03-14 23:59] US-112 — SSO - SAML 2.0 integration — PASS
+[2026-03-14 23:59] US-113 — Base - Calendar and Gantt views — PASS
+[2026-03-14 23:59] US-114 — Base - Gallery view — PASS
+[2026-03-14 23:59] US-115 — Export messages to document — PASS
+[2026-03-14 23:59] US-116 — Scheduled messages — PASS
+[2026-03-14 23:59] US-117 — File upload service with S3 — PASS
+[2026-03-14 23:59] US-118 — User status and working hours — PASS
+[2026-03-14 23:59] US-119 — Dark mode and theme system — PASS
+[2026-03-14 23:59] US-120 — Keyboard shortcuts system — PASS

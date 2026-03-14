@@ -19,11 +19,14 @@ import {
   Settings,
   Bell,
   Shield,
+  Sun,
+  Moon,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { api } from "@/lib/api";
+import { useTheme } from "@/hooks/use-theme";
 
 interface NavItem {
   icon: LucideIcon;
@@ -49,6 +52,7 @@ const navItems: NavItem[] = [
 export function NavigationRail() {
   const pathname = usePathname();
   const [unreadCount, setUnreadCount] = useState(0);
+  const { theme, resolvedTheme, setTheme } = useTheme();
 
   const fetchUnreadCount = useCallback(async () => {
     try {
@@ -139,6 +143,25 @@ export function NavigationRail() {
             </Link>
           </TooltipTrigger>
           <TooltipContent side="right">Notifications</TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+              className="flex items-center justify-center w-10 h-10 rounded-lg transition-colors text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-800"
+            >
+              {resolvedTheme === "dark" ? (
+                <Sun className="w-5 h-5" />
+              ) : (
+                <Moon className="w-5 h-5" />
+              )}
+              <span className="sr-only">Toggle theme</span>
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="right">
+            {resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+          </TooltipContent>
         </Tooltip>
 
         <Tooltip>

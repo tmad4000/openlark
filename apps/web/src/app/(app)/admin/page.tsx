@@ -47,7 +47,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type AdminTab = "organization" | "members" | "departments" | "roles" | "security" | "audit";
+type AdminTab = "organization" | "members" | "departments" | "roles" | "security" | "sso" | "audit";
 
 // ─── Role badge ───
 function RoleBadge({ role }: { role: string }) {
@@ -985,6 +985,170 @@ function SecurityTab({ orgId }: { orgId: string }) {
   );
 }
 
+// ─── SSO / SAML Tab ───
+function SsoTab({ orgId }: { orgId: string }) {
+  const [config, setConfig] = useState<{
+    entityId: string;
+    ssoUrl: string;
+    certificate: string;
+    isEnabled: boolean;
+  } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [entityId, setEntityId] = useState("");
+  const [ssoUrl, setSsoUrl] = useState("");
+  const [certificate, setCertificate] = useState("");
+  const [isEnabled, setIsEnabled] = useState(false);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const result = await api.getSsoConfig();
+        if (result.config) {
+          setConfig(result.config);
+          setEntityId(result.config.entityId);
+          setSsoUrl(result.config.ssoUrl);
+          setCertificate(result.config.certificate);
+          setIsEnabled(result.config.isEnabled);
+        }
+      } catch {
+        // No config yet
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, []);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      if (config) {
+        const result = await api.updateSsoConfig({
+          entityId,
+          ssoUrl,
+          certificate,
+          isEnabled,
+        });
+        setConfig(result.config);
+      } else {
+        const result = await api.createSsoConfig({
+          entityId,
+          ssoUrl,
+          certificate,
+        });
+        setConfig(result.config);
+      }
+    } catch {
+      // ignore
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="p-6">
+        <div className="flex items-center gap-2">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          <span className="text-sm text-gray-500">Loading SSO configuration...</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-6 max-w-2xl">
+      <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">
+        SSO / SAML 2.0 Configuration
+      </h2>
+      <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+        Configure SAML 2.0 identity provider for single sign-on.
+      </p>
+
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Entity ID (IdP Issuer)
+          </label>
+          <input
+            type="text"
+            value={entityId}
+            onChange={(e) => setEntityId(e.target.value)}
+            placeholder="https://idp.example.com/saml/metadata"
+            className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-md text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            SSO URL (IdP Login URL)
+          </label>
+          <input
+            type="text"
+            value={ssoUrl}
+            onChange={(e) => setSsoUrl(e.target.value)}
+            placeholder="https://idp.example.com/saml/sso"
+            className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-md text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            X.509 Certificate
+          </label>
+          <textarea
+            value={certificate}
+            onChange={(e) => setCertificate(e.target.value)}
+            placeholder="-----BEGIN CERTIFICATE-----&#10;...&#10;-----END CERTIFICATE-----"
+            rows={6}
+            className="w-full px-3 py-2 border border-gray-200 dark:border-gray-700 rounded-md text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-mono"
+          />
+        </div>
+
+        {config && (
+          <div className="flex items-center gap-3">
+            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              Enable SSO
+            </label>
+            <button
+              onClick={() => setIsEnabled(!isEnabled)}
+              className={cn(
+                "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
+                isEnabled ? "bg-blue-500" : "bg-gray-300 dark:bg-gray-600"
+              )}
+            >
+              <span
+                className={cn(
+                  "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
+                  isEnabled ? "translate-x-6" : "translate-x-1"
+                )}
+              />
+            </button>
+          </div>
+        )}
+
+        <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+          <Button onClick={handleSave} disabled={saving || !entityId || !ssoUrl || !certificate}>
+            {saving && <Loader2 className="w-4 h-4 mr-1 animate-spin" />}
+            {config ? "Update Configuration" : "Save Configuration"}
+          </Button>
+        </div>
+
+        <div className="mt-6 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
+          <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+            Service Provider Details
+          </h3>
+          <div className="space-y-1 text-xs text-gray-500 dark:text-gray-400 font-mono">
+            <p>ACS URL: {typeof window !== "undefined" ? window.location.origin : ""}/api/v1/auth/saml/callback</p>
+            <p>Entity ID: {typeof window !== "undefined" ? window.location.origin : ""}/saml/metadata</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Audit Logs Tab ───
 function AuditLogsTab({ orgId }: { orgId: string }) {
   const [logs, setLogs] = useState<AuditLogEntry[]>([]);
@@ -1270,6 +1434,7 @@ export default function AdminPage() {
     { id: "departments", label: "Departments", icon: Building2 },
     { id: "roles", label: "Roles", icon: KeyRound },
     { id: "security", label: "Security", icon: Lock },
+    { id: "sso", label: "SSO / SAML", icon: Shield },
     { id: "audit", label: "Audit Logs", icon: FileText },
   ];
 
@@ -1319,6 +1484,9 @@ export default function AdminPage() {
         {activeTab === "roles" && <RolesTab />}
         {activeTab === "security" && organization && (
           <SecurityTab orgId={organization.id} />
+        )}
+        {activeTab === "sso" && organization && (
+          <SsoTab orgId={organization.id} />
         )}
         {activeTab === "audit" && organization && (
           <AuditLogsTab orgId={organization.id} />

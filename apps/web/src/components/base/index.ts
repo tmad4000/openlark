@@ -1,5 +1,8 @@
 export { BaseGridView } from "./base-grid-view";
 export { BaseKanbanView } from "./base-kanban-view";
+export { BaseCalendarView } from "./base-calendar-view";
+export { BaseGanttView } from "./base-gantt-view";
+export { BaseGalleryView } from "./base-gallery-view";
 export { BaseFormView } from "./base-form-view";
 export { BaseAutomationsPanel } from "./base-automations-panel";
 export { BaseDashboardView } from "./base-dashboard-view";

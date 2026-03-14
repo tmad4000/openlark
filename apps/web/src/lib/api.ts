@@ -1745,6 +1745,82 @@ class ApiClient {
       { method: "DELETE" }
     );
   }
+
+  // SSO configuration
+  async getSsoConfig() {
+    return this.request<{ config: SsoConfig | null }>("/admin/sso");
+  }
+
+  async createSsoConfig(data: { entityId: string; ssoUrl: string; certificate: string }) {
+    return this.request<{ config: SsoConfig }>("/admin/sso", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateSsoConfig(data: {
+    entityId?: string;
+    ssoUrl?: string;
+    certificate?: string;
+    isEnabled?: boolean;
+  }) {
+    return this.request<{ config: SsoConfig }>("/admin/sso", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+
+  // Export chat messages to document
+  async exportChatToDocument(chatId: string, title?: string) {
+    return this.request<ChatExport>(`/messenger/chats/${chatId}/export`, {
+      method: "POST",
+      body: JSON.stringify({ title }),
+    });
+  }
+
+  // Scheduled messages
+  async getScheduledMessages(chatId?: string) {
+    const params = new URLSearchParams();
+    if (chatId) params.set("chatId", chatId);
+    const qs = params.toString();
+    return this.request<{ messages: Message[] }>(`/messenger/scheduled${qs ? `?${qs}` : ""}`);
+  }
+
+  async cancelScheduledMessage(messageId: string) {
+    return this.request<{ message: Message }>(`/messenger/scheduled/${messageId}`, {
+      method: "DELETE",
+    });
+  }
+
+  // File upload
+  async uploadFile(data: { name: string; mimeType: string; size: number }) {
+    return this.request<{ file: FileInfo }>("/files/upload", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getFile(fileId: string) {
+    return this.request<{ file: FileInfo }>(`/files/${fileId}`);
+  }
+
+  // User status
+  async getUserStatus() {
+    return this.request<{ status: UserStatus }>("/users/me/status");
+  }
+
+  async setUserStatus(data: {
+    emoji?: string;
+    text?: string;
+    expiresAt?: string;
+    workingHoursStart?: string;
+    workingHoursEnd?: string;
+  }) {
+    return this.request<{ status: UserStatus }>("/users/me/status", {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
 }
 
 // Types
@@ -2657,6 +2733,54 @@ export interface EventSubscriptionInfo {
   callbackUrl: string;
   status: string;
   createdAt: string;
+}
+
+// SSO types
+export interface SsoConfig {
+  id: string;
+  orgId: string;
+  entityId: string;
+  ssoUrl: string;
+  certificate: string;
+  isEnabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// File types
+export interface FileInfo {
+  id: string;
+  orgId: string;
+  uploaderId: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  storageKey: string;
+  createdAt: string;
+}
+
+// User status types
+export interface UserStatus {
+  emoji: string | null;
+  text: string | null;
+  expiresAt: string | null;
+  workingHoursStart: string;
+  workingHoursEnd: string;
+}
+
+// Chat export types
+export interface ChatExport {
+  title: string;
+  chatId: string;
+  exportedBy: string;
+  exportedAt: string;
+  messageCount: number;
+  messages: Array<{
+    id: string;
+    sender: string;
+    content: unknown;
+    timestamp: string | null;
+  }>;
 }
 
 export const api = new ApiClient();

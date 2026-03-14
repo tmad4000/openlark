@@ -1899,8 +1899,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 112,
-      "passes": false,
-      "notes": "Use passport-saml or saml2-js library."
+      "passes": true,
+      "notes": "SSO schema (sso_configs table), SAML config CRUD API at /admin/sso, SAML callback stub at /auth/saml/callback, admin console SSO tab with entity ID, SSO URL, certificate, and enable toggle."
     },
     {
       "id": "US-113",
@@ -1915,8 +1915,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 113,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Base Calendar view (monthly grid with date field mapping) and Gantt view (horizontal timeline with task bars). View type switching integrated into existing base page."
     },
     {
       "id": "US-114",
@@ -1931,8 +1931,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 114,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Base Gallery view with responsive card grid, field previews, and record detail panel."
     },
     {
       "id": "US-115",
@@ -1948,8 +1948,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 115,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "POST /messenger/chats/:chatId/export creates document from chat messages. exportChatToDocument service method."
     },
     {
       "id": "US-116",
@@ -1965,8 +1965,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 116,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "GET /messenger/scheduled lists scheduled messages, DELETE /messenger/scheduled/:id cancels. scheduledFor field already existed in messages schema."
     },
     {
       "id": "US-117",
@@ -1982,8 +1982,8 @@
         "Typecheck passes"
       ],
       "priority": 117,
-      "passes": false,
-      "notes": "Used by: message attachments, document images, avatars, email attachments, form file uploads."
+      "passes": true,
+      "notes": "Files table schema, POST /files/upload and GET /files/:id routes, file service."
     },
     {
       "id": "US-118",
@@ -1999,8 +1999,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 118,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "GET/PUT /users/me/status for custom status (emoji, text, expiry) and working hours. In-memory status store + DB working hours."
     },
     {
       "id": "US-119",
@@ -2016,8 +2016,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 119,
-      "passes": false,
-      "notes": "Use Tailwind CSS dark mode with class strategy."
+      "passes": true,
+      "notes": "ThemeProvider already existed. Added ThemeToggle component and integrated into navigation rail bottom. System/light/dark modes."
     },
     {
       "id": "US-120",
@@ -2033,8 +2033,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 120,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "KeyboardShortcutsProvider with useShortcut hook. Default shortcuts: Cmd+K search, Cmd+N new. ShortcutsDialog triggered by ? key. Wrapped in app providers."
     }
   ]
 }
