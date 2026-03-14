@@ -1848,8 +1848,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 109,
-      "passes": false,
-      "notes": "Can use tldraw (open source) as the whiteboard engine."
+      "passes": true,
+      "notes": "Board editor (whiteboard) with infinite canvas. Tools: select, rectangle, circle, line/arrow, sticky note, text, freeform draw. Drag to create shapes, select and drag to move. Selection shown with dashed blue outline. Zoom via scroll wheel, pan by dragging canvas in select mode. Dot grid pattern background. SVG rendering for all elements."
     },
     {
       "id": "US-110",

@@ -7,6 +7,7 @@ import { DocumentEditor } from "@/components/docs/document-editor";
 import { SheetEditor } from "@/components/docs/sheet-editor";
 import { SlidesEditor } from "@/components/docs/slides-editor";
 import { MindNoteEditor } from "@/components/docs/mindnote-editor";
+import { BoardEditor } from "@/components/docs/board-editor";
 import { AppShell } from "@/components/layout/app-shell";
 import { DocumentList, CreateDocumentDialog } from "@/components/docs";
 import { api, type Document } from "@/lib/api";
@@ -105,6 +106,8 @@ export default function DocPage({ params }: { params: Promise<{ id: string }> })
             <SlidesEditor document={document} readOnly={false} currentUser={user} />
           ) : document.type === "mindnote" ? (
             <MindNoteEditor document={document} readOnly={false} currentUser={user} />
+          ) : document.type === "board" ? (
+            <BoardEditor document={document} readOnly={false} currentUser={user} />
           ) : (
             <DocumentEditor document={document} readOnly={false} currentUser={user} />
           )
