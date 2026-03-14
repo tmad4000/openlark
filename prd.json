@@ -1794,8 +1794,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 106,
-      "passes": false,
-      "notes": "Use HyperFormula for formula calculation engine. Custom grid rendering with virtualization."
+      "passes": true,
+      "notes": "Sheet editor component at /docs/:id for type=sheet documents. Renders 26x100 grid with column/row headers. Click to select, double-click/type to edit. Tab/Enter navigation. Formula bar showing selected cell formula/value. Built-in formula engine: SUM, AVERAGE, COUNT, IF, VLOOKUP, cell references, arithmetic. Formatting toolbar: bold, italic, alignment, font size, text/bg color, number format. Cell format stored per-cell."
     },
     {
       "id": "US-107",

@@ -93,3 +93,4 @@
 [2026-03-14 23:59] US-103 — Open Platform - Webhook event delivery — PASS
 [2026-03-14 23:59] US-104 — Open Platform - Bot messaging API — PASS
 [2026-03-14 23:59] US-105 — Notification bot (webhook bot) for group chats — PASS
+[2026-03-14 23:59] US-106 — Sheets - basic spreadsheet editor — PASS

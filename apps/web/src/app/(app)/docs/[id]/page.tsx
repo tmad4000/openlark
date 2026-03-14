@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, use } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/use-auth";
 import { DocumentEditor } from "@/components/docs/document-editor";
+import { SheetEditor } from "@/components/docs/sheet-editor";
 import { AppShell } from "@/components/layout/app-shell";
 import { DocumentList, CreateDocumentDialog } from "@/components/docs";
 import { api, type Document } from "@/lib/api";
@@ -96,7 +97,11 @@ export default function DocPage({ params }: { params: Promise<{ id: string }> })
             </div>
           </div>
         ) : document ? (
-          <DocumentEditor document={document} readOnly={false} currentUser={user} />
+          document.type === "sheet" ? (
+            <SheetEditor document={document} readOnly={false} currentUser={user} />
+          ) : (
+            <DocumentEditor document={document} readOnly={false} currentUser={user} />
+          )
         ) : null}
       </AppShell>
 
