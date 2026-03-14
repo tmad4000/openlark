@@ -151,6 +151,59 @@ class ApiClient {
     });
   }
 
+  async getAuditLogs(params: {
+    actorId?: string;
+    action?: string;
+    entityType?: string;
+    from?: string;
+    to?: string;
+    search?: string;
+    limit?: number;
+    offset?: number;
+  } = {}) {
+    const p = new URLSearchParams();
+    if (params.actorId) p.set("actorId", params.actorId);
+    if (params.action) p.set("action", params.action);
+    if (params.entityType) p.set("entityType", params.entityType);
+    if (params.from) p.set("from", params.from);
+    if (params.to) p.set("to", params.to);
+    if (params.search) p.set("search", params.search);
+    if (params.limit) p.set("limit", String(params.limit));
+    if (params.offset) p.set("offset", String(params.offset));
+    const qs = p.toString();
+    return this.request<{ logs: AuditLogEntry[]; total: number }>(`/admin/audit-logs${qs ? `?${qs}` : ""}`);
+  }
+
+  async getAuditActions() {
+    return this.request<{ actions: string[] }>("/admin/audit-logs/actions");
+  }
+
+  async getAuditEntityTypes() {
+    return this.request<{ entityTypes: string[] }>("/admin/audit-logs/entity-types");
+  }
+
+  getAuditExportUrl(params: {
+    actorId?: string;
+    action?: string;
+    entityType?: string;
+    from?: string;
+    to?: string;
+    search?: string;
+  } = {}) {
+    const p = new URLSearchParams();
+    if (params.actorId) p.set("actorId", params.actorId);
+    if (params.action) p.set("action", params.action);
+    if (params.entityType) p.set("entityType", params.entityType);
+    if (params.from) p.set("from", params.from);
+    if (params.to) p.set("to", params.to);
+    if (params.search) p.set("search", params.search);
+    const qs = p.toString();
+    const token = this.getToken();
+    if (token) p.set("token", token);
+    const fullQs = p.toString();
+    return `${API_BASE_URL}/api/v1/admin/audit-logs/export${fullQs ? `?${fullQs}` : ""}`;
+  }
+
   async getOrganization(orgId: string) {
     return this.request<{ organization: OrganizationFull }>(`/orgs/${orgId}`);
   }
@@ -2452,6 +2505,22 @@ export interface FormResponseInfo {
   respondentId: string | null;
   answers: Record<string, unknown>;
   submittedAt: string;
+}
+
+// Audit log types
+export interface AuditLogEntry {
+  id: string;
+  orgId: string;
+  actorId: string;
+  action: string;
+  entityType: string;
+  entityId: string | null;
+  diff: unknown;
+  ip: string | null;
+  userAgent: string | null;
+  createdAt: string;
+  actorEmail: string | null;
+  actorName: string | null;
 }
 
 export const api = new ApiClient();

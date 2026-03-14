@@ -18,6 +18,7 @@ import {
   type SecuritySettings,
   type DepartmentTree,
   type InvitationInfo,
+  type AuditLogEntry,
 } from "@/lib/api";
 import {
   Shield,
@@ -38,10 +39,15 @@ import {
   Save,
   X,
   Lock,
+  FileText,
+  Download,
+  ChevronLeft,
+  ChevronRight as ChevronRightIcon,
+  Calendar,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type AdminTab = "organization" | "members" | "departments" | "roles" | "security";
+type AdminTab = "organization" | "members" | "departments" | "roles" | "security" | "audit";
 
 // ─── Role badge ───
 function RoleBadge({ role }: { role: string }) {
@@ -979,6 +985,265 @@ function SecurityTab({ orgId }: { orgId: string }) {
   );
 }
 
+// ─── Audit Logs Tab ───
+function AuditLogsTab({ orgId }: { orgId: string }) {
+  const [logs, setLogs] = useState<AuditLogEntry[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(0);
+  const [actions, setActions] = useState<string[]>([]);
+  const [entityTypes, setEntityTypes] = useState<string[]>([]);
+
+  const [filters, setFilters] = useState({
+    search: "",
+    action: "",
+    entityType: "",
+    from: "",
+    to: "",
+  });
+
+  const PAGE_SIZE = 50;
+
+  const loadLogs = useCallback(async (pageNum: number) => {
+    setLoading(true);
+    try {
+      const result = await api.getAuditLogs({
+        action: filters.action || undefined,
+        entityType: filters.entityType || undefined,
+        from: filters.from || undefined,
+        to: filters.to || undefined,
+        search: filters.search || undefined,
+        limit: PAGE_SIZE,
+        offset: pageNum * PAGE_SIZE,
+      });
+      setLogs(result.logs);
+      setTotal(result.total);
+    } catch {
+      // ignore
+    } finally {
+      setLoading(false);
+    }
+  }, [filters]);
+
+  useEffect(() => {
+    loadLogs(page);
+  }, [loadLogs, page]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const [actionsRes, typesRes] = await Promise.all([
+          api.getAuditActions(),
+          api.getAuditEntityTypes(),
+        ]);
+        setActions(actionsRes.actions);
+        setEntityTypes(typesRes.entityTypes);
+      } catch {
+        // ignore
+      }
+    })();
+  }, []);
+
+  const handleFilter = () => {
+    setPage(0);
+    loadLogs(0);
+  };
+
+  const handleExport = () => {
+    const url = api.getAuditExportUrl({
+      action: filters.action || undefined,
+      entityType: filters.entityType || undefined,
+      from: filters.from || undefined,
+      to: filters.to || undefined,
+      search: filters.search || undefined,
+    });
+    window.open(url, "_blank");
+  };
+
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+
+  const selectClass =
+    "px-2 py-1.5 text-sm rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500";
+
+  return (
+    <div className="flex-1 flex flex-col p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Audit Logs</h2>
+        <Button size="sm" variant="outline" onClick={handleExport}>
+          <Download className="w-4 h-4 mr-1" />
+          Export CSV
+        </Button>
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-wrap items-end gap-3 mb-4">
+        <div className="flex-1 min-w-[200px]">
+          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Search</label>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              value={filters.search}
+              onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
+              onKeyDown={(e) => e.key === "Enter" && handleFilter()}
+              placeholder="Search actions, entities..."
+              className="w-full pl-9 pr-3 py-1.5 text-sm rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Action</label>
+          <select
+            value={filters.action}
+            onChange={(e) => setFilters((f) => ({ ...f, action: e.target.value }))}
+            className={selectClass}
+          >
+            <option value="">All Actions</option>
+            {actions.map((a) => (
+              <option key={a} value={a}>{a}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Entity Type</label>
+          <select
+            value={filters.entityType}
+            onChange={(e) => setFilters((f) => ({ ...f, entityType: e.target.value }))}
+            className={selectClass}
+          >
+            <option value="">All Types</option>
+            {entityTypes.map((t) => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">From</label>
+          <input
+            type="date"
+            value={filters.from}
+            onChange={(e) => setFilters((f) => ({ ...f, from: e.target.value }))}
+            className={selectClass}
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">To</label>
+          <input
+            type="date"
+            value={filters.to}
+            onChange={(e) => setFilters((f) => ({ ...f, to: e.target.value }))}
+            className={selectClass}
+          />
+        </div>
+
+        <Button size="sm" onClick={handleFilter}>
+          <Search className="w-4 h-4 mr-1" />
+          Filter
+        </Button>
+      </div>
+
+      {/* Results */}
+      {loading ? (
+        <div className="flex-1 flex items-center justify-center">
+          <Loader2 className="w-5 h-5 text-gray-400 animate-spin" />
+        </div>
+      ) : (
+        <>
+          <div className="border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden flex-1">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
+                  <th className="text-left px-4 py-2 font-medium text-gray-600 dark:text-gray-400">Timestamp</th>
+                  <th className="text-left px-4 py-2 font-medium text-gray-600 dark:text-gray-400">Actor</th>
+                  <th className="text-left px-4 py-2 font-medium text-gray-600 dark:text-gray-400">Action</th>
+                  <th className="text-left px-4 py-2 font-medium text-gray-600 dark:text-gray-400">Entity Type</th>
+                  <th className="text-left px-4 py-2 font-medium text-gray-600 dark:text-gray-400">Entity ID</th>
+                  <th className="text-left px-4 py-2 font-medium text-gray-600 dark:text-gray-400">IP</th>
+                </tr>
+              </thead>
+              <tbody>
+                {logs.map((log) => (
+                  <tr key={log.id} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900/50">
+                    <td className="px-4 py-2.5 text-gray-600 dark:text-gray-400 whitespace-nowrap">
+                      {new Date(log.createdAt).toLocaleString()}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <div>
+                        <span className="text-gray-900 dark:text-gray-100">{log.actorName || "Unknown"}</span>
+                        {log.actorEmail && (
+                          <span className="text-xs text-gray-400 ml-1">({log.actorEmail})</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                        {log.action}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5 text-gray-600 dark:text-gray-400 capitalize">
+                      {log.entityType}
+                    </td>
+                    <td className="px-4 py-2.5 text-gray-500 dark:text-gray-400 font-mono text-xs">
+                      {log.entityId ? log.entityId.slice(0, 8) + "..." : "-"}
+                    </td>
+                    <td className="px-4 py-2.5 text-gray-500 dark:text-gray-400 text-xs">
+                      {log.ip || "-"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {logs.length === 0 && (
+              <div className="p-8 text-center text-sm text-gray-400">
+                <FileText className="w-10 h-10 mx-auto text-gray-300 dark:text-gray-600 mb-2" />
+                No audit logs found
+              </div>
+            )}
+          </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between mt-4">
+              <span className="text-sm text-gray-500 dark:text-gray-400">
+                Showing {page * PAGE_SIZE + 1}-{Math.min((page + 1) * PAGE_SIZE, total)} of {total}
+              </span>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                  disabled={page === 0}
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                <span className="text-sm text-gray-600 dark:text-gray-400">
+                  Page {page + 1} of {totalPages}
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                  disabled={page >= totalPages - 1}
+                >
+                  <ChevronRightIcon className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          )}
+
+          <div className="mt-3 text-xs text-gray-400 dark:text-gray-500">
+            Logs retained for 180+ days. Data shown reflects all state-changing API activity.
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Admin Page ───
 export default function AdminPage() {
   const { user, organization } = useAuth();
@@ -1005,6 +1270,7 @@ export default function AdminPage() {
     { id: "departments", label: "Departments", icon: Building2 },
     { id: "roles", label: "Roles", icon: KeyRound },
     { id: "security", label: "Security", icon: Lock },
+    { id: "audit", label: "Audit Logs", icon: FileText },
   ];
 
   const sidebar = (
@@ -1053,6 +1319,9 @@ export default function AdminPage() {
         {activeTab === "roles" && <RolesTab />}
         {activeTab === "security" && organization && (
           <SecurityTab orgId={organization.id} />
+        )}
+        {activeTab === "audit" && organization && (
+          <AuditLogsTab orgId={organization.id} />
         )}
       </div>
     </AppShell>

@@ -33,6 +33,7 @@ import { translationRoutes } from "./modules/translation/index.js";
 import { meetingsRoutes, meetingsWebhookRoutes } from "./modules/meetings/index.js";
 import { minutesRoutes } from "./modules/minutes/index.js";
 import { formsRoutes } from "./modules/forms/index.js";
+import { auditRoutes, registerAuditMiddleware } from "./modules/audit/index.js";
 
 export async function buildApp() {
   const app = Fastify({
@@ -141,8 +142,14 @@ export async function buildApp() {
       // Forms module (form builder and responses)
       api.register(formsRoutes, { prefix: "/forms" });
 
+      // Audit logs (admin)
+      api.register(auditRoutes, { prefix: "/admin/audit-logs" });
+
       // LiveKit webhooks (no auth — verified by LiveKit in production)
       api.register(meetingsWebhookRoutes, { prefix: "/webhooks" });
+
+      // Audit middleware — logs all state-changing API calls
+      registerAuditMiddleware(api);
     },
     { prefix: "/api/v1" }
   );
