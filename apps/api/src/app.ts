@@ -26,6 +26,7 @@ import { taskRoutes } from "./modules/tasks/index.js";
 import { approvalsRoutes } from "./modules/approvals/index.js";
 import { okrRoutes } from "./modules/okrs/index.js";
 import { attendanceRoutes } from "./modules/attendance/index.js";
+import { emailRoutes } from "./modules/email/index.js";
 
 export async function buildApp() {
   const app = Fastify({
@@ -112,6 +113,9 @@ export async function buildApp() {
 
       // Attendance module (clock-in/out, leave, overtime)
       api.register(attendanceRoutes, { prefix: "/attendance" });
+
+      // Email module (mailboxes, messages, send/receive)
+      api.register(emailRoutes, { prefix: "/email" });
     },
     { prefix: "/api/v1" }
   );

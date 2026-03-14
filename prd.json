@@ -1422,8 +1422,8 @@
         "Typecheck passes"
       ],
       "priority": 84,
-      "passes": false,
-      "notes": "V1 uses transactional email API (Postmark/SendGrid) for sending. Full SMTP server is V2."
+      "passes": true,
+      "notes": "V1 schema: mailboxes, email_messages, email_domains, mailing_lists tables. API routes under /api/v1/email with send, list by folder, get by id, patch (read/flag/move), and delete (soft to trash). Uses transactional email pattern (no SMTP server)."
     },
     {
       "id": "US-085",
