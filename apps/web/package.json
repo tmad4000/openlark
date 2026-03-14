@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack --port 8253 --hostname 127.0.0.1",
+    "dev": "next dev --turbopack --port 7953 --hostname 127.0.0.1",
     "build": "next build",
     "start": "next start",
     "lint": "eslint . --ext .ts,.tsx",

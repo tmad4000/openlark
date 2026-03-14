@@ -58,7 +58,7 @@ export const chats = pgTable(
       .references(() => organizations.id),
     isPublic: boolean("is_public").notNull().default(false),
     maxMembers: integer("max_members"),
-    settings: jsonb("settings").$type<Record<string, unknown>>().default({}),
+    settings: jsonb("settings_json").$type<Record<string, unknown>>().default({}),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -107,7 +107,7 @@ export const messages = pgTable(
       .notNull()
       .references(() => users.id),
     type: messageTypeEnum("type").notNull().default("text"),
-    content: jsonb("content").$type<Record<string, unknown>>().notNull(),
+    content: jsonb("content_json").$type<Record<string, unknown>>().notNull(),
     threadId: uuid("thread_id").references((): AnyPgColumn => messages.id),
     replyToId: uuid("reply_to_id").references((): AnyPgColumn => messages.id),
     forwardedFromMessageId: uuid("forwarded_from_message_id").references((): AnyPgColumn => messages.id),

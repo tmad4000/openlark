@@ -229,6 +229,7 @@ export async function documentsRoutes(fastify: FastifyInstance) {
         principalId: currentUserId,
         principalType: "user",
         role: "owner",
+        createdBy: currentUserId,
       });
 
       return reply.status(201).send({
@@ -845,6 +846,7 @@ export async function documentsRoutes(fastify: FastifyInstance) {
           principalId,
           principalType,
           role,
+          createdBy: currentUserId,
         })
         .returning();
 
@@ -1500,6 +1502,7 @@ export async function documentsRoutes(fastify: FastifyInstance) {
           principalId: orgId,
           principalType: "org",
           role,
+          createdBy: currentUserId,
         });
       }
 

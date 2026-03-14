@@ -74,8 +74,8 @@ while true; do
     break
   fi
 
-  # Run Claude Code with the prompt
-  claude --print "$PROMPT" 2>&1 | tee -a "ralph-iteration-${ITERATION}.log"
+  # Run Claude Code with the prompt (skip permissions for autonomous operation)
+  claude --print --dangerously-skip-permissions "$PROMPT" 2>&1 | tee -a "ralph-iteration-${ITERATION}.log"
 
   echo ""
   echo "Iteration $ITERATION complete."

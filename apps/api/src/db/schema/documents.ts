@@ -58,6 +58,7 @@ export const documentPermissions = pgTable("document_permissions", {
   principalId: uuid("principal_id").notNull(), // user_id, department_id, or org_id
   principalType: documentPrincipalTypeEnum("principal_type").notNull(),
   role: documentRoleEnum("role").notNull(),
+  createdBy: uuid("created_by").notNull().references(() => users.id),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [

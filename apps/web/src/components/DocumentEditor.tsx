@@ -1116,26 +1116,8 @@ const DocumentEditorInner = forwardRef<DocumentEditorHandle, DocumentEditorProps
               Collaboration.configure({
                 document: ydocRef.current,
               }),
-              CollaborationCursor.configure({
-                provider: providerRef.current,
-                user: {
-                  name: userName,
-                  color: colorRef.current,
-                },
-                render: (user: { name: string; color: string }) => {
-                  const cursor = document.createElement("span");
-                  cursor.classList.add("collaboration-cursor__caret");
-                  cursor.style.borderColor = user.color;
-
-                  const label = document.createElement("div");
-                  label.classList.add("collaboration-cursor__label");
-                  label.style.backgroundColor = user.color;
-                  label.textContent = user.name;
-                  cursor.appendChild(label);
-
-                  return cursor;
-                },
-              }),
+              // CollaborationCursor temporarily disabled (v2/v3 mismatch)
+              // CollaborationCursor.configure({ provider: providerRef.current }),
             ]
           : []),
         DragHandle,
@@ -1349,7 +1331,12 @@ const DocumentEditorInner = forwardRef<DocumentEditorHandle, DocumentEditorProps
       onCommentClick?.(customEvent.detail.commentId);
     };
 
-    const editorElement = editor.view.dom;
+    let editorElement: HTMLElement;
+    try {
+      editorElement = editor.view.dom;
+    } catch {
+      return;
+    }
     editorElement.addEventListener("comment-click", handleCommentClick);
 
     return () => {
