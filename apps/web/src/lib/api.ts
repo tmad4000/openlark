@@ -155,7 +155,7 @@ class ApiClient {
     return this.request<{ organization: OrganizationFull }>(`/orgs/${orgId}`);
   }
 
-  async updateOrganization(orgId: string, data: { name?: string; domain?: string; logoUrl?: string; industry?: string }) {
+  async updateOrganization(orgId: string, data: { name?: string; domain?: string; logoUrl?: string; industry?: string; settings?: Record<string, unknown> }) {
     return this.request<{ organization: OrganizationFull }>(`/orgs/${orgId}`, {
       method: "PATCH",
       body: JSON.stringify(data),
@@ -1627,6 +1627,17 @@ export interface Organization {
   logoUrl: string | null;
 }
 
+export interface SecuritySettings {
+  passwordMinLength?: number;
+  passwordRequireUppercase?: boolean;
+  passwordRequireNumber?: boolean;
+  passwordRequireSpecial?: boolean;
+  passwordExpiryDays?: number;
+  require2fa?: boolean;
+  allowExternalComms?: boolean;
+  sessionTimeoutMinutes?: number;
+}
+
 export interface OrganizationFull {
   id: string;
   name: string;
@@ -1634,6 +1645,7 @@ export interface OrganizationFull {
   logoUrl: string | null;
   industry: string | null;
   plan: string;
+  settingsJson: Record<string, unknown> | null;
   createdAt: string;
   updatedAt: string;
 }

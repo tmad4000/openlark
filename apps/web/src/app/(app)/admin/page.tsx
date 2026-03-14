@@ -15,6 +15,7 @@ import {
   api,
   type AdminMember,
   type OrganizationFull,
+  type SecuritySettings,
   type DepartmentTree,
   type InvitationInfo,
 } from "@/lib/api";
@@ -36,10 +37,11 @@ import {
   UserCheck,
   Save,
   X,
+  Lock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type AdminTab = "organization" | "members" | "departments" | "roles";
+type AdminTab = "organization" | "members" | "departments" | "roles" | "security";
 
 // ─── Role badge ───
 function RoleBadge({ role }: { role: string }) {
@@ -771,6 +773,212 @@ function RolesTab() {
   );
 }
 
+// ─── Security Tab ───
+const DEFAULT_SECURITY: SecuritySettings = {
+  passwordMinLength: 8,
+  passwordRequireUppercase: false,
+  passwordRequireNumber: false,
+  passwordRequireSpecial: false,
+  passwordExpiryDays: 0,
+  require2fa: false,
+  allowExternalComms: true,
+  sessionTimeoutMinutes: 0,
+};
+
+function SecurityTab({ orgId }: { orgId: string }) {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [settings, setSettings] = useState<SecuritySettings>(DEFAULT_SECURITY);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const result = await api.getOrganization(orgId);
+        const saved = (result.organization.settingsJson?.security ?? {}) as SecuritySettings;
+        setSettings({ ...DEFAULT_SECURITY, ...saved });
+      } catch {
+        // ignore
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [orgId]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const result = await api.getOrganization(orgId);
+      const existingSettings = result.organization.settingsJson ?? {};
+      await api.updateOrganization(orgId, {
+        settings: { ...existingSettings, security: settings },
+      });
+    } catch {
+      // ignore
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const update = <K extends keyof SecuritySettings>(key: K, value: SecuritySettings[K]) => {
+    setSettings((s) => ({ ...s, [key]: value }));
+  };
+
+  if (loading) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <Loader2 className="w-5 h-5 text-gray-400 animate-spin" />
+      </div>
+    );
+  }
+
+  const inputClass =
+    "w-full px-3 py-2 text-sm rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500";
+
+  return (
+    <div className="max-w-2xl mx-auto p-6 space-y-8">
+      <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Security Settings</h2>
+
+      {/* Password Policy */}
+      <section className="space-y-4">
+        <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-800 pb-2">
+          Password Policy
+        </h3>
+
+        <div>
+          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+            Minimum Password Length
+          </label>
+          <input
+            type="number"
+            min={6}
+            max={128}
+            value={settings.passwordMinLength ?? 8}
+            onChange={(e) => update("passwordMinLength", parseInt(e.target.value) || 8)}
+            className={inputClass}
+          />
+        </div>
+
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={settings.passwordRequireUppercase ?? false}
+            onChange={(e) => update("passwordRequireUppercase", e.target.checked)}
+            className="accent-blue-600 w-4 h-4"
+          />
+          <span className="text-sm text-gray-700 dark:text-gray-300">Require uppercase letter</span>
+        </label>
+
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={settings.passwordRequireNumber ?? false}
+            onChange={(e) => update("passwordRequireNumber", e.target.checked)}
+            className="accent-blue-600 w-4 h-4"
+          />
+          <span className="text-sm text-gray-700 dark:text-gray-300">Require number</span>
+        </label>
+
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={settings.passwordRequireSpecial ?? false}
+            onChange={(e) => update("passwordRequireSpecial", e.target.checked)}
+            className="accent-blue-600 w-4 h-4"
+          />
+          <span className="text-sm text-gray-700 dark:text-gray-300">Require special character</span>
+        </label>
+
+        <div>
+          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+            Password Expiry (days, 0 = never)
+          </label>
+          <input
+            type="number"
+            min={0}
+            max={365}
+            value={settings.passwordExpiryDays ?? 0}
+            onChange={(e) => update("passwordExpiryDays", parseInt(e.target.value) || 0)}
+            className={inputClass}
+          />
+        </div>
+      </section>
+
+      {/* Two-Factor Authentication */}
+      <section className="space-y-4">
+        <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-800 pb-2">
+          Two-Factor Authentication
+        </h3>
+
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={settings.require2fa ?? false}
+            onChange={(e) => update("require2fa", e.target.checked)}
+            className="accent-blue-600 w-4 h-4"
+          />
+          <div>
+            <span className="text-sm text-gray-700 dark:text-gray-300">Require 2FA for all members</span>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+              All members must set up two-factor authentication to access the workspace.
+            </p>
+          </div>
+        </label>
+      </section>
+
+      {/* External Communication */}
+      <section className="space-y-4">
+        <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-800 pb-2">
+          External Communication
+        </h3>
+
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={settings.allowExternalComms ?? true}
+            onChange={(e) => update("allowExternalComms", e.target.checked)}
+            className="accent-blue-600 w-4 h-4"
+          />
+          <div>
+            <span className="text-sm text-gray-700 dark:text-gray-300">Allow external messaging</span>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+              Members can send and receive messages from users outside the organization.
+            </p>
+          </div>
+        </label>
+      </section>
+
+      {/* Session Timeout */}
+      <section className="space-y-4">
+        <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100 border-b border-gray-200 dark:border-gray-800 pb-2">
+          Session Management
+        </h3>
+
+        <div>
+          <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
+            Idle Session Timeout (minutes, 0 = no timeout)
+          </label>
+          <input
+            type="number"
+            min={0}
+            max={10080}
+            value={settings.sessionTimeoutMinutes ?? 0}
+            onChange={(e) => update("sessionTimeoutMinutes", parseInt(e.target.value) || 0)}
+            className={inputClass}
+          />
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            Automatically sign out users after this period of inactivity.
+          </p>
+        </div>
+      </section>
+
+      <Button onClick={handleSave} disabled={saving}>
+        {saving ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Save className="w-4 h-4 mr-1" />}
+        Save Security Settings
+      </Button>
+    </div>
+  );
+}
+
 // ─── Main Admin Page ───
 export default function AdminPage() {
   const { user, organization } = useAuth();
@@ -796,6 +1004,7 @@ export default function AdminPage() {
     { id: "members", label: "Members", icon: Users },
     { id: "departments", label: "Departments", icon: Building2 },
     { id: "roles", label: "Roles", icon: KeyRound },
+    { id: "security", label: "Security", icon: Lock },
   ];
 
   const sidebar = (
@@ -842,6 +1051,9 @@ export default function AdminPage() {
           <DepartmentsTab orgId={organization.id} />
         )}
         {activeTab === "roles" && <RolesTab />}
+        {activeTab === "security" && organization && (
+          <SecurityTab orgId={organization.id} />
+        )}
       </div>
     </AppShell>
   );

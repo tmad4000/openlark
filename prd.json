@@ -1606,7 +1606,7 @@
       ],
       "priority": 95,
       "passes": true,
-      "notes": "Minutes viewer page at /app/minutes/[id] with three tabs: Transcript (timestamped paragraphs with speaker labels, click-to-seek, paragraph commenting), Summary (key points, overview, decisions, action items with Create Task button), and Chapters (click-to-seek chapter navigation). Audio player with play/pause, skip \u00b110s, progress scrubber, speed control (0.5x-2x), and silence skipping toggle. API: GET /minutes/:id returns minutes with meeting and recording info; GET/POST/DELETE /minutes/:id/comments for transcript paragraph commenting."
+      "notes": "Minutes viewer page at /app/minutes/[id] with three tabs: Transcript (timestamped paragraphs with speaker labels, click-to-seek, paragraph commenting), Summary (key points, overview, decisions, action items with Create Task button), and Chapters (click-to-seek chapter navigation). Audio player with play/pause, skip ±10s, progress scrubber, speed control (0.5x-2x), and silence skipping toggle. API: GET /minutes/:id returns minutes with meeting and recording info; GET/POST/DELETE /minutes/:id/comments for transcript paragraph commenting."
     },
     {
       "id": "US-096",
@@ -1675,8 +1675,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 99,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added Security tab to admin console with password policy (min length, uppercase/number/special requirements, expiry), 2FA toggle, external communication toggle, and session timeout. Settings saved to organization.settingsJson JSONB field."
     },
     {
       "id": "US-100",
