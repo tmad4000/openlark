@@ -242,6 +242,30 @@ class ApiClient {
     );
   }
 
+  // Notification bots
+  async getChatBots(chatId: string) {
+    return this.request<{ bots: NotificationBotInfo[] }>(`/messenger/chats/${chatId}/bots`);
+  }
+
+  async createChatBot(chatId: string, data: { name: string; avatarUrl?: string }) {
+    return this.request<{ bot: NotificationBotInfo }>(`/messenger/chats/${chatId}/bots`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async regenerateBotWebhook(chatId: string, botId: string) {
+    return this.request<{ webhookUrl: string }>(`/messenger/chats/${chatId}/bots/${botId}/regenerate`, {
+      method: "POST",
+    });
+  }
+
+  async deleteChatBot(chatId: string, botId: string) {
+    return this.request<{ success: boolean }>(`/messenger/chats/${chatId}/bots/${botId}`, {
+      method: "DELETE",
+    });
+  }
+
   async regenerateAppSecret(id: string) {
     return this.request<{ appSecret: string }>(`/platform/apps/${id}/regenerate-secret`, {
       method: "POST",
@@ -2591,6 +2615,14 @@ export interface WebhookDeliveryInfo {
   attempts: number;
   lastAttemptAt: string | null;
   responseStatus: number | null;
+  createdAt: string;
+}
+
+export interface NotificationBotInfo {
+  id: string;
+  name: string;
+  avatarUrl: string | null;
+  webhookUrl: string;
   createdAt: string;
 }
 

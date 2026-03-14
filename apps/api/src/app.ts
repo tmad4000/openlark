@@ -34,7 +34,13 @@ import { meetingsRoutes, meetingsWebhookRoutes } from "./modules/meetings/index.
 import { minutesRoutes } from "./modules/minutes/index.js";
 import { formsRoutes } from "./modules/forms/index.js";
 import { auditRoutes, registerAuditMiddleware } from "./modules/audit/index.js";
-import { platformRoutes, oauthRoutes, botRoutes } from "./modules/platform/index.js";
+import {
+  platformRoutes,
+  oauthRoutes,
+  botRoutes,
+  notificationBotRoutes,
+  webhookBotRoutes,
+} from "./modules/platform/index.js";
 
 export async function buildApp() {
   const app = Fastify({
@@ -154,6 +160,12 @@ export async function buildApp() {
 
       // Bot messaging API
       api.register(botRoutes, { prefix: "/bot" });
+
+      // Notification bots (webhook bots for group chats)
+      api.register(notificationBotRoutes, { prefix: "/messenger/chats/:chatId/bots" });
+
+      // Public webhook bot endpoint (no auth — URL is the secret)
+      api.register(webhookBotRoutes, { prefix: "/webhook-bot" });
 
       // LiveKit webhooks (no auth — verified by LiveKit in production)
       api.register(meetingsWebhookRoutes, { prefix: "/webhooks" });

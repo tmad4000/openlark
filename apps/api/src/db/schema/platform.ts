@@ -121,7 +121,31 @@ export const webhookDeliveries = pgTable(
   ]
 );
 
+// Notification bots (simple webhook bots for group chats)
+export const notificationBots = pgTable(
+  "notification_bots",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    chatId: uuid("chat_id").notNull(),
+    orgId: uuid("org_id")
+      .notNull()
+      .references(() => organizations.id),
+    name: varchar("name", { length: 255 }).notNull(),
+    avatarUrl: text("avatar_url"),
+    webhookToken: varchar("webhook_token", { length: 128 }).notNull(),
+    createdBy: uuid("created_by").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("notification_bots_webhook_token_idx").on(table.webhookToken),
+    index("notification_bots_chat_id_idx").on(table.chatId),
+  ]
+);
+
 // Type exports
+export type NotificationBot = typeof notificationBots.$inferSelect;
 export type WebhookDelivery = typeof webhookDeliveries.$inferSelect;
 export type App = typeof apps.$inferSelect;
 export type NewApp = typeof apps.$inferInsert;

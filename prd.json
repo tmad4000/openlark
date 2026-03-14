@@ -1776,8 +1776,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 105,
-      "passes": false,
-      "notes": "Simple one-way notification bots - no event receiving."
+      "passes": true,
+      "notes": "Notification bot schema (notification_bots table) with webhook_token. Management routes at /messenger/chats/:chatId/bots for CRUD. Public POST /webhook-bot/:token endpoint (no auth needed - URL is the secret). Supports text and card payloads. Bot name/avatar shown in message content. Webhook URL can be regenerated."
     },
     {
       "id": "US-106",
