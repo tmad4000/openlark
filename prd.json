@@ -1233,8 +1233,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 73,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added Add Subtask button with inline creation, checkbox toggle for subtask completion, indented subtask tree (up to 5 levels), Dependencies tab with task search and finish-to-start default, Blocked by indicator on task header, added TaskDependency type and API client methods (getTaskDependencies, addTaskDependency). Parent task is NOT auto-completed when all subtasks done."
     },
     {
       "id": "US-074",

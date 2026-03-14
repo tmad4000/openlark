@@ -1072,6 +1072,26 @@ class ApiClient {
       `/tasks?parentTaskId=${parentTaskId}`
     );
   }
+
+  async getTaskDependencies(taskId: string) {
+    return this.request<{ dependencies: TaskDependency[] }>(
+      `/tasks/${taskId}/dependencies`
+    );
+  }
+
+  async addTaskDependency(
+    taskId: string,
+    dependsOnTaskId: string,
+    type: "fs" | "ss" | "ff" | "sf" = "fs"
+  ) {
+    return this.request<{ dependency: TaskDependency }>(
+      `/tasks/${taskId}/dependencies`,
+      {
+        method: "POST",
+        body: JSON.stringify({ dependsOnTaskId, type }),
+      }
+    );
+  }
 }
 
 // Types
@@ -1521,6 +1541,12 @@ export interface TaskComment {
   content: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface TaskDependency {
+  taskId: string;
+  dependsOnTaskId: string;
+  type: "fs" | "ss" | "ff" | "sf";
 }
 
 export const api = new ApiClient();
