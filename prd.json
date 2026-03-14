@@ -1865,8 +1865,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 110,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "AI features: ai_jobs table tracks all AI requests. POST /ai/complete accepts prompt/context/type (rewrite/summarize/expand/tone/complete). Pluggable LLM backend via config: OpenAI, Anthropic, Ollama, or mock (dev). AI usage tracked per user with GET /ai/usage (total + monthly jobs and tokens). Frontend API client methods added."
     },
     {
       "id": "US-111",

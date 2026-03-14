@@ -33,6 +33,7 @@ import { translationRoutes } from "./modules/translation/index.js";
 import { meetingsRoutes, meetingsWebhookRoutes } from "./modules/meetings/index.js";
 import { minutesRoutes } from "./modules/minutes/index.js";
 import { formsRoutes } from "./modules/forms/index.js";
+import { aiRoutes } from "./modules/ai/index.js";
 import { auditRoutes, registerAuditMiddleware } from "./modules/audit/index.js";
 import {
   platformRoutes,
@@ -148,6 +149,9 @@ export async function buildApp() {
 
       // Forms module (form builder and responses)
       api.register(formsRoutes, { prefix: "/forms" });
+
+      // AI features (smart compose, document AI)
+      api.register(aiRoutes, { prefix: "/ai" });
 
       // Audit logs (admin)
       api.register(auditRoutes, { prefix: "/admin/audit-logs" });

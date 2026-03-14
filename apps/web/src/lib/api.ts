@@ -204,6 +204,30 @@ class ApiClient {
     return `${API_BASE_URL}/api/v1/admin/audit-logs/export${fullQs ? `?${fullQs}` : ""}`;
   }
 
+  // AI APIs
+  async aiComplete(data: {
+    prompt: string;
+    context?: string;
+    type?: "rewrite" | "summarize" | "expand" | "tone" | "complete";
+    toneStyle?: string;
+  }) {
+    return this.request<{ text: string; jobId: string }>("/ai/complete", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getAiUsage() {
+    return this.request<{
+      usage: {
+        totalJobs: number;
+        totalTokens: number;
+        monthlyJobs: number;
+        monthlyTokens: number;
+      };
+    }>("/ai/usage");
+  }
+
   // Platform / Developer APIs
   async getPlatformApps() {
     return this.request<{ apps: PlatformApp[] }>("/platform/apps");
