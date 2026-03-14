@@ -36,6 +36,38 @@ export const createFormSchema = z.object({
 
 export type CreateFormInput = z.infer<typeof createFormSchema>;
 
+export const updateFormSchema = z.object({
+  title: z.string().min(1).max(255).optional(),
+  description: z.string().nullable().optional(),
+  settings: z.record(z.unknown()).optional(),
+  theme: z.record(z.unknown()).optional(),
+  questions: z
+    .array(
+      z.object({
+        id: z.string().uuid().optional(),
+        type: z.enum([
+          "text",
+          "single_select",
+          "multi_choice",
+          "rating",
+          "nps",
+          "location",
+          "date",
+          "person",
+          "file",
+          "number",
+        ]),
+        config: z.record(z.unknown()).optional().default({}),
+        position: z.number().int().min(0).optional(),
+        required: z.boolean().optional().default(false),
+        displayCondition: z.record(z.unknown()).nullable().optional(),
+      })
+    )
+    .optional(),
+});
+
+export type UpdateFormInput = z.infer<typeof updateFormSchema>;
+
 export const formsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).optional().default(50),
   offset: z.coerce.number().int().min(0).optional().default(0),

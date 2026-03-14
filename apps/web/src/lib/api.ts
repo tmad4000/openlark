@@ -1444,6 +1444,64 @@ class ApiClient {
     );
   }
 
+  // Forms
+  async getForms(params?: { limit?: number; offset?: number }) {
+    const searchParams = new URLSearchParams();
+    if (params?.limit) searchParams.set("limit", String(params.limit));
+    if (params?.offset) searchParams.set("offset", String(params.offset));
+    const qs = searchParams.toString();
+    return this.request<{ forms: FormInfo[] }>(`/forms${qs ? `?${qs}` : ""}`);
+  }
+
+  async getForm(formId: string) {
+    return this.request<{ form: FormWithQuestions }>(`/forms/${formId}`);
+  }
+
+  async createForm(data: {
+    title: string;
+    description?: string;
+    settings?: Record<string, unknown>;
+    theme?: Record<string, unknown>;
+    questions?: FormQuestionInput[];
+  }) {
+    return this.request<{ form: FormWithQuestions }>("/forms", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateForm(formId: string, data: {
+    title?: string;
+    description?: string | null;
+    settings?: Record<string, unknown>;
+    theme?: Record<string, unknown>;
+    questions?: FormQuestionInput[];
+  }) {
+    return this.request<{ form: FormWithQuestions }>(`/forms/${formId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteForm(formId: string) {
+    return this.request<void>(`/forms/${formId}`, { method: "DELETE" });
+  }
+
+  async getFormResponses(formId: string, params?: { limit?: number; offset?: number }) {
+    const searchParams = new URLSearchParams();
+    if (params?.limit) searchParams.set("limit", String(params.limit));
+    if (params?.offset) searchParams.set("offset", String(params.offset));
+    const qs = searchParams.toString();
+    return this.request<{ responses: FormResponseInfo[] }>(`/forms/${formId}/responses${qs ? `?${qs}` : ""}`);
+  }
+
+  async submitFormResponse(formId: string, answers: Record<string, unknown>) {
+    return this.request<{ response: FormResponseInfo }>(`/forms/${formId}/responses`, {
+      method: "POST",
+      body: JSON.stringify({ answers }),
+    });
+  }
+
   async deleteMinutesComment(minutesId: string, commentId: string) {
     return this.request<{ comment: MinutesComment }>(
       `/minutes/${minutesId}/comments/${commentId}`,
@@ -2196,6 +2254,61 @@ export interface MeetingInfo {
   endedAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+// Form types
+export type FormQuestionType =
+  | "text"
+  | "single_select"
+  | "multi_choice"
+  | "rating"
+  | "nps"
+  | "location"
+  | "date"
+  | "person"
+  | "file"
+  | "number";
+
+export interface FormQuestionInput {
+  id?: string;
+  type: FormQuestionType;
+  config?: Record<string, unknown>;
+  position?: number;
+  required?: boolean;
+  displayCondition?: Record<string, unknown> | null;
+}
+
+export interface FormQuestionInfo {
+  id: string;
+  formId: string;
+  type: FormQuestionType;
+  config: Record<string, unknown>;
+  position: number;
+  required: boolean;
+  displayCondition: Record<string, unknown> | null;
+}
+
+export interface FormInfo {
+  id: string;
+  orgId: string;
+  title: string;
+  description: string | null;
+  settings: Record<string, unknown>;
+  theme: Record<string, unknown>;
+  creatorId: string;
+  createdAt: string;
+}
+
+export interface FormWithQuestions extends FormInfo {
+  questions: FormQuestionInfo[];
+}
+
+export interface FormResponseInfo {
+  id: string;
+  formId: string;
+  respondentId: string | null;
+  answers: Record<string, unknown>;
+  submittedAt: string;
 }
 
 export const api = new ApiClient();

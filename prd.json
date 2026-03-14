@@ -1640,8 +1640,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 97,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Form builder UI at /forms/:id/edit with drag-and-drop question ordering, type picker, question config (title, description, required, options, conditional display), preview mode, share tab with copy link and QR code, responses tab with expandable table view. Added PATCH /forms/:id and DELETE /forms/:id API routes."
     },
     {
       "id": "US-098",

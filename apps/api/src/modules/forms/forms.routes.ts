@@ -1,6 +1,7 @@
 import { FastifyInstance } from "fastify";
 import {
   createFormSchema,
+  updateFormSchema,
   formsQuerySchema,
   submitResponseSchema,
   responsesQuerySchema,
@@ -61,6 +62,39 @@ export async function formsRoutes(app: FastifyInstance) {
       });
     }
     return reply.send({ data: { form } });
+  });
+
+  // PATCH /forms/:id — update a form
+  app.patch<{ Params: { id: string } }>("/:id", async (req, reply) => {
+    try {
+      const input = updateFormSchema.parse(req.body);
+      const form = await formsService.updateForm(req.params.id, input);
+      if (!form) {
+        return reply.status(404).send({
+          code: "FORM_NOT_FOUND",
+          message: "Form not found",
+        });
+      }
+      return reply.send({ data: { form } });
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return reply.status(400).send(formatZodError(error));
+      }
+      throw error;
+    }
+  });
+
+  // DELETE /forms/:id — delete a form
+  app.delete<{ Params: { id: string } }>("/:id", async (req, reply) => {
+    const form = await formsService.getFormById(req.params.id);
+    if (!form) {
+      return reply.status(404).send({
+        code: "FORM_NOT_FOUND",
+        message: "Form not found",
+      });
+    }
+    await formsService.deleteForm(req.params.id);
+    return reply.status(204).send();
   });
 
   // ============ RESPONSES ============

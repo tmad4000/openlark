@@ -7,6 +7,7 @@ import {
 import { eq, and, sql } from "drizzle-orm";
 import type {
   CreateFormInput,
+  UpdateFormInput,
   SubmitResponseInput,
   FormsQueryInput,
   ResponsesQueryInput,
@@ -73,6 +74,46 @@ export class FormsService {
       .orderBy(forms.createdAt)
       .limit(query.limit)
       .offset(query.offset);
+  }
+
+  async deleteForm(formId: string) {
+    await db.delete(forms).where(eq(forms.id, formId));
+  }
+
+  async updateForm(formId: string, input: UpdateFormInput) {
+    const existing = await this.getFormById(formId);
+    if (!existing) return null;
+
+    // Update form fields
+    const updateData: Record<string, unknown> = {};
+    if (input.title !== undefined) updateData.title = input.title;
+    if (input.description !== undefined) updateData.description = input.description;
+    if (input.settings !== undefined) updateData.settings = input.settings;
+    if (input.theme !== undefined) updateData.theme = input.theme;
+
+    if (Object.keys(updateData).length > 0) {
+      await db.update(forms).set(updateData).where(eq(forms.id, formId));
+    }
+
+    // Replace questions if provided
+    if (input.questions !== undefined) {
+      await db.delete(formQuestions).where(eq(formQuestions.formId, formId));
+
+      if (input.questions.length > 0) {
+        const questionValues = input.questions.map((q, idx) => ({
+          formId,
+          type: q.type,
+          config: q.config,
+          position: q.position ?? idx,
+          required: q.required,
+          displayCondition: q.displayCondition ?? undefined,
+        }));
+
+        await db.insert(formQuestions).values(questionValues);
+      }
+    }
+
+    return this.getFormById(formId);
   }
 
   // ============ RESPONSES ============
