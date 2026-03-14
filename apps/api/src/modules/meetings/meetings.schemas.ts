@@ -17,4 +17,10 @@ export const joinMeetingSchema = z.object({
   // Optional — user identity comes from auth
 });
 
+export const startMeetingFromChatSchema = z.object({
+  chatId: z.string().uuid(),
+  title: z.string().max(255).optional(),
+});
+
 export type CreateMeetingInput = z.infer<typeof createMeetingSchema>;
+export type StartMeetingFromChatInput = z.infer<typeof startMeetingFromChatSchema>;

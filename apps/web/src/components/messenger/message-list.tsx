@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import { api, type Message, type MessageReaction, type TranslationPreferences } from "@/lib/api";
 import { useAuth } from "@/hooks/use-auth";
-import { Loader2, Clock, AlertCircle, MessageSquareText, Pin, Star, Pencil, Trash2, Check, X, Forward, Copy, CheckCheck, Zap, CheckSquare, ClipboardCheck, ThumbsUp, ThumbsDown, Languages } from "lucide-react";
+import { Loader2, Clock, AlertCircle, MessageSquareText, Pin, Star, Pencil, Trash2, Check, X, Forward, Copy, CheckCheck, Zap, CheckSquare, ClipboardCheck, ThumbsUp, ThumbsDown, Languages, Video } from "lucide-react";
 import {
   ReadReceiptIndicator,
   type ReadStatus,
@@ -949,6 +949,8 @@ function MessageBubble({
                 </button>
               </div>
             </div>
+          ) : message.type === "system" && message.contentJson?.cardType === "meeting" ? (
+            <MeetingCardContent contentJson={message.contentJson} senderName={senderName} />
           ) : message.type === "card" && message.contentJson?.cardType === "approval" ? (
             <ApprovalCardContent contentJson={message.contentJson} isOwn={isOwn} />
           ) : message.contentJson?.html ? (
@@ -1028,6 +1030,43 @@ function MessageBubble({
           senderMap={senderMap}
         />
       </div>
+    </div>
+  );
+}
+
+// Meeting system message rendered inside chat
+function MeetingCardContent({
+  contentJson,
+  senderName,
+}: {
+  contentJson: Record<string, unknown>;
+  senderName?: string | null;
+}) {
+  const meetingId = contentJson.meetingId as string;
+  const title = (contentJson.title as string) || "Meeting";
+
+  const handleJoinMeeting = useCallback(() => {
+    window.open(`/meeting/${meetingId}`, "_blank");
+  }, [meetingId]);
+
+  return (
+    <div className="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 p-3 min-w-[240px]">
+      <div className="flex items-center gap-2 mb-2">
+        <Video className="h-4 w-4 text-blue-500" />
+        <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+          {title}
+        </span>
+      </div>
+      <div className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+        {senderName || "Someone"} started a meeting
+      </div>
+      <button
+        onClick={handleJoinMeeting}
+        className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium bg-blue-600 hover:bg-blue-700 text-white transition-colors"
+      >
+        <Video className="h-4 w-4" />
+        Join Meeting
+      </button>
     </div>
   );
 }

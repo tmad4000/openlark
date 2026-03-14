@@ -122,6 +122,17 @@ class MeetingsService {
       .where(eq(meetingParticipants.meetingId, meetingId));
   }
 
+  async addParticipant(meetingId: string, userId: string) {
+    await db
+      .insert(meetingParticipants)
+      .values({
+        meetingId,
+        userId,
+        role: "participant",
+      })
+      .onConflictDoNothing();
+  }
+
   async endMeeting(meetingId: string, userId: string) {
     const meeting = await this.getMeeting(meetingId);
     if (!meeting) return null;

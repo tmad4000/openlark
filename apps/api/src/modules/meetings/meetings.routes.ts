@@ -1,12 +1,81 @@
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { meetingsService } from "./meetings.service.js";
-import { createMeetingSchema } from "./meetings.schemas.js";
+import { createMeetingSchema, startMeetingFromChatSchema } from "./meetings.schemas.js";
 import { authenticate } from "../auth/middleware.js";
 import { formatZodError } from "../../utils/validation.js";
+import { messengerService } from "../messenger/messenger.service.js";
+import { publishMessageEvent } from "../messenger/websocket.js";
 
 export async function meetingsRoutes(app: FastifyInstance) {
   app.addHook("preHandler", authenticate);
+
+  // POST /meetings/from-chat - Start a meeting from a chat
+  app.post("/from-chat", async (req, reply) => {
+    try {
+      const input = startMeetingFromChatSchema.parse(req.body);
+      const chatId = input.chatId;
+
+      // Get chat members to add as participants
+      const members = await messengerService.getChatMembers(chatId);
+
+      // Create the meeting
+      const title = input.title || "Meeting";
+      const result = await meetingsService.createMeeting(
+        { title, type: "instant" },
+        req.user!.id,
+        req.user!.orgId,
+        req.user!.email
+      );
+
+      const meeting = result.meeting!;
+
+      // Add all other chat members as meeting participants
+      for (const member of members) {
+        if (member.userId !== req.user!.id) {
+          await meetingsService.addParticipant(
+            meeting.id,
+            member.userId
+          );
+        }
+      }
+
+      // Post a system message in the chat with meeting info
+      const systemMessage = await messengerService.sendCardMessage(
+        chatId,
+        req.user!.id,
+        {
+          cardType: "meeting",
+          meetingId: meeting.id,
+          title,
+          hostId: req.user!.id,
+          status: "active",
+          text: `Meeting started: ${title}`,
+        },
+        "system"
+      );
+
+      // Broadcast the system message via WebSocket
+      await publishMessageEvent(chatId, {
+        type: "new_message",
+        chatId,
+        message: systemMessage,
+      });
+
+      return reply.status(201).send({
+        data: {
+          meeting,
+          token: result.token,
+          systemMessage,
+        },
+      });
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return reply.status(400).send(formatZodError(error));
+      }
+      throw error;
+    }
+  });
 
   // POST /meetings - Create a meeting and get join token
   app.post("/", async (req, reply) => {

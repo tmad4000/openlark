@@ -12,7 +12,7 @@ import { ThreadPanel } from "@/components/messenger/thread-panel";
 import { AppShell } from "@/components/layout/app-shell";
 import { ChatTabs, type CustomTab } from "@/components/messenger/chat-tabs";
 import { cn } from "@/lib/utils";
-import { MessageSquare, Wifi, WifiOff, Loader2, Pin, X, Star, FileText, File, Info, Megaphone } from "lucide-react";
+import { MessageSquare, Wifi, WifiOff, Loader2, Pin, X, Star, FileText, File, Info, Megaphone, Video } from "lucide-react";
 import { api, type Chat, type Pin as PinType, type Favorite, type Message, type Announcement, type ChatMember } from "@/lib/api";
 import { ForwardDialog } from "@/components/messenger/forward-dialog";
 import { BuzzDialog } from "@/components/messenger/buzz-dialog";
@@ -399,6 +399,22 @@ export default function MessengerPage() {
     } catch { /* ignore */ }
   }, []);
 
+  const [startingMeeting, setStartingMeeting] = useState(false);
+
+  const handleStartMeeting = useCallback(async () => {
+    if (!selectedChatId || startingMeeting) return;
+    setStartingMeeting(true);
+    try {
+      const res = await api.startMeetingFromChat(selectedChatId, "Meeting");
+      // Open the meeting in a new tab
+      window.open(`/meeting/${res.meeting.id}?token=${encodeURIComponent(res.token)}`, "_blank");
+    } catch {
+      // ignore
+    } finally {
+      setStartingMeeting(false);
+    }
+  }, [selectedChatId, startingMeeting]);
+
   const handleSelectChat = useCallback((chatId: string, chatType?: string) => {
     setSelectedChatId(chatId);
     setSelectedChatType(chatType || null);
@@ -447,6 +463,15 @@ export default function MessengerPage() {
                   </h2>
                 </div>
                 <div className="flex items-center gap-2">
+                  {/* Video call button */}
+                  <button
+                    onClick={handleStartMeeting}
+                    disabled={startingMeeting}
+                    className="p-1.5 rounded-md transition-colors text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50"
+                    title="Start video call"
+                  >
+                    <Video className="h-4 w-4" />
+                  </button>
                   {/* Group info button */}
                   {selectedChatType && selectedChatType !== "dm" && (
                     <button

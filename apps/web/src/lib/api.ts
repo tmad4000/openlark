@@ -1393,6 +1393,13 @@ class ApiClient {
   }
 
   // Meetings (video)
+  async startMeetingFromChat(chatId: string, title?: string) {
+    return this.request<{ meeting: MeetingInfo; token: string; systemMessage: Message }>("/meetings/from-chat", {
+      method: "POST",
+      body: JSON.stringify({ chatId, title }),
+    });
+  }
+
   async createMeeting(data: { title: string; type?: "instant" | "scheduled" | "recurring"; settings?: Record<string, unknown> }) {
     return this.request<{ meeting: MeetingInfo; token: string }>("/meetings", {
       method: "POST",
@@ -1496,8 +1503,8 @@ export interface Message {
     html?: string;
     mentions?: Array<{ id: string; label: string }>;
     forwarded?: ForwardedInfo;
-    // Approval card fields
-    cardType?: "approval";
+    // Card type fields
+    cardType?: "approval" | "meeting";
     requestId?: string;
     stepId?: string;
     templateName?: string;
@@ -1505,6 +1512,10 @@ export interface Message {
     formFields?: Array<{ label: string; value: string }>;
     status?: "pending" | "approved" | "rejected";
     decidedBy?: string;
+    // Meeting card fields
+    meetingId?: string;
+    title?: string;
+    hostId?: string;
     [key: string]: unknown;
   };
   threadId: string | null;
