@@ -71,7 +71,7 @@ export default function PublicFormPage() {
   useEffect(() => {
     const fetchForm = async () => {
       try {
-        const res = await fetch(`/api/forms/${token}`);
+        const res = await fetch(`/api/public-forms/${token}`);
         if (res.ok) {
           const data = await res.json();
           setForm(data);
@@ -114,7 +114,7 @@ export default function PublicFormPage() {
     setError(null);
 
     try {
-      const res = await fetch(`/api/forms/${token}/submit`, {
+      const res = await fetch(`/api/public-forms/${token}/submit`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

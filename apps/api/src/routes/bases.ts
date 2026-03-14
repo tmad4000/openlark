@@ -1629,7 +1629,7 @@ export async function basesRoutes(fastify: FastifyInstance) {
   fastify.get<{
     Params: { token: string };
   }>(
-    "/forms/:token",
+    "/public-forms/:token",
     async (request, reply) => {
       const { token } = request.params;
 
@@ -1694,7 +1694,7 @@ export async function basesRoutes(fastify: FastifyInstance) {
     Params: { token: string };
     Body: { data: Record<string, unknown> };
   }>(
-    "/forms/:token/submit",
+    "/public-forms/:token/submit",
     async (request, reply) => {
       const { token } = request.params;
       const { data } = request.body;
