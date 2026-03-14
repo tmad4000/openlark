@@ -1252,8 +1252,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 74,
-      "passes": false,
-      "notes": "Can use an open source Gantt library (frappe-gantt, dhtmlxGantt) or build custom with SVG."
+      "passes": true,
+      "notes": "Custom SVG Gantt chart in task-gantt-view.tsx. Features: horizontal bars by start/due date, dependency arrows between tasks, drag bar edges to change dates, milestones as diamonds, zoom levels (day/week/month), critical path highlighted with red dashed border. View toggle added as third option alongside list/kanban."
     },
     {
       "id": "US-075",

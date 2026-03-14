@@ -6,6 +6,7 @@ import { api, type Task } from "@/lib/api";
 import { AppShell } from "@/components/layout/app-shell";
 import { TaskListView } from "@/components/tasks/task-list-view";
 import { TaskKanbanView } from "@/components/tasks/task-kanban-view";
+import { TaskGanttView } from "@/components/tasks/task-gantt-view";
 import { TaskDetailPanel } from "@/components/tasks/task-detail-panel";
 import { CreateTaskForm } from "@/components/tasks/create-task-form";
 import { Button } from "@/components/ui/button";
@@ -15,11 +16,12 @@ import {
   Plus,
   List,
   Columns3,
+  GanttChart,
   User,
   Loader2,
 } from "lucide-react";
 
-type ViewMode = "list" | "kanban";
+type ViewMode = "list" | "kanban" | "gantt";
 type TabMode = "all" | "my";
 
 const PRIORITY_ORDER: Record<string, number> = {
@@ -229,6 +231,18 @@ export default function TasksPage() {
               <Columns3 className="w-3.5 h-3.5" />
               Kanban
             </button>
+            <button
+              onClick={() => setViewMode("gantt")}
+              className={cn(
+                "flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-colors",
+                viewMode === "gantt"
+                  ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm"
+                  : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+              )}
+            >
+              <GanttChart className="w-3.5 h-3.5" />
+              Gantt
+            </button>
           </div>
         </div>
 
@@ -254,11 +268,17 @@ export default function TasksPage() {
             sortOrder={sortOrder}
             onSort={handleSort}
           />
-        ) : (
+        ) : viewMode === "kanban" ? (
           <TaskKanbanView
             tasks={filteredTasks}
             onSelectTask={handleSelectTask}
             onTasksChange={loadTasks}
+          />
+        ) : (
+          <TaskGanttView
+            tasks={filteredTasks}
+            onSelectTask={handleSelectTask}
+            selectedTaskId={selectedTask?.id}
           />
         )}
       </div>
