@@ -1457,8 +1457,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 86,
-      "passes": false,
-      "notes": "Initial implementation uses PostgreSQL full-text search. Meilisearch migration is a follow-up."
+      "passes": true,
+      "notes": "Backend: GET /api/v1/search with cross-module query (messages, docs, events, contacts, tasks, email). Frontend: Cmd+K opens search modal with category tabs, recent searches in localStorage, result navigation. Permission-scoped via org membership and chat membership checks."
     },
     {
       "id": "US-087",

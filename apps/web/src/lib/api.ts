@@ -1362,6 +1362,16 @@ class ApiClient {
   async deleteEmailMessage(id: string) {
     return this.request<void>(`/email/messages/${id}`, { method: "DELETE" });
   }
+
+  // ── Global Search ──────────────────────────────────────────────────
+
+  async globalSearch(params: { q: string; category?: string; limit?: number }) {
+    const searchParams = new URLSearchParams();
+    searchParams.set("q", params.q);
+    if (params.category) searchParams.set("category", params.category);
+    if (params.limit) searchParams.set("limit", String(params.limit));
+    return this.request<{ results: GlobalSearchResult[] }>(`/search?${searchParams.toString()}`);
+  }
 }
 
 // Types
@@ -2003,6 +2013,17 @@ export interface EmailMessage {
   sentAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface GlobalSearchResult {
+  id: string;
+  type: "message" | "document" | "event" | "contact" | "task" | "email";
+  title: string;
+  snippet: string;
+  sourceModule: string;
+  sourceId?: string;
+  timestamp: string;
+  meta?: Record<string, unknown>;
 }
 
 export const api = new ApiClient();

@@ -27,6 +27,7 @@ import { approvalsRoutes } from "./modules/approvals/index.js";
 import { okrRoutes } from "./modules/okrs/index.js";
 import { attendanceRoutes } from "./modules/attendance/index.js";
 import { emailRoutes } from "./modules/email/index.js";
+import { searchRoutes } from "./modules/search/index.js";
 
 export async function buildApp() {
   const app = Fastify({
@@ -116,6 +117,9 @@ export async function buildApp() {
 
       // Email module (mailboxes, messages, send/receive)
       api.register(emailRoutes, { prefix: "/email" });
+
+      // Global search module
+      api.register(searchRoutes, { prefix: "/search" });
     },
     { prefix: "/api/v1" }
   );
