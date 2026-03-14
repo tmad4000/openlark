@@ -990,6 +990,77 @@ export class AuthService {
       memberCount: countMap.get(d.id) || 0,
     }));
   }
+  /**
+   * List all members in the organization with role and status info
+   */
+  async listOrgMembers(orgId: string, query?: string) {
+    const conditions = [
+      eq(users.orgId, orgId),
+      isNull(users.deletedAt),
+    ];
+
+    if (query && query.trim().length > 0) {
+      const q = `%${query.trim()}%`;
+      conditions.push(
+        or(ilike(users.displayName, q), ilike(users.email, q))!
+      );
+    }
+
+    const results = await db
+      .select({
+        id: users.id,
+        email: users.email,
+        displayName: users.displayName,
+        avatarUrl: users.avatarUrl,
+        status: users.status,
+        role: users.role,
+        createdAt: users.createdAt,
+      })
+      .from(users)
+      .where(and(...conditions))
+      .orderBy(users.displayName);
+
+    return results;
+  }
+
+  /**
+   * Update a user's role (admin operation)
+   */
+  async updateUserRole(userId: string, orgId: string, role: "primary_admin" | "admin" | "member") {
+    const [user] = await db
+      .update(users)
+      .set({ role, updatedAt: new Date() })
+      .where(and(eq(users.id, userId), eq(users.orgId, orgId), isNull(users.deletedAt)))
+      .returning({ id: users.id, role: users.role });
+
+    return user || null;
+  }
+
+  /**
+   * Deactivate a user (admin operation)
+   */
+  async deactivateUser(userId: string, orgId: string) {
+    const [user] = await db
+      .update(users)
+      .set({ status: "deactivated", updatedAt: new Date() })
+      .where(and(eq(users.id, userId), eq(users.orgId, orgId), isNull(users.deletedAt)))
+      .returning({ id: users.id, status: users.status });
+
+    return user || null;
+  }
+
+  /**
+   * Reactivate a deactivated user (admin operation)
+   */
+  async reactivateUser(userId: string, orgId: string) {
+    const [user] = await db
+      .update(users)
+      .set({ status: "active", updatedAt: new Date() })
+      .where(and(eq(users.id, userId), eq(users.orgId, orgId), isNull(users.deletedAt)))
+      .returning({ id: users.id, status: users.status });
+
+    return user || null;
+  }
 }
 
 export const authService = new AuthService();

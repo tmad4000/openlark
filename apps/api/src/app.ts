@@ -11,6 +11,7 @@ import {
   departmentRoutes,
   userRoutes,
   contactsRoutes,
+  adminRoutes,
 } from "./modules/auth/index.js";
 import {
   messengerRoutes,
@@ -81,6 +82,9 @@ export async function buildApp() {
 
       // Contacts directory
       api.register(contactsRoutes, { prefix: "/contacts" });
+
+      // Admin console
+      api.register(adminRoutes, { prefix: "/admin" });
 
       // Messenger module (HTTP + WebSocket)
       api.register(messengerRoutes, { prefix: "/messenger" });

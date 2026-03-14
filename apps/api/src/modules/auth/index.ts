@@ -4,6 +4,7 @@ export { invitationRoutes, acceptInviteRoutes } from "./invitation.routes.js";
 export { departmentRoutes } from "./department.routes.js";
 export { userRoutes } from "./user.routes.js";
 export { contactsRoutes } from "./contacts.routes.js";
+export { adminRoutes } from "./admin.routes.js";
 export { authService, type AuthResult, type TokenPayload } from "./auth.service.js";
 export * from "./auth.schemas.js";
 export { authenticate, requireAdmin, requirePrimaryAdmin } from "./middleware.js";

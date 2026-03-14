@@ -124,6 +124,98 @@ class ApiClient {
     );
   }
 
+  // Admin endpoints
+  async getAdminMembers(query?: string) {
+    const params = new URLSearchParams();
+    if (query) params.set("q", query);
+    const qs = params.toString();
+    return this.request<{ members: AdminMember[] }>(`/admin/members${qs ? `?${qs}` : ""}`);
+  }
+
+  async updateMemberRole(userId: string, role: string) {
+    return this.request<{ user: { id: string; role: string } }>(`/admin/members/${userId}/role`, {
+      method: "PATCH",
+      body: JSON.stringify({ role }),
+    });
+  }
+
+  async deactivateMember(userId: string) {
+    return this.request<{ user: { id: string; status: string } }>(`/admin/members/${userId}/deactivate`, {
+      method: "POST",
+    });
+  }
+
+  async reactivateMember(userId: string) {
+    return this.request<{ user: { id: string; status: string } }>(`/admin/members/${userId}/reactivate`, {
+      method: "POST",
+    });
+  }
+
+  async getOrganization(orgId: string) {
+    return this.request<{ organization: OrganizationFull }>(`/orgs/${orgId}`);
+  }
+
+  async updateOrganization(orgId: string, data: { name?: string; domain?: string; logoUrl?: string; industry?: string }) {
+    return this.request<{ organization: OrganizationFull }>(`/orgs/${orgId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getDepartments(orgId: string) {
+    return this.request<{ departments: DepartmentTree[] }>(`/orgs/${orgId}/departments`);
+  }
+
+  async createDepartment(orgId: string, data: { name: string; parentId?: string }) {
+    return this.request<{ department: DepartmentTree }>(`/orgs/${orgId}/departments`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateDepartment(orgId: string, deptId: string, data: { name?: string; parentId?: string | null }) {
+    return this.request<{ department: DepartmentTree }>(`/orgs/${orgId}/departments/${deptId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteDepartment(orgId: string, deptId: string) {
+    return this.request<{ success: boolean }>(`/orgs/${orgId}/departments/${deptId}`, {
+      method: "DELETE",
+    });
+  }
+
+  async addDepartmentMember(orgId: string, deptId: string, userId: string, role: string) {
+    return this.request<{ member: { departmentId: string; userId: string; role: string } }>(
+      `/orgs/${orgId}/departments/${deptId}/members`,
+      { method: "POST", body: JSON.stringify({ userId, role }) }
+    );
+  }
+
+  async removeDepartmentMember(orgId: string, deptId: string, userId: string) {
+    return this.request<{ success: boolean }>(`/orgs/${orgId}/departments/${deptId}/members/${userId}`, {
+      method: "DELETE",
+    });
+  }
+
+  async getInvitations(orgId: string) {
+    return this.request<{ invitations: InvitationInfo[] }>(`/orgs/${orgId}/invitations`);
+  }
+
+  async createInvitations(orgId: string, emails: string[]) {
+    return this.request<{ invitations: { id: string; email: string; link: string }[] }>(
+      `/orgs/${orgId}/invitations`,
+      { method: "POST", body: JSON.stringify({ emails }) }
+    );
+  }
+
+  async revokeInvitation(orgId: string, invitationId: string) {
+    return this.request<{ success: boolean }>(`/orgs/${orgId}/invitations/${invitationId}`, {
+      method: "DELETE",
+    });
+  }
+
   // Chat endpoints
   async getChats() {
     return this.request<{ chats: Chat[] }>("/messenger/chats");
@@ -1518,6 +1610,7 @@ export interface User {
   avatarUrl: string | null;
   status: string;
   orgId: string;
+  role?: string;
 }
 
 export interface UserSearchResult {
@@ -1532,6 +1625,44 @@ export interface Organization {
   name: string;
   domain: string | null;
   logoUrl: string | null;
+}
+
+export interface OrganizationFull {
+  id: string;
+  name: string;
+  domain: string | null;
+  logoUrl: string | null;
+  industry: string | null;
+  plan: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminMember {
+  id: string;
+  email: string;
+  displayName: string;
+  avatarUrl: string | null;
+  status: string;
+  role: string;
+  createdAt: string;
+}
+
+export interface DepartmentTree {
+  id: string;
+  name: string;
+  parentId: string | null;
+  children: DepartmentTree[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface InvitationInfo {
+  id: string;
+  email: string;
+  role: string;
+  expiresAt: string;
+  createdAt: string;
 }
 
 export interface ChatMemberSettings {

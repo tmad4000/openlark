@@ -85,3 +85,4 @@
 [2026-03-14 23:59] US-095 — Minutes viewer UI — PASS
 [2026-03-14 23:59] US-096 — Forms module - schema and builder API — PASS
 [2026-03-14 23:59] US-097 — Forms builder and response UI — PASS
+[2026-03-14 23:59] US-098 — Admin console - organization settings and user management — PASS

@@ -18,6 +18,7 @@ import {
   Palmtree,
   Settings,
   Bell,
+  Shield,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -97,6 +98,24 @@ export function NavigationRail() {
       </div>
 
       <div className="flex flex-col items-center py-4 gap-2 border-t border-gray-200 dark:border-gray-800">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Link
+              href="/admin"
+              className={cn(
+                "flex items-center justify-center w-10 h-10 rounded-lg transition-colors",
+                pathname.startsWith("/admin")
+                  ? "bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400"
+                  : "text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-800"
+              )}
+            >
+              <Shield className="w-5 h-5" />
+              <span className="sr-only">Admin</span>
+            </Link>
+          </TooltipTrigger>
+          <TooltipContent side="right">Admin</TooltipContent>
+        </Tooltip>
+
         <Tooltip>
           <TooltipTrigger asChild>
             <Link
