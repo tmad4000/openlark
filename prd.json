@@ -1882,8 +1882,8 @@
         "Typecheck passes"
       ],
       "priority": 111,
-      "passes": false,
-      "notes": "This is the 'deploy in 10 minutes' goal from the PRD."
+      "passes": true,
+      "notes": "Docker Compose production deployment with postgres, redis, minio, api, web, collab, worker, nginx services. Multi-stage Dockerfiles for web and api. Health checks on all services. Nginx reverse proxy routes /api, /collab, /. .env.example documents all required vars."
     },
     {
       "id": "US-112",
