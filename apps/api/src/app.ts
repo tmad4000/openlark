@@ -24,6 +24,7 @@ import { baseRoutes } from "./modules/base/index.js";
 import { automationRoutes } from "./modules/automations/index.js";
 import { taskRoutes } from "./modules/tasks/index.js";
 import { approvalsRoutes } from "./modules/approvals/index.js";
+import { okrRoutes } from "./modules/okrs/index.js";
 
 export async function buildApp() {
   const app = Fastify({
@@ -104,6 +105,9 @@ export async function buildApp() {
 
       // Approvals module (approval workflows)
       api.register(approvalsRoutes, { prefix: "/approvals" });
+
+      // OKR module (objectives and key results)
+      api.register(okrRoutes, { prefix: "/okrs" });
     },
     { prefix: "/api/v1" }
   );

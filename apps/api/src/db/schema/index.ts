@@ -12,3 +12,4 @@ export * from "./wiki";
 export * from "./base";
 export * from "./tasks";
 export * from "./approvals";
+export * from "./okrs";
