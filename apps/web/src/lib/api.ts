@@ -204,6 +204,44 @@ class ApiClient {
     return `${API_BASE_URL}/api/v1/admin/audit-logs/export${fullQs ? `?${fullQs}` : ""}`;
   }
 
+  // Platform / Developer APIs
+  async getPlatformApps() {
+    return this.request<{ apps: PlatformApp[] }>("/platform/apps");
+  }
+
+  async createPlatformApp(data: {
+    name: string;
+    description?: string;
+    redirectUris?: string[];
+    scopes?: string[];
+    botEnabled?: boolean;
+    webhookUrl?: string;
+  }) {
+    return this.request<{ app: PlatformApp }>("/platform/apps", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updatePlatformApp(id: string, data: Record<string, unknown>) {
+    return this.request<{ app: PlatformApp }>(`/platform/apps/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deletePlatformApp(id: string) {
+    return this.request<{ success: boolean }>(`/platform/apps/${id}`, {
+      method: "DELETE",
+    });
+  }
+
+  async regenerateAppSecret(id: string) {
+    return this.request<{ appSecret: string }>(`/platform/apps/${id}/regenerate-secret`, {
+      method: "POST",
+    });
+  }
+
   async getOrganization(orgId: string) {
     return this.request<{ organization: OrganizationFull }>(`/orgs/${orgId}`);
   }
@@ -2521,6 +2559,30 @@ export interface AuditLogEntry {
   createdAt: string;
   actorEmail: string | null;
   actorName: string | null;
+}
+
+// Platform / Developer types
+export interface PlatformApp {
+  id: string;
+  orgId: string;
+  name: string;
+  description: string | null;
+  appId: string;
+  appSecret?: string; // Only on creation
+  redirectUris: string[];
+  scopes: string[];
+  botEnabled: boolean;
+  webhookUrl: string | null;
+  createdAt: string;
+}
+
+export interface EventSubscriptionInfo {
+  id: string;
+  appId: string;
+  eventType: string;
+  callbackUrl: string;
+  status: string;
+  createdAt: string;
 }
 
 export const api = new ApiClient();

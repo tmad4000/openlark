@@ -34,6 +34,7 @@ import { meetingsRoutes, meetingsWebhookRoutes } from "./modules/meetings/index.
 import { minutesRoutes } from "./modules/minutes/index.js";
 import { formsRoutes } from "./modules/forms/index.js";
 import { auditRoutes, registerAuditMiddleware } from "./modules/audit/index.js";
+import { platformRoutes, oauthRoutes } from "./modules/platform/index.js";
 
 export async function buildApp() {
   const app = Fastify({
@@ -144,6 +145,12 @@ export async function buildApp() {
 
       // Audit logs (admin)
       api.register(auditRoutes, { prefix: "/admin/audit-logs" });
+
+      // Open Platform (app registration, developer console)
+      api.register(platformRoutes, { prefix: "/platform" });
+
+      // OAuth 2.0 endpoints
+      api.register(oauthRoutes, { prefix: "/auth/oauth" });
 
       // LiveKit webhooks (no auth — verified by LiveKit in production)
       api.register(meetingsWebhookRoutes, { prefix: "/webhooks" });

@@ -89,3 +89,4 @@
 [2026-03-14 23:59] US-099 — Admin console - security settings — PASS
 [2026-03-14 23:59] US-100 — Audit logging — PASS
 [2026-03-14 23:59] US-101 — Workplace dashboard — PASS
+[2026-03-14 23:59] US-102 — Open Platform - App registration and OAuth — PASS

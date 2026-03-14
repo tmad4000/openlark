@@ -1727,8 +1727,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 102,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created apps table, event_subscriptions table, and oauth_codes table in Drizzle schema. Platform service handles app CRUD, secret generation/hashing, OAuth auth code flow. Platform routes for app management. OAuth routes: /auth/oauth/authorize and /auth/oauth/token. Developer console at /admin/developers with app list, create dialog, credentials display, delete, and secret regeneration."
     },
     {
       "id": "US-103",
