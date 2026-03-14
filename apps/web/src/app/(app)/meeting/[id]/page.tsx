@@ -27,6 +27,7 @@ import {
   Users,
   Grid3X3,
   Monitor,
+  MonitorOff,
   MessageSquare,
   Timer,
   X,
@@ -175,11 +176,17 @@ function MeetingStage({
     { onlySubscribed: false }
   );
 
+  const room = useRoomContext();
   const screenShareTracks = tracks.filter(
     (t) => t.source === Track.Source.ScreenShare
   );
-  const effectiveView =
-    screenShareTracks.length > 0 ? "speaker" : viewMode;
+  const isScreenSharing = screenShareTracks.length > 0;
+  const effectiveView = isScreenSharing ? "speaker" : viewMode;
+
+  // Determine the presenter info
+  const presenterTrack = screenShareTracks[0];
+  const presenterName = presenterTrack?.participant?.name || presenterTrack?.participant?.identity || "Someone";
+  const isLocalSharing = presenterTrack?.participant?.isLocal ?? false;
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
@@ -208,6 +215,31 @@ function MeetingStage({
           Speaker
         </button>
       </div>
+
+      {/* Presenter indicator */}
+      {isScreenSharing && (
+        <div className="flex items-center justify-center gap-3 py-1.5 bg-blue-600/20 border-b border-blue-600/30">
+          <div className="flex items-center gap-2 text-xs text-blue-300">
+            <Monitor className="w-3.5 h-3.5" />
+            <span>
+              <span className="font-medium text-blue-200">{presenterName}</span>
+              {isLocalSharing ? " (You) " : " "}
+              is sharing their screen
+            </span>
+          </div>
+          {isLocalSharing && (
+            <button
+              onClick={() => {
+                room.localParticipant.setScreenShareEnabled(false);
+              }}
+              className="flex items-center gap-1.5 px-3 py-1 rounded bg-red-600 hover:bg-red-700 text-white text-xs font-medium transition-colors"
+            >
+              <MonitorOff className="w-3 h-3" />
+              Stop Sharing
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Video area */}
       <div className="flex-1 flex min-h-0">

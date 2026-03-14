@@ -1541,8 +1541,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 91,
-      "passes": false,
-      "notes": "Uses LiveKit's built-in screen share track."
+      "passes": true,
+      "notes": "Screen share button via LiveKit ControlBar (triggers browser share picker for screen/window/tab). Shared screen auto-displayed as main view in speaker layout. Presenter indicator banner shows who is sharing. Stop Sharing button calls setScreenShareEnabled(false). Typecheck passes."
     },
     {
       "id": "US-092",
