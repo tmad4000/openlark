@@ -1269,8 +1269,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 75,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added CreateTaskFromMessageDialog component, Create Task button in message hover menu, createTaskFromMessage API client method. Uses existing POST /tasks/from-message endpoint. Task links back to source message via sourceMessageId. Assignee picker shows chat members."
     },
     {
       "id": "US-076",

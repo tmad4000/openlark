@@ -1092,6 +1092,19 @@ class ApiClient {
       }
     );
   }
+
+  async createTaskFromMessage(data: {
+    messageId: string;
+    title?: string;
+    assigneeIds?: string[];
+    dueDate?: string;
+    taskListId?: string;
+  }) {
+    return this.request<{ task: Task }>("/tasks/from-message", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
 }
 
 // Types

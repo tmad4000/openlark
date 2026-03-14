@@ -16,6 +16,7 @@ import { MessageSquare, Wifi, WifiOff, Loader2, Pin, X, Star, FileText, File, In
 import { api, type Chat, type Pin as PinType, type Favorite, type Message, type Announcement, type ChatMember } from "@/lib/api";
 import { ForwardDialog } from "@/components/messenger/forward-dialog";
 import { BuzzDialog } from "@/components/messenger/buzz-dialog";
+import { CreateTaskFromMessageDialog } from "@/components/messenger/create-task-dialog";
 import { BuzzOverlay } from "@/components/messenger/buzz-overlay";
 import { GroupSettingsPanel } from "@/components/messenger/group-settings-panel";
 import { AnnouncementsView } from "@/components/messenger/announcements-view";
@@ -45,6 +46,8 @@ export default function MessengerPage() {
   const [isBuzzDialogOpen, setIsBuzzDialogOpen] = useState(false);
   const [buzzTargetMessage, setBuzzTargetMessage] = useState<Message | null>(null);
   const [activeBuzz, setActiveBuzz] = useState<BuzzEvent | null>(null);
+  const [isCreateTaskDialogOpen, setIsCreateTaskDialogOpen] = useState(false);
+  const [createTaskMessage, setCreateTaskMessage] = useState<Message | null>(null);
 
   // Sender map ref for thread panel
   const senderMapRef = useRef<Map<string, { displayName: string | null; avatarUrl: string | null }>>(new Map());
@@ -151,6 +154,11 @@ export default function MessengerPage() {
   const handleBuzzMessage = useCallback((message: Message) => {
     setBuzzTargetMessage(message);
     setIsBuzzDialogOpen(true);
+  }, []);
+
+  const handleCreateTaskFromMessage = useCallback((message: Message) => {
+    setCreateTaskMessage(message);
+    setIsCreateTaskDialogOpen(true);
   }, []);
 
   const handleBuzzSent = useCallback((messageId: string) => {
@@ -536,6 +544,7 @@ export default function MessengerPage() {
                   onForwardMessage={handleForwardMessage}
                   onBuzzMessage={handleBuzzMessage}
                   buzzedMessageIds={buzzedMessageIds}
+                  onCreateTask={handleCreateTaskFromMessage}
                 />
               )
             ) : chatTab === "pins" ? (
@@ -677,6 +686,16 @@ export default function MessengerPage() {
           chatId={selectedChatId}
           currentUserId={user?.id || ""}
           onBuzzSent={handleBuzzSent}
+        />
+      )}
+
+      {/* Create task from message dialog */}
+      {createTaskMessage && selectedChatId && (
+        <CreateTaskFromMessageDialog
+          open={isCreateTaskDialogOpen}
+          onOpenChange={setIsCreateTaskDialogOpen}
+          message={createTaskMessage}
+          chatId={selectedChatId}
         />
       )}
 

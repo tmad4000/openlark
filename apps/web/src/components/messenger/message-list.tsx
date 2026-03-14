@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import { api, type Message, type MessageReaction } from "@/lib/api";
 import { useAuth } from "@/hooks/use-auth";
-import { Loader2, Clock, AlertCircle, MessageSquareText, Pin, Star, Pencil, Trash2, Check, X, Forward, Copy, CheckCheck, Zap } from "lucide-react";
+import { Loader2, Clock, AlertCircle, MessageSquareText, Pin, Star, Pencil, Trash2, Check, X, Forward, Copy, CheckCheck, Zap, CheckSquare } from "lucide-react";
 import {
   ReadReceiptIndicator,
   type ReadStatus,
@@ -49,9 +49,10 @@ interface MessageListProps {
   onForwardMessage?: (message: Message) => void;
   onBuzzMessage?: (message: Message) => void;
   buzzedMessageIds?: Set<string>;
+  onCreateTask?: (message: Message) => void;
 }
 
-export function MessageList({ chatId, onMessagesLoaded, onlineUsers, memberCount, onOpenThread, pinnedMessageIds, favoritedMessageIds, onPinMessage, onUnpinMessage, onFavoriteMessage, onUnfavoriteMessage, onEditMessage, onRecallMessage, onForwardMessage, onBuzzMessage, buzzedMessageIds }: MessageListProps) {
+export function MessageList({ chatId, onMessagesLoaded, onlineUsers, memberCount, onOpenThread, pinnedMessageIds, favoritedMessageIds, onPinMessage, onUnpinMessage, onFavoriteMessage, onUnfavoriteMessage, onEditMessage, onRecallMessage, onForwardMessage, onBuzzMessage, buzzedMessageIds, onCreateTask }: MessageListProps) {
   const { user } = useAuth();
   const [messages, setMessages] = useState<OptimisticMessage[]>([]);
   const [senderMap, setSenderMap] = useState<SenderMap>(new Map());
@@ -501,6 +502,7 @@ export function MessageList({ chatId, onMessagesLoaded, onlineUsers, memberCount
                 onForward={onForwardMessage}
                 onBuzz={onBuzzMessage}
                 isBuzzed={buzzedMessageIds?.has(message.id) ?? false}
+                onCreateTask={onCreateTask}
               />
             );
           })}
@@ -545,6 +547,7 @@ interface MessageBubbleProps {
   onForward?: (message: Message) => void;
   onBuzz?: (message: Message) => void;
   isBuzzed?: boolean;
+  onCreateTask?: (message: Message) => void;
 }
 
 const EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -572,6 +575,7 @@ function MessageBubble({
   onForward,
   onBuzz,
   isBuzzed,
+  onCreateTask,
 }: MessageBubbleProps) {
   const [showPicker, setShowPicker] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -712,6 +716,13 @@ function MessageBubble({
               title="Forward message"
             >
               <Forward className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => onCreateTask?.(message)}
+              className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 hover:text-green-600 dark:hover:text-green-400"
+              title="Create Task"
+            >
+              <CheckSquare className="h-4 w-4" />
             </button>
             {isOwn && !isRecalled && (
               <button
