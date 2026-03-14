@@ -1439,8 +1439,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 85,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Email page at /app/email with three-column layout (folder sidebar, message list, detail panel). Folders: Inbox, Sent, Drafts, Archive, Trash. Email list shows subject, sender, date, unread indicator, star, attachment icon. Detail panel renders HTML body, shows attachments, has reply/forward buttons. Compose dialog with to, cc, subject, rich text body. API client methods added for all email endpoints."
     },
     {
       "id": "US-086",

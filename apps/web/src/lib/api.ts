@@ -1331,6 +1331,37 @@ class ApiClient {
       body: JSON.stringify({ decision }),
     });
   }
+
+  // Email
+  async sendEmail(data: { to: string[]; cc?: string[]; subject: string; body_html: string }) {
+    return this.request<{ message: EmailMessage }>("/email/send", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getEmailMessages(folder?: string, limit = 50, offset = 0) {
+    const params = new URLSearchParams();
+    if (folder) params.set("folder", folder);
+    params.set("limit", String(limit));
+    params.set("offset", String(offset));
+    return this.request<{ messages: EmailMessage[] }>(`/email/messages?${params.toString()}`);
+  }
+
+  async getEmailMessage(id: string) {
+    return this.request<{ message: EmailMessage }>(`/email/messages/${id}`);
+  }
+
+  async updateEmailMessage(id: string, data: { isRead?: boolean; isFlagged?: boolean; folder?: string }) {
+    return this.request<{ message: EmailMessage }>(`/email/messages/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteEmailMessage(id: string) {
+    return this.request<void>(`/email/messages/${id}`, { method: "DELETE" });
+  }
 }
 
 // Types
@@ -1946,6 +1977,32 @@ export interface LeaveRequestItem {
   reviewedAt: string | null;
   createdAt: string;
   leaveTypeName: string;
+}
+
+// Email types
+export type EmailFolder = "inbox" | "sent" | "drafts" | "trash" | "archive" | "spam";
+
+export interface EmailMessage {
+  id: string;
+  orgId: string;
+  mailboxId: string;
+  fromAddress: string;
+  toAddresses: string[];
+  ccAddresses: string[] | null;
+  bccAddresses: string[] | null;
+  subject: string;
+  bodyHtml: string;
+  bodyText: string | null;
+  attachments: { name: string; url: string; size: number; mimeType: string }[] | null;
+  folder: EmailFolder;
+  status: "draft" | "queued" | "sent" | "failed";
+  isRead: boolean;
+  isFlagged: boolean;
+  inReplyTo: string | null;
+  threadId: string | null;
+  sentAt: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export const api = new ApiClient();
