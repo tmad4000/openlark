@@ -1710,8 +1710,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 101,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Workplace dashboard with greeting header, quick actions (New Chat/Doc/Event/Task), 4 widget cards (Recent Chats, Upcoming Events, My Tasks, Recent Docs), and app launcher grid showing all 12 modules. Customizable layout noted for admin (to be extended). Replaced previous attendance-only page."
     },
     {
       "id": "US-102",
