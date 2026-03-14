@@ -1743,8 +1743,8 @@
         "Typecheck passes"
       ],
       "priority": 103,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created webhook_deliveries table with status enum (pending/delivered/failed). WebhookService.dispatch() finds subscriptions, creates deliveries, and attempts delivery with signature. Retry with exponential backoff (1s, 5s, 30s, 5m, 30m) up to 5 attempts. Delivery logs visible via GET /platform/apps/:id/deliveries. Frontend types and API methods added."
     },
     {
       "id": "US-104",

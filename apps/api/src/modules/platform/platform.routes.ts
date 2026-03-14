@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { authenticate, requireAdmin } from "../auth/middleware.js";
 import { authService } from "../auth/auth.service.js";
 import { platformService } from "./platform.service.js";
+import { webhookService } from "./webhook.service.js";
 
 /**
  * Platform routes for app registration and management
@@ -152,6 +153,23 @@ export async function platformRoutes(app: FastifyInstance) {
         body.callbackUrl
       );
       return reply.status(201).send({ data: { subscription: sub } });
+    }
+  );
+
+  // Webhook delivery logs
+  app.get<{
+    Params: { id: string };
+    Querystring: { limit?: string; offset?: string };
+  }>(
+    "/apps/:id/deliveries",
+    { preHandler: requireAdmin },
+    async (req, reply) => {
+      const deliveries = await webhookService.getDeliveries(
+        req.params.id,
+        req.query.limit ? parseInt(req.query.limit) : 50,
+        req.query.offset ? parseInt(req.query.offset) : 0
+      );
+      return reply.send({ data: { deliveries } });
     }
   );
 }

@@ -236,6 +236,12 @@ class ApiClient {
     });
   }
 
+  async getWebhookDeliveries(appId: string, limit = 50, offset = 0) {
+    return this.request<{ deliveries: WebhookDeliveryInfo[] }>(
+      `/platform/apps/${appId}/deliveries?limit=${limit}&offset=${offset}`
+    );
+  }
+
   async regenerateAppSecret(id: string) {
     return this.request<{ appSecret: string }>(`/platform/apps/${id}/regenerate-secret`, {
       method: "POST",
@@ -2573,6 +2579,18 @@ export interface PlatformApp {
   scopes: string[];
   botEnabled: boolean;
   webhookUrl: string | null;
+  createdAt: string;
+}
+
+export interface WebhookDeliveryInfo {
+  id: string;
+  subscriptionId: string;
+  eventType: string;
+  payload: unknown;
+  status: "pending" | "delivered" | "failed";
+  attempts: number;
+  lastAttemptAt: string | null;
+  responseStatus: number | null;
   createdAt: string;
 }
 

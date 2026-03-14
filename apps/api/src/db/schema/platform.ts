@@ -1,10 +1,13 @@
 import {
   pgTable,
+  pgEnum,
   uuid,
   varchar,
   text,
   timestamp,
   boolean,
+  integer,
+  jsonb,
   index,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
@@ -85,7 +88,41 @@ export const oauthCodes = pgTable(
   ]
 );
 
+// Webhook delivery status enum
+export const webhookDeliveryStatusEnum = pgEnum("webhook_delivery_status", [
+  "pending",
+  "delivered",
+  "failed",
+]);
+
+// Webhook deliveries table
+export const webhookDeliveries = pgTable(
+  "webhook_deliveries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    subscriptionId: uuid("subscription_id")
+      .notNull()
+      .references(() => eventSubscriptions.id, { onDelete: "cascade" }),
+    eventType: varchar("event_type", { length: 100 }).notNull(),
+    payload: jsonb("payload").notNull(),
+    status: webhookDeliveryStatusEnum("status").notNull().default("pending"),
+    attempts: integer("attempts").notNull().default(0),
+    lastAttemptAt: timestamp("last_attempt_at", { withTimezone: true }),
+    responseStatus: integer("response_status"),
+    responseBody: text("response_body"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("webhook_deliveries_sub_id_idx").on(table.subscriptionId),
+    index("webhook_deliveries_status_idx").on(table.status),
+    index("webhook_deliveries_created_at_idx").on(table.createdAt),
+  ]
+);
+
 // Type exports
+export type WebhookDelivery = typeof webhookDeliveries.$inferSelect;
 export type App = typeof apps.$inferSelect;
 export type NewApp = typeof apps.$inferInsert;
 export type EventSubscription = typeof eventSubscriptions.$inferSelect;
