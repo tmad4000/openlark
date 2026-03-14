@@ -1524,8 +1524,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 90,
-      "passes": false,
-      "notes": "Use LiveKit React components. Focus on core meeting experience."
+      "passes": true,
+      "notes": "Custom meeting UI with: gallery view (GridLayout) and speaker view (FocusLayout+CarouselLayout), auto-switches to speaker view on screen share. Bottom toolbar with mic/camera/screen-share/leave via ControlBar, plus chat and participants toggle. Participant list panel with avatar, name, speaking indicator. Chat panel using LiveKit Chat component. Meeting header with title and live duration timer. All built on LiveKit React components."
     },
     {
       "id": "US-091",
