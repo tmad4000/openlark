@@ -1215,8 +1215,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 72,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Tasks page at /app/tasks with List and Kanban view toggles. List view has sortable columns (status, title, priority, assignee, due date). Kanban view groups by status (Todo/In Progress/Done) with drag-and-drop. Click task opens right detail panel with status/priority controls, comments tab, subtasks tab. Inline create task form with title, priority, due date. My Tasks tab filters to assigned tasks. API client methods added for full task CRUD + comments."
     },
     {
       "id": "US-073",

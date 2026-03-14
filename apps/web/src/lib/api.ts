@@ -983,6 +983,95 @@ class ApiClient {
       method: "DELETE",
     });
   }
+
+  // Task endpoints
+  async getTasks(params?: {
+    status?: "todo" | "in_progress" | "done";
+    assignee?: string;
+    dueBefore?: string;
+    dueAfter?: string;
+    listId?: string;
+    parentTaskId?: string;
+    limit?: number;
+    offset?: number;
+  }) {
+    const searchParams = new URLSearchParams();
+    if (params?.status) searchParams.set("status", params.status);
+    if (params?.assignee) searchParams.set("assignee", params.assignee);
+    if (params?.dueBefore) searchParams.set("dueBefore", params.dueBefore);
+    if (params?.dueAfter) searchParams.set("dueAfter", params.dueAfter);
+    if (params?.listId) searchParams.set("listId", params.listId);
+    if (params?.parentTaskId) searchParams.set("parentTaskId", params.parentTaskId);
+    if (params?.limit) searchParams.set("limit", params.limit.toString());
+    if (params?.offset) searchParams.set("offset", params.offset.toString());
+    const query = searchParams.toString();
+    return this.request<{ tasks: Task[] }>(
+      `/tasks${query ? `?${query}` : ""}`
+    );
+  }
+
+  async getTask(taskId: string) {
+    return this.request<{ task: Task }>(`/tasks/${taskId}`);
+  }
+
+  async createTask(data: {
+    title: string;
+    description?: string;
+    status?: "todo" | "in_progress" | "done";
+    priority?: "none" | "low" | "medium" | "high" | "urgent";
+    assigneeIds?: string[];
+    dueDate?: string;
+    startDate?: string;
+    parentTaskId?: string;
+    taskListId?: string;
+  }) {
+    return this.request<{ task: Task }>("/tasks", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateTask(
+    taskId: string,
+    data: {
+      title?: string;
+      description?: string;
+      status?: "todo" | "in_progress" | "done";
+      priority?: "none" | "low" | "medium" | "high" | "urgent";
+      assigneeIds?: string[];
+      dueDate?: string | null;
+      startDate?: string | null;
+      parentTaskId?: string | null;
+    }
+  ) {
+    return this.request<{ task: Task }>(`/tasks/${taskId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteTask(taskId: string) {
+    return this.request<void>(`/tasks/${taskId}`, {
+      method: "DELETE",
+    });
+  }
+
+  async getTaskComments(taskId: string) {
+    return this.request<{ comments: TaskComment[] }>(`/tasks/${taskId}/comments`);
+  }
+
+  async addTaskComment(taskId: string, content: string) {
+    return this.request<{ comment: TaskComment }>(`/tasks/${taskId}/comments`, {
+      method: "POST",
+      body: JSON.stringify({ content }),
+    });
+  }
+
+  async getSubtasks(parentTaskId: string) {
+    return this.request<{ tasks: Task[] }>(
+      `/tasks?parentTaskId=${parentTaskId}`
+    );
+  }
 }
 
 // Types
@@ -1402,6 +1491,36 @@ export interface BaseDashboard {
   name: string;
   layout: DashboardChartBlock[];
   createdAt: string;
+}
+
+// Task types
+export interface Task {
+  id: string;
+  orgId: string;
+  title: string;
+  description: string | null;
+  status: "todo" | "in_progress" | "done";
+  priority: "none" | "low" | "medium" | "high" | "urgent";
+  assigneeIds: string[];
+  creatorId: string;
+  dueDate: string | null;
+  startDate: string | null;
+  parentTaskId: string | null;
+  customFields: Record<string, unknown> | null;
+  recurrenceRule: string | null;
+  sourceMessageId: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TaskComment {
+  id: string;
+  taskId: string;
+  userId: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export const api = new ApiClient();
