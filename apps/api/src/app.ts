@@ -25,6 +25,7 @@ import { automationRoutes } from "./modules/automations/index.js";
 import { taskRoutes } from "./modules/tasks/index.js";
 import { approvalsRoutes } from "./modules/approvals/index.js";
 import { okrRoutes } from "./modules/okrs/index.js";
+import { attendanceRoutes } from "./modules/attendance/index.js";
 
 export async function buildApp() {
   const app = Fastify({
@@ -108,6 +109,9 @@ export async function buildApp() {
 
       // OKR module (objectives and key results)
       api.register(okrRoutes, { prefix: "/okrs" });
+
+      // Attendance module (clock-in/out, leave, overtime)
+      api.register(attendanceRoutes, { prefix: "/attendance" });
     },
     { prefix: "/api/v1" }
   );
