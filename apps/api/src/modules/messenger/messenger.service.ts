@@ -500,6 +500,53 @@ export class MessengerService {
   }
 
   /**
+   * Send a card/system message directly into a chat (no membership check).
+   * Used by internal services (e.g. approval workflow) to inject interactive cards.
+   */
+  async sendCardMessage(
+    chatId: string,
+    senderId: string,
+    contentJson: Record<string, unknown>,
+    type: "card" | "system" = "card"
+  ): Promise<Message> {
+    const [message] = await db
+      .insert(messages)
+      .values({
+        chatId,
+        senderId,
+        type,
+        contentJson,
+      })
+      .returning();
+
+    if (!message) {
+      throw new Error("Failed to send card message");
+    }
+
+    await db
+      .update(chats)
+      .set({ updatedAt: new Date() })
+      .where(eq(chats.id, chatId));
+
+    return message;
+  }
+
+  /**
+   * Update the contentJson of a message (used for interactive card state updates).
+   */
+  async updateMessageContent(
+    messageId: string,
+    contentJson: Record<string, unknown>
+  ): Promise<Message | null> {
+    const [updated] = await db
+      .update(messages)
+      .set({ contentJson })
+      .where(eq(messages.id, messageId))
+      .returning();
+    return updated || null;
+  }
+
+  /**
    * Get messages in a chat with pagination
    * Excludes thread replies (messages with threadId) from the main timeline.
    * Includes replyCount for parent messages that have thread replies.

@@ -1320,8 +1320,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 78,
-      "passes": false,
-      "notes": "This is a key Lark differentiator - approvals without leaving chat."
+      "passes": true,
+      "notes": "Approval cards sent as card-type messages to approver DMs when request is submitted. Card shows template name, requester, form fields, and Approve/Reject buttons. Clicking buttons calls decideApprovalStep API and updates card to show decision status. Notification sent to requester on decision. Real-time WebSocket updates refresh card state. MessengerService extended with sendCardMessage and updateMessageContent methods."
     },
     {
       "id": "US-079",

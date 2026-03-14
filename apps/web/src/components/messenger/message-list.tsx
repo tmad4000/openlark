@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import { api, type Message, type MessageReaction } from "@/lib/api";
 import { useAuth } from "@/hooks/use-auth";
-import { Loader2, Clock, AlertCircle, MessageSquareText, Pin, Star, Pencil, Trash2, Check, X, Forward, Copy, CheckCheck, Zap, CheckSquare } from "lucide-react";
+import { Loader2, Clock, AlertCircle, MessageSquareText, Pin, Star, Pencil, Trash2, Check, X, Forward, Copy, CheckCheck, Zap, CheckSquare, ClipboardCheck, ThumbsUp, ThumbsDown } from "lucide-react";
 import {
   ReadReceiptIndicator,
   type ReadStatus,
@@ -771,10 +771,15 @@ function MessageBubble({
 
         <div
           className={cn(
-            "rounded-lg px-4 py-2",
-            isOwn
-              ? "bg-blue-600 text-white"
-              : "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100",
+            "rounded-lg",
+            message.type === "card"
+              ? "px-1 py-1 text-gray-900 dark:text-gray-100"
+              : cn(
+                  "px-4 py-2",
+                  isOwn
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                ),
             isRecalled && "opacity-50",
             isPending && "opacity-70",
             isFailed && "border-2 border-red-400"
@@ -838,6 +843,8 @@ function MessageBubble({
                 </button>
               </div>
             </div>
+          ) : message.type === "card" && message.contentJson?.cardType === "approval" ? (
+            <ApprovalCardContent contentJson={message.contentJson} isOwn={isOwn} />
           ) : message.contentJson?.html ? (
             <MessageRichContent html={message.contentJson.html} isOwn={isOwn} />
           ) : (
@@ -897,6 +904,137 @@ function MessageBubble({
           senderMap={senderMap}
         />
       </div>
+    </div>
+  );
+}
+
+// Approval card rendered inside a chat message
+function ApprovalCardContent({
+  contentJson,
+  isOwn,
+}: {
+  contentJson: Record<string, unknown>;
+  isOwn: boolean;
+}) {
+  const [deciding, setDeciding] = useState(false);
+  const [localStatus, setLocalStatus] = useState<string>(
+    (contentJson.status as string) || "pending"
+  );
+
+  // Sync local status when contentJson changes (e.g. from real-time update)
+  useEffect(() => {
+    setLocalStatus((contentJson.status as string) || "pending");
+  }, [contentJson.status]);
+
+  const templateName = (contentJson.templateName as string) || "Approval";
+  const requesterName = (contentJson.requesterName as string) || "Unknown";
+  const requestId = contentJson.requestId as string;
+  const stepId = contentJson.stepId as string;
+  const decidedBy = contentJson.decidedBy as string | undefined;
+  const formFields = (contentJson.formFields as Array<{ label: string; value: string }>) || [];
+
+  const handleDecision = async (decision: "approve" | "reject") => {
+    if (deciding || localStatus !== "pending") return;
+    setDeciding(true);
+    try {
+      await api.decideApprovalStep(requestId, stepId, { decision });
+      setLocalStatus(decision === "approve" ? "approved" : "rejected");
+    } catch {
+      // stay in current state
+    } finally {
+      setDeciding(false);
+    }
+  };
+
+  const isPending = localStatus === "pending";
+  const isApproved = localStatus === "approved";
+  const isRejected = localStatus === "rejected";
+
+  return (
+    <div className={cn(
+      "rounded-lg border p-3 min-w-[260px]",
+      isOwn
+        ? "border-blue-400/30 bg-blue-700/30"
+        : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900"
+    )}>
+      {/* Header */}
+      <div className="flex items-center gap-2 mb-2">
+        <ClipboardCheck className={cn(
+          "h-4 w-4",
+          isOwn ? "text-blue-200" : "text-blue-500"
+        )} />
+        <span className={cn(
+          "text-sm font-medium",
+          isOwn ? "text-white" : "text-gray-900 dark:text-gray-100"
+        )}>
+          {templateName}
+        </span>
+      </div>
+
+      {/* Requester */}
+      <div className={cn(
+        "text-xs mb-2",
+        isOwn ? "text-blue-200" : "text-gray-500 dark:text-gray-400"
+      )}>
+        From: {requesterName}
+      </div>
+
+      {/* Form fields */}
+      {formFields.length > 0 && (
+        <div className={cn(
+          "space-y-1 mb-3 text-xs",
+          isOwn ? "text-blue-100" : "text-gray-700 dark:text-gray-300"
+        )}>
+          {formFields.map((field, i) => (
+            <div key={i} className="flex justify-between gap-2">
+              <span className="opacity-70">{field.label}:</span>
+              <span className="font-medium truncate max-w-[160px]">{field.value}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Status / action buttons */}
+      {isPending ? (
+        <div className="flex gap-2 mt-2">
+          <button
+            onClick={() => handleDecision("approve")}
+            disabled={deciding}
+            className={cn(
+              "flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded text-xs font-medium transition-colors",
+              "bg-green-500 hover:bg-green-600 text-white disabled:opacity-50"
+            )}
+          >
+            <ThumbsUp className="h-3 w-3" />
+            Approve
+          </button>
+          <button
+            onClick={() => handleDecision("reject")}
+            disabled={deciding}
+            className={cn(
+              "flex-1 flex items-center justify-center gap-1 px-3 py-1.5 rounded text-xs font-medium transition-colors",
+              "bg-red-500 hover:bg-red-600 text-white disabled:opacity-50"
+            )}
+          >
+            <ThumbsDown className="h-3 w-3" />
+            Reject
+          </button>
+        </div>
+      ) : (
+        <div className={cn(
+          "flex items-center gap-2 mt-2 text-xs font-medium rounded px-2 py-1.5",
+          isApproved
+            ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+            : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+        )}>
+          {isApproved ? (
+            <ThumbsUp className="h-3 w-3" />
+          ) : (
+            <ThumbsDown className="h-3 w-3" />
+          )}
+          <span>{isApproved ? "Approved" : "Rejected"}{decidedBy ? ` by ${decidedBy}` : ""}</span>
+        </div>
+      )}
     </div>
   );
 }

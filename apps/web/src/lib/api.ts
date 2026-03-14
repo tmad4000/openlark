@@ -1248,6 +1248,16 @@ export interface Message {
     html?: string;
     mentions?: Array<{ id: string; label: string }>;
     forwarded?: ForwardedInfo;
+    // Approval card fields
+    cardType?: "approval";
+    requestId?: string;
+    stepId?: string;
+    templateName?: string;
+    requesterName?: string;
+    formFields?: Array<{ label: string; value: string }>;
+    status?: "pending" | "approved" | "rejected";
+    decidedBy?: string;
+    [key: string]: unknown;
   };
   threadId: string | null;
   topicId: string | null;
