@@ -894,6 +894,62 @@ class ApiClient {
       method: "DELETE",
     });
   }
+
+  // Automation endpoints
+  async getAutomations(baseId: string) {
+    return this.request<{ automations: BaseAutomation[] }>(
+      `/base/bases/${baseId}/automations`
+    );
+  }
+
+  async createAutomation(
+    baseId: string,
+    data: {
+      name: string;
+      trigger: AutomationTrigger;
+      actions: AutomationAction[];
+      type?: "automation" | "workflow";
+      enabled?: boolean;
+    }
+  ) {
+    return this.request<{ automation: BaseAutomation }>(
+      `/base/bases/${baseId}/automations`,
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+      }
+    );
+  }
+
+  async updateAutomation(
+    automationId: string,
+    data: {
+      name?: string;
+      trigger?: AutomationTrigger;
+      actions?: AutomationAction[];
+      enabled?: boolean;
+    }
+  ) {
+    return this.request<{ automation: BaseAutomation }>(
+      `/base/automations/${automationId}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      }
+    );
+  }
+
+  async deleteAutomation(automationId: string) {
+    return this.request<void>(`/base/automations/${automationId}`, {
+      method: "DELETE",
+    });
+  }
+
+  async getAutomationRuns(automationId: string) {
+    return this.request<{ runs: AutomationRun[] }>(
+      `/base/automations/${automationId}/runs`
+    );
+  }
 }
 
 // Types
@@ -1238,6 +1294,55 @@ export interface BaseViewInfo {
   config: unknown;
   position: number;
   createdAt: string;
+}
+
+// Automation types
+export type TriggerType =
+  | "record_created"
+  | "record_updated"
+  | "record_matches_condition"
+  | "scheduled"
+  | "button_clicked"
+  | "webhook_received";
+
+export type ActionType =
+  | "update_record"
+  | "create_record"
+  | "send_message"
+  | "http_request";
+
+export interface AutomationTrigger {
+  type: TriggerType;
+  tableId?: string;
+  condition?: Record<string, unknown>;
+  schedule?: string;
+  webhookId?: string;
+}
+
+export interface AutomationAction {
+  type: ActionType;
+  config: Record<string, unknown>;
+}
+
+export interface BaseAutomation {
+  id: string;
+  baseId: string;
+  name: string;
+  trigger: AutomationTrigger;
+  actions: AutomationAction[];
+  enabled: boolean;
+  type: "automation" | "workflow";
+  createdAt: string;
+}
+
+export interface AutomationRun {
+  id: string;
+  automationId: string;
+  triggerEvent: Record<string, unknown>;
+  status: "success" | "failed";
+  error: string | null;
+  startedAt: string;
+  completedAt: string | null;
 }
 
 export const api = new ApiClient();

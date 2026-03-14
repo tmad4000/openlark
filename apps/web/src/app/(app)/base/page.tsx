@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { AppShell } from "@/components/layout/app-shell";
-import { BaseGridView, BaseKanbanView } from "@/components/base";
+import { BaseGridView, BaseKanbanView, BaseAutomationsPanel } from "@/components/base";
 import { BaseFormView, type FormViewConfig } from "@/components/base/base-form-view";
 import type { ViewConfig } from "@/components/base/base-view-toolbar";
 import { api, type BaseInfo, type BaseTableInfo, type BaseViewInfo } from "@/lib/api";
@@ -18,6 +18,7 @@ import {
   LayoutGrid,
   FileInput,
   ChevronLeft,
+  Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,6 +44,7 @@ export default function BasePage() {
   const [creating, setCreating] = useState(false);
   const [newBaseName, setNewBaseName] = useState("");
   const [addingView, setAddingView] = useState(false);
+  const [showAutomations, setShowAutomations] = useState(false);
 
   // Load bases
   useEffect(() => {
@@ -311,10 +313,14 @@ export default function BasePage() {
         {tables.map((table) => (
           <button
             key={table.id}
-            onClick={() => setSelectedTable(table)}
+            onClick={() => {
+              setSelectedTable(table);
+              setShowAutomations(false);
+            }}
             className={cn(
               "w-full flex items-center gap-2 px-3 py-1.5 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors",
               selectedTable?.id === table.id &&
+                !showAutomations &&
                 "bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400"
             )}
           >
@@ -322,6 +328,23 @@ export default function BasePage() {
             <span className="truncate">{table.name}</span>
           </button>
         ))}
+
+        <div className="px-3 mt-4 mb-1">
+          <span className="text-[10px] uppercase tracking-wider text-gray-500 font-medium">
+            Tools
+          </span>
+        </div>
+        <button
+          onClick={() => setShowAutomations(true)}
+          className={cn(
+            "w-full flex items-center gap-2 px-3 py-1.5 text-sm text-left hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors",
+            showAutomations &&
+              "bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400"
+          )}
+        >
+          <Zap className="w-3.5 h-3.5 flex-shrink-0" />
+          <span className="truncate">Automations</span>
+        </button>
       </div>
     </div>
   );
@@ -407,7 +430,9 @@ export default function BasePage() {
         </div>
 
         {/* View content */}
-        {selectedTable ? (
+        {showAutomations ? (
+          <BaseAutomationsPanel baseId={selectedBase.id} tables={tables} />
+        ) : selectedTable ? (
           selectedView?.type === "form" ? (
             <BaseFormView
               tableId={selectedTable.id}

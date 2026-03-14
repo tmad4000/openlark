@@ -1161,8 +1161,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 69,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added BaseAutomationsPanel component with automation list (enabled/disabled toggle), create/edit form with trigger type selection, table selector for record-based triggers, cron schedule input for scheduled triggers, multi-step action builder with type-specific config forms (table selector, message template, HTTP method/URL), test run button that shows latest run result, and expandable run history with status/duration/error display. Added automation API methods and types to api.ts. Automations tab accessible from Base sidebar under 'Tools' section."
     },
     {
       "id": "US-070",
