@@ -1405,8 +1405,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 83,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Leave management API: CRUD for leave types, leave balances with auto-initialization, leave request submission with balance checking, admin review (approve/reject) with balance deduction. UI: /leave page with request form, balance display, approved leave calendar view, admin tab for reviewing org requests, leave type configuration. Integrated under /attendance prefix. Navigation rail updated."
     },
     {
       "id": "US-084",

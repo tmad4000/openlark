@@ -1280,6 +1280,57 @@ class ApiClient {
   async getAttendanceStats(month: string) {
     return this.request<{ stats: AttendanceStats }>(`/attendance/stats?month=${month}`);
   }
+
+  // Leave Management
+  async getLeaveTypes() {
+    return this.request<{ leaveTypes: LeaveType[] }>("/attendance/leave-types");
+  }
+
+  async createLeaveType(data: { name: string; isPaid?: boolean; defaultDaysPerYear?: number }) {
+    return this.request<{ leaveType: LeaveType }>("/attendance/leave-types", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getLeaveBalances(year?: number) {
+    const y = year || new Date().getFullYear();
+    return this.request<{ balances: LeaveBalance[] }>(`/attendance/leave-balances?year=${y}`);
+  }
+
+  async submitLeaveRequest(data: {
+    leaveTypeId: string;
+    startDate: string;
+    endDate: string;
+    days: number;
+    reason?: string;
+  }) {
+    return this.request<{ request: LeaveRequestItem }>("/attendance/leaves", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getLeaveRequests(query?: { status?: string }) {
+    const params = new URLSearchParams();
+    if (query?.status) params.set("status", query.status);
+    const qs = params.toString();
+    return this.request<{ requests: LeaveRequestItem[] }>(`/attendance/leaves${qs ? `?${qs}` : ""}`);
+  }
+
+  async getOrgLeaveRequests(query?: { status?: string }) {
+    const params = new URLSearchParams();
+    if (query?.status) params.set("status", query.status);
+    const qs = params.toString();
+    return this.request<{ requests: LeaveRequestItem[] }>(`/attendance/leaves/org${qs ? `?${qs}` : ""}`);
+  }
+
+  async reviewLeaveRequest(id: string, decision: "approved" | "rejected") {
+    return this.request<{ request: LeaveRequestItem }>(`/attendance/leaves/${id}/review`, {
+      method: "POST",
+      body: JSON.stringify({ decision }),
+    });
+  }
 }
 
 // Types
@@ -1859,6 +1910,42 @@ export interface AttendanceStats {
   daysAbsent: number;
   leaveDays: number;
   overtimeHours: number;
+}
+
+// Leave types
+export interface LeaveType {
+  id: string;
+  orgId: string;
+  name: string;
+  isPaid: boolean;
+  defaultDaysPerYear: number;
+  createdAt: string;
+}
+
+export interface LeaveBalance {
+  id: string;
+  leaveTypeId: string;
+  year: number;
+  totalDays: string;
+  usedDays: string;
+  leaveTypeName: string;
+  isPaid: boolean;
+}
+
+export interface LeaveRequestItem {
+  id: string;
+  userId: string;
+  orgId: string;
+  leaveTypeId: string;
+  startDate: string;
+  endDate: string;
+  days: string;
+  reason: string | null;
+  status: "pending" | "approved" | "rejected" | "cancelled";
+  reviewerId: string | null;
+  reviewedAt: string | null;
+  createdAt: string;
+  leaveTypeName: string;
 }
 
 export const api = new ApiClient();

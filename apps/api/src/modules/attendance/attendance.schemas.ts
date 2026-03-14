@@ -29,3 +29,41 @@ export const statsQuerySchema = z.object({
 });
 
 export type StatsQuery = z.infer<typeof statsQuerySchema>;
+
+// ============ LEAVE TYPES ============
+
+export const createLeaveTypeSchema = z.object({
+  name: z.string().min(1).max(255),
+  isPaid: z.boolean().optional().default(true),
+  defaultDaysPerYear: z.number().int().min(0).optional().default(0),
+});
+
+export type CreateLeaveTypeInput = z.infer<typeof createLeaveTypeSchema>;
+
+// ============ LEAVE REQUESTS ============
+
+export const createLeaveRequestSchema = z.object({
+  leaveTypeId: z.string().uuid(),
+  startDate: z.string().datetime(),
+  endDate: z.string().datetime(),
+  days: z.number().positive(),
+  reason: z.string().optional(),
+});
+
+export type CreateLeaveRequestInput = z.infer<typeof createLeaveRequestSchema>;
+
+export const leaveRequestsQuerySchema = z.object({
+  status: z
+    .enum(["pending", "approved", "rejected", "cancelled"])
+    .optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional().default(50),
+  offset: z.coerce.number().int().min(0).optional().default(0),
+});
+
+export type LeaveRequestsQueryInput = z.infer<typeof leaveRequestsQuerySchema>;
+
+export const reviewLeaveRequestSchema = z.object({
+  decision: z.enum(["approved", "rejected"]),
+});
+
+export type ReviewLeaveRequestInput = z.infer<typeof reviewLeaveRequestSchema>;

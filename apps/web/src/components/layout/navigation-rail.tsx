@@ -14,6 +14,7 @@ import {
   Home,
   ClipboardCheck,
   Target,
+  Palmtree,
   Settings,
   Bell,
   type LucideIcon,
@@ -39,6 +40,7 @@ const navItems: NavItem[] = [
   { icon: Home, label: "Workplace", href: "/workplace" },
   { icon: ClipboardCheck, label: "Approvals", href: "/approvals" },
   { icon: Target, label: "OKRs", href: "/okr" },
+  { icon: Palmtree, label: "Leave", href: "/leave" },
 ];
 
 export function NavigationRail() {

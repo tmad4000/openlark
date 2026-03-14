@@ -3,10 +3,20 @@ import {
   clockRecords,
   attendanceLocations,
   leaveRequests,
+  leaveTypes,
+  leaveBalances,
   overtimeRecords,
 } from "../../db/schema/index.js";
-import { eq, and, gte, lt, sql } from "drizzle-orm";
-import type { ClockInput, MyRecordsQuery, StatsQuery } from "./attendance.schemas.js";
+import { eq, and, gte, lt, sql, desc } from "drizzle-orm";
+import type {
+  ClockInput,
+  MyRecordsQuery,
+  StatsQuery,
+  CreateLeaveTypeInput,
+  CreateLeaveRequestInput,
+  LeaveRequestsQueryInput,
+  ReviewLeaveRequestInput,
+} from "./attendance.schemas.js";
 
 export class AttendanceService {
   // ============ CLOCK ============
@@ -202,6 +212,226 @@ export class AttendanceService {
       current.setUTCDate(current.getUTCDate() + 1);
     }
     return count;
+  }
+
+  // ============ LEAVE TYPES ============
+
+  async createLeaveType(input: CreateLeaveTypeInput, orgId: string) {
+    const [lt] = await db
+      .insert(leaveTypes)
+      .values({
+        orgId,
+        name: input.name,
+        isPaid: input.isPaid,
+        defaultDaysPerYear: input.defaultDaysPerYear,
+      })
+      .returning();
+    if (!lt) throw new Error("Failed to create leave type");
+    return lt;
+  }
+
+  async getLeaveTypes(orgId: string) {
+    return db
+      .select()
+      .from(leaveTypes)
+      .where(eq(leaveTypes.orgId, orgId));
+  }
+
+  // ============ LEAVE BALANCES ============
+
+  async getLeaveBalances(userId: string, year: number) {
+    return db
+      .select({
+        id: leaveBalances.id,
+        leaveTypeId: leaveBalances.leaveTypeId,
+        year: leaveBalances.year,
+        totalDays: leaveBalances.totalDays,
+        usedDays: leaveBalances.usedDays,
+        leaveTypeName: leaveTypes.name,
+        isPaid: leaveTypes.isPaid,
+      })
+      .from(leaveBalances)
+      .innerJoin(leaveTypes, eq(leaveBalances.leaveTypeId, leaveTypes.id))
+      .where(
+        and(
+          eq(leaveBalances.userId, userId),
+          eq(leaveBalances.year, year)
+        )
+      );
+  }
+
+  async initializeBalances(userId: string, orgId: string, year: number) {
+    const types = await this.getLeaveTypes(orgId);
+    const existing = await this.getLeaveBalances(userId, year);
+    const existingTypeIds = new Set(existing.map((b) => b.leaveTypeId));
+
+    const toCreate = types.filter((t) => !existingTypeIds.has(t.id));
+    if (toCreate.length === 0) return existing;
+
+    await db.insert(leaveBalances).values(
+      toCreate.map((t) => ({
+        userId,
+        leaveTypeId: t.id,
+        year,
+        totalDays: String(t.defaultDaysPerYear),
+        usedDays: "0",
+      }))
+    );
+
+    return this.getLeaveBalances(userId, year);
+  }
+
+  // ============ LEAVE REQUESTS ============
+
+  async createLeaveRequest(
+    input: CreateLeaveRequestInput,
+    userId: string,
+    orgId: string
+  ) {
+    // Check balance
+    const year = new Date(input.startDate).getUTCFullYear();
+    const balances = await this.getLeaveBalances(userId, year);
+    const balance = balances.find((b) => b.leaveTypeId === input.leaveTypeId);
+    if (balance) {
+      const remaining =
+        Number(balance.totalDays) - Number(balance.usedDays);
+      if (input.days > remaining) {
+        return {
+          error: "INSUFFICIENT_BALANCE" as const,
+          message: `Only ${remaining} days remaining`,
+        };
+      }
+    }
+
+    const [request] = await db
+      .insert(leaveRequests)
+      .values({
+        userId,
+        orgId,
+        leaveTypeId: input.leaveTypeId,
+        startDate: new Date(input.startDate),
+        endDate: new Date(input.endDate),
+        days: String(input.days),
+        reason: input.reason,
+        status: "pending",
+      })
+      .returning();
+
+    if (!request) throw new Error("Failed to create leave request");
+    return { request };
+  }
+
+  async getLeaveRequests(
+    userId: string,
+    orgId: string,
+    query: LeaveRequestsQueryInput
+  ) {
+    const conditions = [
+      eq(leaveRequests.orgId, orgId),
+      eq(leaveRequests.userId, userId),
+    ];
+    if (query.status) {
+      conditions.push(eq(leaveRequests.status, query.status));
+    }
+
+    return db
+      .select({
+        id: leaveRequests.id,
+        userId: leaveRequests.userId,
+        orgId: leaveRequests.orgId,
+        leaveTypeId: leaveRequests.leaveTypeId,
+        startDate: leaveRequests.startDate,
+        endDate: leaveRequests.endDate,
+        days: leaveRequests.days,
+        reason: leaveRequests.reason,
+        status: leaveRequests.status,
+        reviewerId: leaveRequests.reviewerId,
+        reviewedAt: leaveRequests.reviewedAt,
+        createdAt: leaveRequests.createdAt,
+        leaveTypeName: leaveTypes.name,
+      })
+      .from(leaveRequests)
+      .innerJoin(leaveTypes, eq(leaveRequests.leaveTypeId, leaveTypes.id))
+      .where(and(...conditions))
+      .orderBy(desc(leaveRequests.createdAt))
+      .limit(query.limit)
+      .offset(query.offset);
+  }
+
+  async reviewLeaveRequest(
+    requestId: string,
+    input: ReviewLeaveRequestInput,
+    reviewerId: string
+  ) {
+    const [request] = await db
+      .select()
+      .from(leaveRequests)
+      .where(eq(leaveRequests.id, requestId));
+
+    if (!request) return null;
+
+    if (request.status !== "pending") {
+      return { error: "ALREADY_DECIDED" as const, message: "Already reviewed" };
+    }
+
+    const [updated] = await db
+      .update(leaveRequests)
+      .set({
+        status: input.decision,
+        reviewerId,
+        reviewedAt: new Date(),
+      })
+      .where(eq(leaveRequests.id, requestId))
+      .returning();
+
+    // If approved, update balance
+    if (input.decision === "approved" && updated) {
+      const year = updated.startDate.getUTCFullYear();
+      await db
+        .update(leaveBalances)
+        .set({
+          usedDays: sql`${leaveBalances.usedDays}::numeric + ${Number(updated.days)}`,
+        })
+        .where(
+          and(
+            eq(leaveBalances.userId, updated.userId),
+            eq(leaveBalances.leaveTypeId, updated.leaveTypeId),
+            eq(leaveBalances.year, year)
+          )
+        );
+    }
+
+    return { request: updated };
+  }
+
+  async getOrgLeaveRequests(orgId: string, query: LeaveRequestsQueryInput) {
+    const conditions = [eq(leaveRequests.orgId, orgId)];
+    if (query.status) {
+      conditions.push(eq(leaveRequests.status, query.status));
+    }
+
+    return db
+      .select({
+        id: leaveRequests.id,
+        userId: leaveRequests.userId,
+        orgId: leaveRequests.orgId,
+        leaveTypeId: leaveRequests.leaveTypeId,
+        startDate: leaveRequests.startDate,
+        endDate: leaveRequests.endDate,
+        days: leaveRequests.days,
+        reason: leaveRequests.reason,
+        status: leaveRequests.status,
+        reviewerId: leaveRequests.reviewerId,
+        reviewedAt: leaveRequests.reviewedAt,
+        createdAt: leaveRequests.createdAt,
+        leaveTypeName: leaveTypes.name,
+      })
+      .from(leaveRequests)
+      .innerJoin(leaveTypes, eq(leaveRequests.leaveTypeId, leaveTypes.id))
+      .where(and(...conditions))
+      .orderBy(desc(leaveRequests.createdAt))
+      .limit(query.limit)
+      .offset(query.offset);
   }
 }
 
