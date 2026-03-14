@@ -2,9 +2,9 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { cn } from "@/lib/utils";
-import { api, type Message, type MessageReaction } from "@/lib/api";
+import { api, type Message, type MessageReaction, type TranslationPreferences } from "@/lib/api";
 import { useAuth } from "@/hooks/use-auth";
-import { Loader2, Clock, AlertCircle, MessageSquareText, Pin, Star, Pencil, Trash2, Check, X, Forward, Copy, CheckCheck, Zap, CheckSquare, ClipboardCheck, ThumbsUp, ThumbsDown } from "lucide-react";
+import { Loader2, Clock, AlertCircle, MessageSquareText, Pin, Star, Pencil, Trash2, Check, X, Forward, Copy, CheckCheck, Zap, CheckSquare, ClipboardCheck, ThumbsUp, ThumbsDown, Languages } from "lucide-react";
 import {
   ReadReceiptIndicator,
   type ReadStatus,
@@ -52,6 +52,12 @@ interface MessageListProps {
   onCreateTask?: (message: Message) => void;
 }
 
+// Translation cache: messageId -> { translatedText, sourceLang }
+interface TranslationCache {
+  translatedText: string;
+  sourceLang: string;
+}
+
 export function MessageList({ chatId, onMessagesLoaded, onlineUsers, memberCount, onOpenThread, pinnedMessageIds, favoritedMessageIds, onPinMessage, onUnpinMessage, onFavoriteMessage, onUnfavoriteMessage, onEditMessage, onRecallMessage, onForwardMessage, onBuzzMessage, buzzedMessageIds, onCreateTask }: MessageListProps) {
   const { user } = useAuth();
   const [messages, setMessages] = useState<OptimisticMessage[]>([]);
@@ -63,6 +69,8 @@ export function MessageList({ chatId, onMessagesLoaded, onlineUsers, memberCount
   const [readStatuses, setReadStatuses] = useState<Map<string, ReadStatusInfo>>(new Map());
   const [reactions, setReactions] = useState<Map<string, MessageReaction[]>>(new Map());
   const [totalMembers, setTotalMembers] = useState(0);
+  const [translations, setTranslations] = useState<Map<string, TranslationCache>>(new Map());
+  const [translationPrefs, setTranslationPrefs] = useState<TranslationPreferences | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const loadMoreTriggerRef = useRef<HTMLDivElement>(null);
   const markReadTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -135,6 +143,66 @@ export function MessageList({ chatId, onMessagesLoaded, onlineUsers, memberCount
       if (markReadTimerRef.current) clearTimeout(markReadTimerRef.current);
     };
   }, [chatId, onMessagesLoaded, user?.id]);
+
+  // Load translation preferences
+  useEffect(() => {
+    api.getTranslationPreferences()
+      .then((data) => setTranslationPrefs(data.preferences))
+      .catch(() => {}); // silently fail
+  }, []);
+
+  // Translate a single message
+  const handleTranslateMessage = useCallback(
+    async (messageId: string, text: string) => {
+      const targetLang = translationPrefs?.target_language || "en";
+      try {
+        const result = await api.translateText({ text, target_lang: targetLang });
+        setTranslations((prev) => {
+          const next = new Map(prev);
+          next.set(messageId, {
+            translatedText: result.translated_text,
+            sourceLang: result.source_lang,
+          });
+          return next;
+        });
+      } catch {
+        // ignore translation errors
+      }
+    },
+    [translationPrefs?.target_language]
+  );
+
+  // Auto-translate incoming messages when enabled
+  const autoTranslateMessage = useCallback(
+    (message: Message) => {
+      if (
+        translationPrefs?.auto_translate_enabled &&
+        message.senderId !== user?.id &&
+        message.contentJson?.text &&
+        !message.recalledAt
+      ) {
+        handleTranslateMessage(message.id, message.contentJson.text);
+      }
+    },
+    [translationPrefs?.auto_translate_enabled, user?.id, handleTranslateMessage]
+  );
+
+  // Auto-translate toggle handler
+  const handleToggleAutoTranslate = useCallback(async () => {
+    const newValue = !translationPrefs?.auto_translate_enabled;
+    try {
+      const result = await api.updateTranslationPreferences({
+        auto_translate_enabled: newValue,
+      });
+      setTranslationPrefs(result.preferences);
+    } catch {
+      // ignore
+    }
+  }, [translationPrefs?.auto_translate_enabled]);
+
+  // Expose auto-translate toggle for parent
+  MessageList.handleToggleAutoTranslate = handleToggleAutoTranslate;
+  MessageList.translationPrefs = translationPrefs;
 
   // Fetch read statuses for a batch of message IDs
   const fetchReadStatuses = useCallback(
@@ -367,8 +435,10 @@ export function MessageList({ chatId, onMessagesLoaded, onlineUsers, memberCount
     // Auto-mark as read for incoming messages from others
     if (message.senderId !== user?.id && !message._pending) {
       api.markChatRead(message.chatId, message.id).catch(() => {});
+      // Auto-translate if enabled
+      autoTranslateMessage(message);
     }
-  }, [user?.id]);
+  }, [user?.id, autoTranslateMessage]);
 
   // Update a message (for edits)
   const updateMessage = useCallback((updatedMessage: Message) => {
@@ -503,6 +573,8 @@ export function MessageList({ chatId, onMessagesLoaded, onlineUsers, memberCount
                 onBuzz={onBuzzMessage}
                 isBuzzed={buzzedMessageIds?.has(message.id) ?? false}
                 onCreateTask={onCreateTask}
+                translation={translations.get(message.id)}
+                onTranslate={handleTranslateMessage}
               />
             );
           })}
@@ -523,6 +595,8 @@ MessageList.removeOptimisticMessage = (_tempId: string) => {};
 MessageList.handleReadReceipt = (_userId: string, _lastMessageId: string) => {};
 MessageList.handleReactionAdded = (_messageId: string, _emoji: string, _userId: string) => {};
 MessageList.handleReactionRemoved = (_messageId: string, _emoji: string, _userId: string) => {};
+MessageList.handleToggleAutoTranslate = () => {};
+MessageList.translationPrefs = null as TranslationPreferences | null;
 
 interface MessageBubbleProps {
   message: OptimisticMessage;
@@ -548,6 +622,8 @@ interface MessageBubbleProps {
   onBuzz?: (message: Message) => void;
   isBuzzed?: boolean;
   onCreateTask?: (message: Message) => void;
+  translation?: TranslationCache;
+  onTranslate?: (messageId: string, text: string) => Promise<void>;
 }
 
 const EDIT_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -576,12 +652,15 @@ function MessageBubble({
   onBuzz,
   isBuzzed,
   onCreateTask,
+  translation,
+  onTranslate,
 }: MessageBubbleProps) {
   const [showPicker, setShowPicker] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState("");
   const [editLoading, setEditLoading] = useState(false);
   const [recallLoading, setRecallLoading] = useState(false);
+  const [isTranslating, setIsTranslating] = useState(false);
   const editInputRef = useRef<HTMLTextAreaElement>(null);
   const isRecalled = !!message.recalledAt;
   const isEdited = !!message.editedAt;
@@ -655,6 +734,18 @@ function MessageBubble({
     }
   }, [recallLoading, onRecall, message.id]);
 
+  const handleTranslate = useCallback(async () => {
+    if (isTranslating || !onTranslate) return;
+    const text = message.contentJson?.text;
+    if (!text) return;
+    setIsTranslating(true);
+    try {
+      await onTranslate(message.id, text);
+    } finally {
+      setIsTranslating(false);
+    }
+  }, [isTranslating, onTranslate, message.id, message.contentJson?.text]);
+
   return (
     <div
       className={cn(
@@ -724,6 +815,21 @@ function MessageBubble({
             >
               <CheckSquare className="h-4 w-4" />
             </button>
+            {message.contentJson?.text && (
+              <button
+                onClick={handleTranslate}
+                disabled={isTranslating}
+                className={cn(
+                  "p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700",
+                  translation
+                    ? "text-blue-500 hover:text-blue-700"
+                    : "text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                )}
+                title="Translate message"
+              >
+                <Languages className={cn("h-4 w-4", isTranslating && "animate-pulse")} />
+              </button>
+            )}
             {isOwn && !isRecalled && (
               <button
                 onClick={() => onBuzz?.(message)}
@@ -882,6 +988,24 @@ function MessageBubble({
             )}
           </div>
         </div>
+
+        {/* Translation display */}
+        {translation && (
+          <div className={cn(
+            "mt-1 rounded px-3 py-1.5 text-sm border-l-2",
+            isOwn
+              ? "bg-blue-700/30 border-blue-300 text-blue-100"
+              : "bg-gray-50 dark:bg-gray-800/50 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300"
+          )}>
+            <div className="whitespace-pre-wrap break-words">{translation.translatedText}</div>
+            <div className={cn(
+              "text-xs mt-0.5 italic",
+              isOwn ? "text-blue-200" : "text-gray-400 dark:text-gray-500"
+            )}>
+              Translated from {translation.sourceLang}
+            </div>
+          </div>
+        )}
 
         {/* Thread replies indicator */}
         {(message.replyCount ?? 0) > 0 && (

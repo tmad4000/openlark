@@ -1490,8 +1490,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 88,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added translate button (Languages icon) on message hover bar. Clicking translates message text via POST /translate/translate API. Translated text shown below original with \"Translated from [language]\" label. Auto-translate toggle via translation preferences API - when enabled, incoming messages auto-translate. Translation API client methods added to api.ts. Translation state cached per message in MessageList."
     },
     {
       "id": "US-089",

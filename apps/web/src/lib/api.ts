@@ -1372,6 +1372,25 @@ class ApiClient {
     if (params.limit) searchParams.set("limit", String(params.limit));
     return this.request<{ results: GlobalSearchResult[] }>(`/search?${searchParams.toString()}`);
   }
+
+  // Translation
+  async translateText(data: { text: string; target_lang: string; source_lang?: string }) {
+    return this.request<TranslationResult>("/translate/translate", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getTranslationPreferences() {
+    return this.request<{ preferences: TranslationPreferences }>("/translate/preferences");
+  }
+
+  async updateTranslationPreferences(data: { auto_translate_enabled?: boolean; target_language?: string }) {
+    return this.request<{ preferences: TranslationPreferences }>("/translate/preferences", {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
 }
 
 // Types
@@ -2024,6 +2043,18 @@ export interface GlobalSearchResult {
   sourceId?: string;
   timestamp: string;
   meta?: Record<string, unknown>;
+}
+
+// Translation types
+export interface TranslationResult {
+  translated_text: string;
+  source_lang: string;
+  target_lang: string;
+}
+
+export interface TranslationPreferences {
+  auto_translate_enabled: boolean;
+  target_language: string;
 }
 
 export const api = new ApiClient();
