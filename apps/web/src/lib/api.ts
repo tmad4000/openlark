@@ -1165,6 +1165,100 @@ class ApiClient {
       }
     );
   }
+
+  // OKR endpoints
+  async getOkrCycles(params?: { status?: string; limit?: number; offset?: number }) {
+    const searchParams = new URLSearchParams();
+    if (params?.status) searchParams.set("status", params.status);
+    if (params?.limit) searchParams.set("limit", String(params.limit));
+    if (params?.offset) searchParams.set("offset", String(params.offset));
+    const qs = searchParams.toString();
+    return this.request<{ cycles: OkrCycle[] }>(`/okrs/cycles${qs ? `?${qs}` : ""}`);
+  }
+
+  async createOkrCycle(data: { name: string; startDate: string; endDate: string; status?: string }) {
+    return this.request<{ cycle: OkrCycle }>("/okrs/cycles", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getOkrObjectives(params?: { cycleId?: string; ownerId?: string; status?: string; limit?: number }) {
+    const searchParams = new URLSearchParams();
+    if (params?.cycleId) searchParams.set("cycleId", params.cycleId);
+    if (params?.ownerId) searchParams.set("ownerId", params.ownerId);
+    if (params?.status) searchParams.set("status", params.status);
+    if (params?.limit) searchParams.set("limit", String(params.limit));
+    const qs = searchParams.toString();
+    return this.request<{ objectives: OkrObjective[] }>(`/okrs/objectives${qs ? `?${qs}` : ""}`);
+  }
+
+  async getOkrObjective(objectiveId: string) {
+    return this.request<{ objective: OkrObjective }>(`/okrs/objectives/${objectiveId}`);
+  }
+
+  async createOkrObjective(data: {
+    cycleId: string;
+    title: string;
+    description?: string;
+    parentObjectiveId?: string;
+    visibility?: "everyone" | "leaders" | "team";
+    status?: "draft" | "active" | "completed";
+  }) {
+    return this.request<{ objective: OkrObjective }>("/okrs/objectives", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async createOkrKeyResult(data: {
+    objectiveId: string;
+    title: string;
+    targetValue: number;
+    currentValue?: number;
+    weight?: number;
+    unit?: string;
+  }) {
+    return this.request<{ keyResult: OkrKeyResult }>("/okrs/key-results", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateOkrKeyResult(keyResultId: string, data: {
+    title?: string;
+    targetValue?: number;
+    currentValue?: number;
+    weight?: number;
+    unit?: string;
+  }) {
+    return this.request<{ keyResult: OkrKeyResult }>(`/okrs/key-results/${keyResultId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getOkrKeyResults(objectiveId: string) {
+    return this.request<{ keyResults: OkrKeyResult[] }>(`/okrs/objectives/${objectiveId}/key-results`);
+  }
+
+  async createOkrCheckin(data: { keyResultId: string; value: number; notes?: string }) {
+    return this.request<{ checkin: OkrCheckin }>("/okrs/checkins", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getOkrCheckins(keyResultId: string) {
+    return this.request<{ checkins: OkrCheckin[] }>(`/okrs/key-results/${keyResultId}/checkins`);
+  }
+
+  async createOkrAlignment(data: { objectiveId: string; alignedToObjectiveId: string }) {
+    return this.request<{ alignment: OkrAlignment }>("/okrs/alignments", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
 }
 
 // Types
@@ -1665,6 +1759,61 @@ export interface ApprovalStep {
   decidedBy: string | null;
   decidedAt: string | null;
   comment: string | null;
+}
+
+// OKR types
+export interface OkrCycle {
+  id: string;
+  orgId: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+  status: "creating" | "aligning" | "following_up" | "reviewing";
+  createdAt: string;
+}
+
+export interface OkrObjective {
+  id: string;
+  cycleId: string;
+  ownerId: string;
+  title: string;
+  description: string | null;
+  parentObjectiveId: string | null;
+  visibility: "everyone" | "leaders" | "team";
+  status: "draft" | "active" | "completed";
+  score: string | null;
+  createdAt: string;
+  updatedAt: string;
+  keyResults?: OkrKeyResult[];
+}
+
+export interface OkrKeyResult {
+  id: string;
+  objectiveId: string;
+  title: string;
+  targetValue: string;
+  currentValue: string;
+  weight: string;
+  unit: string | null;
+  score: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OkrCheckin {
+  id: string;
+  keyResultId: string;
+  userId: string;
+  value: string;
+  notes: string | null;
+  createdAt: string;
+}
+
+export interface OkrAlignment {
+  objectiveId: string;
+  alignedToObjectiveId: string;
+  confirmed: boolean;
+  createdAt: string;
 }
 
 export const api = new ApiClient();

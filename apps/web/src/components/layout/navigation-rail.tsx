@@ -13,6 +13,7 @@ import {
   BookOpen,
   Home,
   ClipboardCheck,
+  Target,
   Settings,
   Bell,
   type LucideIcon,
@@ -37,6 +38,7 @@ const navItems: NavItem[] = [
   { icon: BookOpen, label: "Wiki", href: "/wiki" },
   { icon: Home, label: "Workplace", href: "/workplace" },
   { icon: ClipboardCheck, label: "Approvals", href: "/approvals" },
+  { icon: Target, label: "OKRs", href: "/okr" },
 ];
 
 export function NavigationRail() {
