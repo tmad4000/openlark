@@ -1759,8 +1759,8 @@
         "Typecheck passes"
       ],
       "priority": 104,
-      "passes": false,
-      "notes": "This enables bots to send Lark-style interactive message cards."
+      "passes": true,
+      "notes": "Bot messaging API at /bot/messages/send and /bot/messages/update with app_access_token auth (appId:appSecret). Supports text, rich_text, and interactive card messages. Interactive cards support header, content blocks, and action buttons. Card action callbacks forwarded to app webhook via /bot/actions/callback. Uses sendCardMessage for no-membership-check bot sends."
     },
     {
       "id": "US-105",
