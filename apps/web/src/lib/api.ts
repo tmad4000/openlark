@@ -1391,6 +1391,28 @@ class ApiClient {
       body: JSON.stringify(data),
     });
   }
+
+  // Meetings (video)
+  async createMeeting(data: { title: string; type?: "instant" | "scheduled" | "recurring"; settings?: Record<string, unknown> }) {
+    return this.request<{ meeting: MeetingInfo; token: string }>("/meetings", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getMeeting(meetingId: string) {
+    return this.request<{ meeting: MeetingInfo }>(`/meetings/${meetingId}`);
+  }
+
+  async joinMeeting(meetingId: string) {
+    return this.request<{ meeting: MeetingInfo; token: string }>(`/meetings/${meetingId}/join`);
+  }
+
+  async endMeeting(meetingId: string) {
+    return this.request<{ meeting: MeetingInfo }>(`/meetings/${meetingId}/end`, {
+      method: "POST",
+    });
+  }
 }
 
 // Types
@@ -2055,6 +2077,22 @@ export interface TranslationResult {
 export interface TranslationPreferences {
   auto_translate_enabled: boolean;
   target_language: string;
+}
+
+// Meeting types
+export interface MeetingInfo {
+  id: string;
+  orgId: string;
+  title: string;
+  hostId: string;
+  type: "instant" | "scheduled" | "recurring";
+  status: "waiting" | "active" | "ended" | "cancelled";
+  roomId: string;
+  settings: Record<string, unknown>;
+  startedAt: string | null;
+  endedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export const api = new ApiClient();

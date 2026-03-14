@@ -29,6 +29,7 @@ import { attendanceRoutes } from "./modules/attendance/index.js";
 import { emailRoutes } from "./modules/email/index.js";
 import { searchRoutes } from "./modules/search/index.js";
 import { translationRoutes } from "./modules/translation/index.js";
+import { meetingsRoutes } from "./modules/meetings/index.js";
 
 export async function buildApp() {
   const app = Fastify({
@@ -124,6 +125,9 @@ export async function buildApp() {
 
       // Translation module
       api.register(translationRoutes, { prefix: "/translate" });
+
+      // Meetings module (video meetings via LiveKit)
+      api.register(meetingsRoutes, { prefix: "/meetings" });
     },
     { prefix: "/api/v1" }
   );

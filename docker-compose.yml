@@ -78,6 +78,21 @@ services:
       timeout: 5s
       retries: 5
 
+  livekit:
+    image: livekit/livekit-server:latest
+    ports:
+      - "7880:7880"
+      - "7881:7881"
+      - "7882:7882/udp"
+    environment:
+      LIVEKIT_KEYS: "devkey: devsecret1234567890devsecret1234567890"
+      LIVEKIT_LOG_LEVEL: info
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:7880 || exit 0"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
 volumes:
   pgdata:
   redisdata:

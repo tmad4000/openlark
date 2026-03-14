@@ -33,6 +33,11 @@ const envSchema = z.object({
 
   // Hocuspocus (collaboration server)
   HOCUSPOCUS_PORT: z.coerce.number().default(1234),
+
+  // LiveKit (video meetings)
+  LIVEKIT_API_KEY: z.string().default("devkey"),
+  LIVEKIT_API_SECRET: z.string().default("devsecret1234567890devsecret1234567890"),
+  LIVEKIT_URL: z.string().default("ws://localhost:7880"),
 });
 
 export type Env = z.infer<typeof envSchema>;

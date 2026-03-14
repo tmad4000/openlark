@@ -1507,8 +1507,8 @@
         "Typecheck passes"
       ],
       "priority": 89,
-      "passes": false,
-      "notes": "Use @livekit/components-react for the meeting UI components."
+      "passes": true,
+      "notes": "Added LiveKit server to docker-compose.yml (ports 7880/7881/7882). Created meetings and meeting_participants schema tables in apps/api/src/db/schema/meetings.ts. Added LIVEKIT_API_KEY, LIVEKIT_API_SECRET, LIVEKIT_URL to config. Created meetings module with routes (POST /meetings, GET /meetings/:id, GET /meetings/:id/join, POST /meetings/:id/end), service with LiveKit token generation using livekit-server-sdk AccessToken. Registered meetingsRoutes in app.ts under /meetings prefix. Created meeting page at /app/meeting/:id using @livekit/components-react LiveKitRoom and VideoConference components. Added meeting API client methods and MeetingInfo type to web api.ts."
     },
     {
       "id": "US-090",
