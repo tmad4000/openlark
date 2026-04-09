@@ -177,6 +177,12 @@
           "role": "reviewer",
           "value": 1,
           "reason": "Iter 24 review: Auth foundation stable. 2/6 subtasks complete. No changes since last review. Remaining subtasks (RLS, magic link, 2FA, departments, API keys) correctly deferred. Known limitation: login needs org context for multi-tenant."
+        },
+        {
+          "iteration": 36,
+          "role": "reviewer",
+          "value": 1,
+          "reason": "Iter 36 review: Auth foundation stable. 2/6 subtasks complete. Remaining (RLS, magic link, 2FA, departments, API keys) correctly deferred. Known limitation: login needs org context for multi-tenant (auth.service.ts:122). SSO SAML callback remains a 501 stub. Consider closing T-002 as done-for-v1 and splitting remaining subtasks into separate tasks if/when needed."
         }
       ],
       "comments": [
@@ -224,6 +230,11 @@
           "iteration": 30,
           "role": "reviewer",
           "message": "US-112 added SSO config schema (sso_configs table) + admin/sso routes + admin SSO tab. BUT samlCallbackRoutes returns 501 NOT_IMPLEMENTED — SAML flow is non-functional. FR-1.4 still incomplete. Either finish SAML handler or honestly mark this subtask as 'config UI only, flow stub'."
+        },
+        {
+          "iteration": 36,
+          "role": "reviewer",
+          "message": "Iter 36 review: T-002 has been in-progress since iteration 4 — 32 iterations. The 2 completed subtasks (schema + login) ARE the functional auth system the rest of the app uses. The 4 remaining subtasks (RLS, magic link, 2FA, departments) are stretch features nobody is blocked on. Consider closing T-002 as done and creating new tasks for the remaining subtasks IF they become needed. This keeps the plan honest about what is actually in-progress vs aspirational."
         }
       ],
       "status": "in-progress",
@@ -399,6 +410,12 @@
           "role": "reviewer",
           "value": 1,
           "reason": "Iter 27 review: 4/6 subtasks complete. Messenger core solid. Static method pattern in 4 components now (ChatList, MessageList, EventList, DocumentList) - consistent but should be documented as known limitation. Remaining subtasks 3-4 (threads, rich text, typing UI) are Phase 2."
+        },
+        {
+          "iteration": 36,
+          "role": "reviewer",
+          "value": 1,
+          "reason": "Iter 36 review: 4/6 subtasks complete. Messenger is functionally solid. Static method pattern (ChatList.addChat, MessageList.addMessage) flagged since iter 12, now in 4+ components. exportChatToDocument returns JSON but doesn't create a real Doc record — misleading (flagged iter 30, still unfixed). Remaining subtasks (threads, rich text, typing UI) are Phase 2."
         }
       ],
       "comments": [
@@ -511,6 +528,11 @@
           "iteration": 30,
           "role": "reviewer",
           "message": "US-115/US-116 added exportChatToDocument and scheduled message list/cancel — but exportChatToDocument only returns a JSON shape, it does NOT actually create a Doc record in the docs module. Misleading name. Either rename to getChatTranscript or wire it to create a real Document via DocsService."
+        },
+        {
+          "iteration": 36,
+          "role": "reviewer",
+          "message": "Iter 36 review: exportChatToDocument (messenger.service.ts:1751) was flagged in iter 30 as misleading — returns JSON but doesn't create a Doc record. Still unfixed after 6 iterations. If the feature name says 'export to document' it should create a document via DocsService, or be renamed to getChatTranscript. Next implementer touching messenger should resolve this."
         }
       ],
       "status": "in-progress",
@@ -634,6 +656,12 @@
           "role": "reviewer",
           "value": 1,
           "reason": "Iter 27 review: 4/5 subtasks complete. Calendar is functionally solid. Subtask 4 (shared calendars, iCal, drag-and-drop) is Phase 2 scope. Core calendar functionality works: events, RSVP, attendees, room booking. 358+ tests pass."
+        },
+        {
+          "iteration": 36,
+          "role": "reviewer",
+          "value": 1,
+          "reason": "Iter 36 review: 4/5 subtasks complete. Calendar module solid. Subtask 4 (shared calendars, iCal, drag-and-drop) is Phase 2 scope. Three TODOs in calendar.service.ts (FR-6.11, FR-6.12, FR-6.15) are documented and non-blocking. Duplicate date formatting (event-list.tsx / event-details.tsx) still present but minor."
         }
       ],
       "comments": [
@@ -758,6 +786,12 @@
           "role": "reviewer",
           "value": 1,
           "reason": "Iter 27 review: T-005 subtasks 1-2 complete. Docs backend solid (Hocuspocus + PostgreSQL persistence, 45 tests). Frontend has TipTap editor with Yjs collaboration support. Module follows established patterns exactly. Docs page bundle is 469kB - large but expected for TipTap + Yjs. Remaining subtasks 3-5 (slash commands, floating toolbar, permissions UI, comments, synced blocks) are Phase 2 polish."
+        },
+        {
+          "iteration": 36,
+          "role": "reviewer",
+          "value": 1,
+          "reason": "Iter 36 review: 2/5 subtasks complete. Backend + frontend foundation solid. DocumentEditor.tsx still untested (flagged iter 27). Static method pattern (DocumentList.addDocument) continues the established debt. Hocuspocus console.log statements should be replaced with proper logging. Remaining subtasks (slash commands, permissions UI, comments, templates) are Phase 2."
         }
       ],
       "comments": [
@@ -785,6 +819,11 @@
           "iteration": 27,
           "role": "reviewer",
           "message": "Iter 27 review: Hocuspocus server (hocuspocus.ts) is solid. JWT auth with permission checking, Database extension for PostgreSQL persistence. Console.log statements for connection events should be replaced with proper logging in production."
+        },
+        {
+          "iteration": 36,
+          "role": "reviewer",
+          "message": "Iter 36 review: DocumentEditor.tsx has no tests (flagged iter 27, still missing). This is the most complex frontend component (TipTap + Yjs + WebSocket). Even basic tests — renders without crash, toolbar actions toggle marks, read-only mode disables editing — would provide safety for future refactors. Priority: medium."
         }
       ],
       "status": "in-progress",
@@ -1647,6 +1686,12 @@
           "role": "implementer",
           "value": 1,
           "reason": "P1 — files module is genuinely broken, schema rows reference bytes that don't exist"
+        },
+        {
+          "iteration": 36,
+          "role": "reviewer",
+          "value": 1,
+          "reason": "Iter 36 review: Still the highest-priority open task. Files module is a metadata-only stub — schema rows reference bytes that don't exist. Docker-compose MinIO infra already in place. Detailed implementation breakdown in comments from iter 33. Ready to pick up."
         }
       ],
       "comments": [
@@ -1736,11 +1781,33 @@
         "role": "implementer"
       },
       "splitFrom": null
+    },
+    {
+      "id": "T-028",
+      "title": "Tech debt: fix lint error and warnings in API",
+      "description": "pnpm lint fails with 1 error and 29 warnings in apps/api. The error: tasks.service.ts:144 uses 'let' where 'const' is sufficient (prefer-const). The 29 warnings are all @typescript-eslint/no-unused-vars across pre-colony US-* modules (base, calendar, meetings, messenger, minutes, notifications, okrs, platform, tasks, wiki). Fix: change let→const in tasks.service.ts:144, then prefix unused vars with _ or remove unused imports. Quick fix, restores green lint.",
+      "subtasks": [],
+      "votes": [
+        {
+          "iteration": 36,
+          "role": "reviewer",
+          "value": 1,
+          "reason": "Lint is broken — 1 error prevents clean CI. Quick fix (let→const + unused var cleanup). Should be addressed before next feature work."
+        }
+      ],
+      "comments": [],
+      "status": "open",
+      "createdBy": {
+        "iteration": 36,
+        "role": "reviewer"
+      },
+      "claimedBy": null,
+      "splitFrom": null
     }
   ],
   "metadata": {
     "createdAt": "2026-03-04T21:00:00Z",
-    "totalIterations": 42,
+    "totalIterations": 44,
     "iterationLog": [
       {
         "iteration": 1,
@@ -1997,6 +2064,18 @@
       {
         "iteration": 42,
         "role": "reviewer",
+        "taskWorked": null,
+        "contextCompacted": false
+      },
+      {
+        "iteration": 43,
+        "role": "implementer",
+        "taskWorked": "T-027",
+        "contextCompacted": false
+      },
+      {
+        "iteration": 44,
+        "role": "simplifier",
         "taskWorked": null,
         "contextCompacted": false
       }

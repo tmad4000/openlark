@@ -3233,3 +3233,42 @@ Two-part fix:
   - ✅ vi.hoisted() for mock state shared between vi.mock() factories and test bodies
 - **Test baseline**: API tests 251 passed, 61 skipped. Web tests crash with fork resource exhaustion (machine issue, not code regression).
 ---
+
+## 2026-04-09 - Iteration 36 - REVIEW
+- **Code quality observations:**
+  - Recent changes (T-024 status→Redis, T-026 sso/files tests, T-027 websocket timeout) are clean, scoped, and well-tested. No new issues introduced.
+  - SSO and files test files (sso.test.ts, files.test.ts) follow the established vi.hoisted + mock chain pattern. Test quality is good — files.test covers UUID isolation and storageKey scoping, SSO tests cover sparse update with falsy boolean edge case.
+  - websocket.ts T-027 fix is well-documented with a load-bearing comment explaining the early-return rationale and linking back to T-027. Good model for future external-service-skip patterns.
+  - No new console.log statements in production code (only index.ts startup log).
+  - Three calendar TODOs (FR-6.11, FR-6.12, FR-6.15) documented in calendar.service.ts — non-blocking, properly documented.
+- **Commit history review:**
+  - Colony cadence continues healthy: small, scoped commits. No regression introduced in the last 5 commits.
+  - The pattern of colony bookkeeping commits following implementation commits is consistent and reviewable.
+- **Plan assessment:**
+  - T-002..T-005 remain in-progress with high vote counts. T-002 in particular has been in-progress for 32 iterations with only 2/6 subtasks done — the remaining 4 subtasks (RLS, magic link, 2FA, departments) are not blocking anything. Added comment recommending closing as done-for-v1.
+  - T-003 exportChatToDocument misleading name flagged iter 30, still unaddressed after 6 iterations. Added nudge for next implementer.
+  - T-005 DocumentEditor.tsx untested since iter 27. Added nudge — this is the most complex frontend component.
+  - T-025 (files stub) remains the highest-priority open task. Ready to pick up with existing implementation guide in comments.
+  - Static method pattern (addChat, addMessage, addEvent, addDocument) now in 5 component instances across 3 modules. Consistent but fragile — flagged since iter 12. Not blocking Phase 1, should be addressed before Phase 2 multi-instance scenarios.
+  - T-006..T-022 (-1 each) correctly de-prioritized.
+- **Nudges left:**
+  - +1 on T-002 through T-005 and T-025 with specific observations
+  - Comment on T-002: recommend closing as done-for-v1 (remaining subtasks aspirational, nothing blocked)
+  - Comment on T-003: exportChatToDocument still misleading after 6 iterations
+  - Comment on T-005: DocumentEditor.tsx needs tests
+- **Tech debt items:**
+  - T-025 (files stub): highest priority, metadata rows reference nonexistent S3 bytes
+  - Static method pattern in 5 components: growing tech debt, not yet critical
+  - exportChatToDocument: misleading API that doesn't actually create a doc
+  - Hocuspocus console.log statements should use proper logging
+- **Reinforced patterns:**
+  - ✅ vi.hoisted + module-level db/schema mocks — standard across sso.test, files.test, status.test
+  - ✅ 30s timeout on beforeAll/beforeEach hooks calling buildApp() — applied in all 6 test files
+  - ✅ NODE_ENV=test early-return for external services (websocket.ts, hocuspocus.ts)
+  - ✅ Small, scoped colony commits with clear task references
+  - ✅ Tests for falsy boolean edge cases in sparse updates (isEnabled: false in SSO)
+- **Test baseline**: API tests 251 passed, 61 skipped. No regressions from iter 35.
+- **Lint status**: FAILING — 1 error (tasks.service.ts:144 prefer-const) + 29 warnings (unused vars across 10 pre-colony modules). Created T-028 to fix. This is pre-existing from US-* era, not a regression.
+- **New task created**: T-028 — fix lint error and warnings in API (quick fix, restores green lint)
+---
+---
