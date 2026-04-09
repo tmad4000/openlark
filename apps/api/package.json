@@ -16,8 +16,11 @@
     "db:seed": "tsx src/db/seed.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "3.1004.0",
+    "@aws-sdk/s3-request-presigner": "3.1004.0",
     "@fastify/cookie": "^11.0.2",
     "@fastify/cors": "^11.0.0",
+    "@fastify/multipart": "9.4.0",
     "@fastify/rate-limit": "^10.3.0",
     "@fastify/sensible": "^6.0.3",
     "@fastify/websocket": "^11.2.0",
