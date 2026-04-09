@@ -1376,7 +1376,7 @@ export async function messengerRoutes(app: FastifyInstance) {
     }
   );
 
-  // POST /messenger/chats/:chatId/export - Export chat messages to a document
+  // POST /messenger/chats/:chatId/export - Get chat transcript
   app.post<{ Params: { chatId: string }; Body: { title?: string } }>(
     "/chats/:chatId/export",
     async (req, reply) => {
@@ -1395,7 +1395,7 @@ export async function messengerRoutes(app: FastifyInstance) {
         });
       }
 
-      const result = await messengerService.exportChatToDocument(
+      const result = await messengerService.getChatTranscript(
         chatId,
         req.user!.id,
         req.user!.orgId,

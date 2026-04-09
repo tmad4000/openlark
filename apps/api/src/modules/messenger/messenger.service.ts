@@ -1746,9 +1746,9 @@ export class MessengerService {
   }
 
   /**
-   * Export chat messages to a document-like structure
+   * Get chat transcript as structured JSON
    */
-  async exportChatToDocument(
+  async getChatTranscript(
     chatId: string,
     userId: string,
     orgId: string,

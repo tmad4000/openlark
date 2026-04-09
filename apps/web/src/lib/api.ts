@@ -1770,8 +1770,8 @@ class ApiClient {
     });
   }
 
-  // Export chat messages to document
-  async exportChatToDocument(chatId: string, title?: string) {
+  // Get chat transcript as structured JSON
+  async getChatTranscript(chatId: string, title?: string) {
     return this.request<ChatExport>(`/messenger/chats/${chatId}/export`, {
       method: "POST",
       body: JSON.stringify({ title }),
