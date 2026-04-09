@@ -319,6 +319,11 @@ describe("CreateEventDialog", () => {
     const attendeesInput = screen.getByLabelText("Attendees");
     fireEvent.change(attendeesInput, { target: { value: "jane" } });
 
+    // Wait for search to complete first
+    await waitFor(() => {
+      expect(api.searchUsers).toHaveBeenCalledWith("jane");
+    });
+
     await waitFor(() => {
       expect(screen.getByText("Jane Doe")).toBeInTheDocument();
     });
@@ -374,6 +379,11 @@ describe("CreateEventDialog", () => {
     const attendeesInput = screen.getByLabelText("Attendees");
     fireEvent.change(attendeesInput, { target: { value: "jane" } });
 
+    // Wait for search to complete
+    await waitFor(() => {
+      expect(api.searchUsers).toHaveBeenCalledWith("jane");
+    });
+
     await waitFor(() => {
       expect(screen.getByText("Jane Doe")).toBeInTheDocument();
     });
@@ -414,7 +424,18 @@ describe("CreateEventDialog", () => {
     it("loads and displays meeting rooms with availability", async () => {
       render(<CreateEventDialog open={true} onOpenChange={() => {}} />);
 
-      // Rooms are loaded with availability once times are set
+      await waitFor(() => {
+        expect(screen.getByLabelText("Start Time")).toBeInTheDocument();
+      });
+
+      // Rooms are loaded when start and end times are set
+      fireEvent.change(screen.getByLabelText("Start Time"), {
+        target: { value: "2026-03-10T10:00" },
+      });
+      fireEvent.change(screen.getByLabelText("End Time"), {
+        target: { value: "2026-03-10T11:00" },
+      });
+
       await waitFor(() => {
         expect(api.getRoomsWithAvailability).toHaveBeenCalled();
       });
@@ -434,7 +455,15 @@ describe("CreateEventDialog", () => {
       render(<CreateEventDialog open={true} onOpenChange={() => {}} />);
 
       await waitFor(() => {
-        expect(screen.getByLabelText("Meeting Room")).toBeInTheDocument();
+        expect(screen.getByLabelText("Start Time")).toBeInTheDocument();
+      });
+
+      // Set times so rooms load
+      fireEvent.change(screen.getByLabelText("Start Time"), {
+        target: { value: "2026-03-10T10:00" },
+      });
+      fireEvent.change(screen.getByLabelText("End Time"), {
+        target: { value: "2026-03-10T11:00" },
       });
 
       // Wait for rooms to load
@@ -468,12 +497,7 @@ describe("CreateEventDialog", () => {
         expect(screen.getByLabelText("Title")).toBeInTheDocument();
       });
 
-      // Wait for rooms to load
-      await waitFor(() => {
-        expect(screen.getByText(/Conference Room A \(10 people\)/)).toBeInTheDocument();
-      });
-
-      // Fill in form
+      // Fill in form (set times first so rooms load)
       fireEvent.change(screen.getByLabelText("Title"), {
         target: { value: "Meeting in Room" },
       });
@@ -482,6 +506,11 @@ describe("CreateEventDialog", () => {
       });
       fireEvent.change(screen.getByLabelText("End Time"), {
         target: { value: "2026-03-10T11:00" },
+      });
+
+      // Wait for rooms to load
+      await waitFor(() => {
+        expect(screen.getByText(/Conference Room A \(10 people\)/)).toBeInTheDocument();
       });
 
       // Select a room

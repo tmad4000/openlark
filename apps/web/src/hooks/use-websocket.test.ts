@@ -132,14 +132,12 @@ describe("useWebSocket", () => {
       vi.advanceTimersByTime(20);
     });
 
-    // Simulate receiving a message
+    // Simulate receiving a message (implementation uses flat structure, colon-namespaced types)
     act(() => {
       wsInstances[0].simulateMessage({
-        type: "new_message",
-        payload: {
-          chatId: "chat-1",
-          message: { id: "msg-1", content: "Hello" },
-        },
+        type: "message:new",
+        chatId: "chat-1",
+        message: { id: "msg-1", content: "Hello" },
       });
     });
 
@@ -165,11 +163,9 @@ describe("useWebSocket", () => {
 
     act(() => {
       wsInstances[0].simulateMessage({
-        type: "message_edited",
-        payload: {
-          chatId: "chat-1",
-          message: { id: "msg-1", content: "Edited" },
-        },
+        type: "message:edited",
+        chatId: "chat-1",
+        message: { id: "msg-1", content: "Edited" },
       });
     });
 
@@ -195,11 +191,9 @@ describe("useWebSocket", () => {
 
     act(() => {
       wsInstances[0].simulateMessage({
-        type: "message_recalled",
-        payload: {
-          chatId: "chat-1",
-          messageId: "msg-1",
-        },
+        type: "message:recalled",
+        chatId: "chat-1",
+        messageId: "msg-1",
       });
     });
 
@@ -229,8 +223,8 @@ describe("useWebSocket", () => {
 
     expect(wsInstances[0].sentMessages).toContain(
       JSON.stringify({
-        type: "typing_start",
-        payload: { chatId: "chat-1" },
+        type: "typing:start",
+        chatId: "chat-1",
       })
     );
 
@@ -240,8 +234,8 @@ describe("useWebSocket", () => {
 
     expect(wsInstances[0].sentMessages).toContain(
       JSON.stringify({
-        type: "typing_stop",
-        payload: { chatId: "chat-1" },
+        type: "typing:stop",
+        chatId: "chat-1",
       })
     );
 

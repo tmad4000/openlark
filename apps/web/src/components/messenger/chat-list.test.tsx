@@ -122,7 +122,7 @@ describe("ChatList", () => {
     });
 
     await user.click(screen.getByText("Team Chat"));
-    expect(mockOnSelectChat).toHaveBeenCalledWith("chat-1");
+    expect(mockOnSelectChat).toHaveBeenCalledWith("chat-1", "group");
   });
 
   it("shows error state when API fails", async () => {
