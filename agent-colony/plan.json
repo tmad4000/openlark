@@ -183,6 +183,12 @@
           "role": "reviewer",
           "value": 1,
           "reason": "Iter 36 review: Auth foundation stable. 2/6 subtasks complete. Remaining (RLS, magic link, 2FA, departments, API keys) correctly deferred. Known limitation: login needs org context for multi-tenant (auth.service.ts:122). SSO SAML callback remains a 501 stub. Consider closing T-002 as done-for-v1 and splitting remaining subtasks into separate tasks if/when needed."
+        },
+        {
+          "iteration": 39,
+          "role": "reviewer",
+          "value": 1,
+          "reason": "Iter 39 review: Auth foundation stable. 2/6 subtasks complete. Agree with iter 36 suggestion to close T-002 as done-for-v1. The 4 remaining subtasks (RLS, magic link, 2FA, departments) are not blocking any work. Recommend closing and splitting remaining subtasks to new tasks if/when needed."
         }
       ],
       "comments": [
@@ -235,6 +241,11 @@
           "iteration": 36,
           "role": "reviewer",
           "message": "Iter 36 review: T-002 has been in-progress since iteration 4 — 32 iterations. The 2 completed subtasks (schema + login) ARE the functional auth system the rest of the app uses. The 4 remaining subtasks (RLS, magic link, 2FA, departments) are stretch features nobody is blocked on. Consider closing T-002 as done and creating new tasks for the remaining subtasks IF they become needed. This keeps the plan honest about what is actually in-progress vs aspirational."
+        },
+        {
+          "iteration": 39,
+          "role": "reviewer",
+          "message": "Iter 39 review: T-002 has been in-progress for 35 iterations. Strongly recommend next implementer CLOSE this task and create focused follow-up tasks (e.g. 'Add 2FA/TOTP support', 'Implement RLS', 'Add magic link login') only if/when they become blocking. Keeping it in-progress distorts the plan."
         }
       ],
       "status": "in-progress",
@@ -416,6 +427,12 @@
           "role": "reviewer",
           "value": 1,
           "reason": "Iter 36 review: 4/6 subtasks complete. Messenger is functionally solid. Static method pattern (ChatList.addChat, MessageList.addMessage) flagged since iter 12, now in 4+ components. exportChatToDocument returns JSON but doesn't create a real Doc record — misleading (flagged iter 30, still unfixed). Remaining subtasks (threads, rich text, typing UI) are Phase 2."
+        },
+        {
+          "iteration": 39,
+          "role": "reviewer",
+          "value": 1,
+          "reason": "Iter 39 review: 4/6 subtasks complete. Messenger core solid. Same recommendation as T-002: close as done-for-v1 and defer remaining subtasks (threads, rich text, typing UI) to new tasks. exportChatToDocument still misleading (flagged since iter 30). Static method pattern still present in 4+ components."
         }
       ],
       "comments": [
@@ -533,6 +550,11 @@
           "iteration": 36,
           "role": "reviewer",
           "message": "Iter 36 review: exportChatToDocument (messenger.service.ts:1751) was flagged in iter 30 as misleading — returns JSON but doesn't create a Doc record. Still unfixed after 6 iterations. If the feature name says 'export to document' it should create a document via DocsService, or be renamed to getChatTranscript. Next implementer touching messenger should resolve this."
+        },
+        {
+          "iteration": 39,
+          "role": "reviewer",
+          "message": "Iter 39 review: Same as T-002 — close as done. T-003 has been in-progress since iter 13 (26 iterations). Core messenger works. exportChatToDocument (messenger.service.ts:1751) needs rename to getChatTranscript or actual Doc creation — flagged 3 times now (iter 30, 36, 39)."
         }
       ],
       "status": "in-progress",
@@ -662,6 +684,12 @@
           "role": "reviewer",
           "value": 1,
           "reason": "Iter 36 review: 4/5 subtasks complete. Calendar module solid. Subtask 4 (shared calendars, iCal, drag-and-drop) is Phase 2 scope. Three TODOs in calendar.service.ts (FR-6.11, FR-6.12, FR-6.15) are documented and non-blocking. Duplicate date formatting (event-list.tsx / event-details.tsx) still present but minor."
+        },
+        {
+          "iteration": 39,
+          "role": "reviewer",
+          "value": 1,
+          "reason": "Iter 39 review: 4/5 subtasks complete. Calendar fully functional. Same pattern: close as done-for-v1. Subtask 4 (shared calendars, iCal, drag-and-drop) is Phase 2 scope."
         }
       ],
       "comments": [
@@ -792,6 +820,12 @@
           "role": "reviewer",
           "value": 1,
           "reason": "Iter 36 review: 2/5 subtasks complete. Backend + frontend foundation solid. DocumentEditor.tsx still untested (flagged iter 27). Static method pattern (DocumentList.addDocument) continues the established debt. Hocuspocus console.log statements should be replaced with proper logging. Remaining subtasks (slash commands, permissions UI, comments, templates) are Phase 2."
+        },
+        {
+          "iteration": 39,
+          "role": "reviewer",
+          "value": 1,
+          "reason": "Iter 39 review: 2/5 subtasks complete. Docs backend + frontend foundation working. DocumentEditor.tsx still untested (flagged since iter 27). Remaining subtasks (slash commands, permissions, comments, templates) are Phase 2."
         }
       ],
       "comments": [
@@ -824,6 +858,11 @@
           "iteration": 36,
           "role": "reviewer",
           "message": "Iter 36 review: DocumentEditor.tsx has no tests (flagged iter 27, still missing). This is the most complex frontend component (TipTap + Yjs + WebSocket). Even basic tests — renders without crash, toolbar actions toggle marks, read-only mode disables editing — would provide safety for future refactors. Priority: medium."
+        },
+        {
+          "iteration": 39,
+          "role": "reviewer",
+          "message": "Iter 39 review: DocumentEditor.tsx is the most complex frontend component (TipTap + Yjs + WebSocket) and has ZERO tests. This has been flagged for 12 iterations (since iter 27). Even basic smoke tests (renders, toolbar toggles, read-only mode) would catch regressions. Next implementer touching docs should add tests first."
         }
       ],
       "status": "in-progress",
@@ -1710,6 +1749,11 @@
           "iteration": 33,
           "role": "reviewer",
           "message": "Dependency policy reminder (from CLAUDE.md): @aws-sdk/client-s3 releases frequently — pick a version >= 1 month old. Same for @fastify/multipart."
+        },
+        {
+          "iteration": 39,
+          "role": "reviewer",
+          "message": "Iter 39 review: T-025 implementation is clean. S3 client (s3.ts) properly lazy-initializes, uses forcePathStyle for MinIO compatibility. Service correctly scopes storage keys by org/UUID for isolation. Tests mock S3 properly. One observation: deleteFile (files.service.ts:86-92) deletes from S3 THEN from DB — if DB delete fails, S3 object is orphaned. Consider reversing order (delete DB record first, then S3) or wrapping in transaction-like cleanup. Low priority since orphaned S3 objects are harmless but worth noting."
         }
       ],
       "status": "done",
@@ -1821,11 +1865,33 @@
         "role": "implementer"
       },
       "splitFrom": null
+    },
+    {
+      "id": "T-029",
+      "title": "Tech debt: close stale in-progress tasks (T-002, T-003, T-004)",
+      "description": "T-002 (auth), T-003 (messenger), T-004 (calendar) have been in-progress for 20-35 iterations each. Their core functionality is complete and nothing is blocked on their remaining subtasks. Close them as done-for-v1 and create focused follow-up tasks only if/when remaining features become needed. This is a plan hygiene task.",
+      "subtasks": [],
+      "votes": [
+        {
+          "iteration": 39,
+          "role": "reviewer",
+          "value": 1,
+          "reason": "Plan hygiene — these 3 tasks distort the plan by appearing as active work when they are functionally complete. Quick task for next implementer."
+        }
+      ],
+      "comments": [],
+      "status": "open",
+      "createdBy": {
+        "iteration": 39,
+        "role": "reviewer"
+      },
+      "claimedBy": null,
+      "splitFrom": null
     }
   ],
   "metadata": {
     "createdAt": "2026-03-04T21:00:00Z",
-    "totalIterations": 46,
+    "totalIterations": 47,
     "iterationLog": [
       {
         "iteration": 1,
@@ -2107,6 +2173,12 @@
         "iteration": 46,
         "role": "implementer",
         "taskWorked": "T-028",
+        "contextCompacted": false
+      },
+      {
+        "iteration": 47,
+        "role": "implementer",
+        "taskWorked": "T-025",
         "contextCompacted": false
       }
     ]

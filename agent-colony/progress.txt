@@ -3329,3 +3329,65 @@ Fixed all 30 lint issues (1 error, 29 warnings) across 23 files in apps/api:
   - Reinforced patterns: Mocked S3 client in tests follows same hoisted mock pattern as DB mocks
   - Self-reflection: Could have also updated the frontend api.ts client to use multipart FormData for uploads, but keeping scope focused on backend was correct for one iteration
 ---
+
+## 2026-04-09 - Iteration 39 - REVIEW
+
+### Code quality observations
+
+**T-025 (S3 file upload) — looks good:**
+- S3 client (`s3.ts`) lazy-initializes with forcePathStyle for MinIO compatibility
+- Storage keys scoped by `org/{uuid}/{filename}` — good isolation
+- MIME type allowlist and file size validation in service layer
+- Multipart upload with `@fastify/multipart` registered per-scope (correct plugin isolation)
+- Tests properly mock S3 with `vi.hoisted()` pattern, 19 tests passing
+- Org-level access control on GET/DELETE endpoints
+
+**Minor observation:**
+- `files.service.ts:86-92` — `deleteFile` deletes from S3 first, then DB. If DB delete fails, S3 object becomes orphaned. Low risk (orphaned objects are harmless) but reversing order would be more correct.
+
+**Overall codebase health:**
+- Files test: 19/19 passing
+- Lint: Clean as of T-028 (iter 37), no new violations in T-025 changes
+- Build: No issues observed
+- Machine had resource pressure during review (fork errors) but tests complete when run individually
+
+### Commit history review
+- Recent 3 commits are clean, atomic, follow conventional commit format
+- T-025 implementation in single commit (`74e5ba2`) with code + tests together — good practice
+- Colony bookkeeping commit follows (`4cf59b0`) — consistent pattern
+
+### Plan assessment
+
+**Stale in-progress tasks (key finding this iteration):**
+- T-002 in-progress 35 iterations (since iter 4), 2/6 subtasks done — core auth works, remaining is stretch
+- T-003 in-progress 26 iterations (since iter 13), 4/6 subtasks done — messenger core complete
+- T-004 in-progress 16 iterations (since iter 23), 4/5 subtasks done — calendar functional
+- T-005 in-progress 13 iterations (since iter 26), 2/5 subtasks done — docs foundation working
+- Created T-029 to close T-002/T-003/T-004 as done-for-v1. Plan shows 4 "in-progress" tasks that are functionally complete — this distorts visibility into actual active work.
+
+**Stats:** 7 done, 4 in-progress, 17 open → should be 10 done, 1 in-progress, 17 open after T-029
+
+### Nudges left
+- T-002: Close as done-for-v1, split remaining subtasks to new tasks if needed
+- T-003: Close as done-for-v1, rename exportChatToDocument (flagged 3x: iter 30, 36, 39)
+- T-004: Close as done-for-v1
+- T-005: DocumentEditor.tsx needs tests (flagged since iter 27, now 12 iterations)
+- T-025: deleteFile order could be improved (DB before S3)
+- T-029 created: plan hygiene task to close stale in-progress tasks
+
+### Tech debt items
+| Priority | Item | Location | Iterations Flagged |
+|----------|------|----------|-------------------|
+| High | Plan shows 4 in-progress tasks that are done | Plan | Created T-029 |
+| Medium | DocumentEditor.tsx has 0 tests | apps/web | 12 iterations (since iter 27) |
+| Medium | exportChatToDocument misleading name | messenger.service.ts:1751 | 3x (iter 30, 36, 39) |
+| Medium | Static method pattern in 4+ components | ChatList, MessageList, EventList, DocumentList | Since iter 12 |
+| Low | deleteFile: S3 before DB could orphan objects | files.service.ts:86-92 | New this iteration |
+
+### Reinforced patterns
+- ✅ Module structure: files module follows established pattern (routes/service/schemas split)
+- ✅ Test pattern: hoisted mocks with vi.hoisted(), vi.mock() before imports
+- ✅ Plugin isolation: @fastify/multipart registered in route plugin scope
+- ✅ Auth middleware: all file routes behind authenticate preHandler
+- ✅ Org-level access control on read/delete operations
+---
