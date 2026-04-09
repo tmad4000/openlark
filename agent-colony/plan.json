@@ -1649,7 +1649,18 @@
           "reason": "P1 — files module is genuinely broken, schema rows reference bytes that don't exist"
         }
       ],
-      "comments": [],
+      "comments": [
+        {
+          "iteration": 33,
+          "role": "reviewer",
+          "message": "Plumbing already exists in docker-compose.prod.yml:70-74 (S3_ENDPOINT, S3_ACCESS_KEY, S3_SECRET_KEY, S3_BUCKET, S3_REGION env vars wired into the api service) and docker-compose.yml runs MinIO at port 9000 with creds openlark/openlark123. So the implementer doesn't need to touch infra — just: (1) add @aws-sdk/client-s3 + @fastify/multipart deps, (2) create a thin s3 client module reading from process.env, (3) rewrite files.routes.ts POST /upload to consume multipart and PutObject, (4) add GET /:id/download returning a presigned URL via getSignedUrl. Existing files.test.ts mock-driven pattern can be extended with a mocked S3 client. Don't forget mime/size validation at the route layer — current stub trusts the body."
+        },
+        {
+          "iteration": 33,
+          "role": "reviewer",
+          "message": "Dependency policy reminder (from CLAUDE.md): @aws-sdk/client-s3 releases frequently — pick a version >= 1 month old. Same for @fastify/multipart."
+        }
+      ],
       "status": "open",
       "createdBy": {
         "iteration": 30,
@@ -1694,21 +1705,42 @@
           "role": "implementer",
           "value": 1,
           "reason": "Fixing this would unblock 6 test files that pass in isolation but fail in shared runs. Small, contained fix at websocket.ts:309-322."
+        },
+        {
+          "iteration": 33,
+          "role": "reviewer",
+          "value": 1,
+          "reason": "Confirmed real. The inline comment at websocket.ts:309 says 'skip in test mode' but no NODE_ENV check exists — only a try/catch, which doesn't help when ioredis hangs silently. Small fix, large reliability win across ~6 test files."
+        },
+        {
+          "iteration": 34,
+          "role": "implementer",
+          "value": 1,
+          "reason": "claiming and applying the suggested NODE_ENV early-return fix"
         }
       ],
-      "comments": [],
-      "status": "open",
+      "comments": [
+        {
+          "iteration": 33,
+          "role": "reviewer",
+          "message": "Suggested fix (smallest possible diff): at websocket.ts:310, before the try block, add 'if (process.env.NODE_ENV === \"test\") { subscriberInitialized = true; return; }'. This matches the existing intent of the comment and avoids the Redis subscriber path entirely under vitest. Alternative if you want test coverage of the connect path: wrap sub.connect() in Promise.race with a 500ms timeout. Either way, verify by running 'pnpm --filter api test' before/after and confirming the suite-level FAIL count drops on docs/messenger/calendar/auth/middleware/sso/files."
+        }
+      ],
+      "status": "done",
       "createdBy": {
         "iteration": 32,
         "role": "implementer"
       },
-      "claimedBy": null,
+      "claimedBy": {
+        "iteration": 34,
+        "role": "implementer"
+      },
       "splitFrom": null
     }
   ],
   "metadata": {
     "createdAt": "2026-03-04T21:00:00Z",
-    "totalIterations": 40,
+    "totalIterations": 42,
     "iterationLog": [
       {
         "iteration": 1,
@@ -1954,6 +1986,18 @@
         "iteration": 40,
         "role": "implementer",
         "taskWorked": "T-024",
+        "contextCompacted": false
+      },
+      {
+        "iteration": 41,
+        "role": "implementer",
+        "taskWorked": "T-026",
+        "contextCompacted": false
+      },
+      {
+        "iteration": 42,
+        "role": "reviewer",
+        "taskWorked": null,
         "contextCompacted": false
       }
     ]

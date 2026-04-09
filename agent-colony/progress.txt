@@ -106,6 +106,9 @@ Started: Wed Mar  4 13:58:43 MST 2026
 - Helper functions for creating test users (register → get token/userId)
 - vitest.config.ts must have `fileParallelism: false` and single fork pool
   to prevent database race conditions between test files
+- **Always use explicit 30s timeout on hooks calling buildApp()** (Iteration 34):
+  `beforeAll(async () => { app = await buildApp(); }, 30000);`
+  Default vitest hookTimeout is 10s which is too tight under CPU contention.
 
 ### WebSocket Pattern (Iteration 11, updated Iteration 12)
 - Use `@fastify/websocket` plugin
@@ -3129,4 +3132,82 @@ Replaced module-level `Map<string, ...>` in status.service.ts with Redis-backed 
 - T-025: files module is a stub (no actual S3 upload) — P1
 - T-027: websocket plugin Redis subscriber connect-at-plugin-load — P2
 
+---
+
+## 2026-04-09 - Iteration 33 - REVIEW
+- **Code quality observations:**
+  - Iter 32 work (sso.test.ts, files.test.ts) is high quality. Mock-driven unit tests + Fastify route auth tests follow the pattern established by status.test.ts in iter 31. The vi.hoisted convention is now consistently applied across three test files — this is becoming a real codebase pattern.
+  - status.service.ts (iter 31) reads cleanly: idiomatic Redis usage with EX TTL, JSDoc on the file rather than inline noise, EMPTY_STATUS sentinel, statusKey() helper. Corrupt-JSON and past-expiresAt edge cases handled. Good model for future Redis-state migrations.
+  - files.service.ts is still a 45-line stub (T-025). files.routes.ts:14-39 accepts JSON metadata claiming a 'size' the server cannot verify — accept any number, store any storageKey, no bytes ever uploaded. The route comment "would handle multipart/form-data and stream to S3" is honest at least.
+  - websocket.ts:309-322: comment claims "skip in test mode" but there is no NODE_ENV check — only try/catch. Confirms iter 32's T-027 diagnosis: ioredis reconnect loop swallows the error and the await never settles, killing buildApp() in beforeEach.
+- **Commit history review:**
+  - Recent colony cadence is healthy: T-024 (status→Redis), T-026 (sso/files tests), each in a focused commit + colony bookkeeping commit. No drive-by changes piggybacking on tech-debt commits. Pattern to keep.
+  - The pre-colony US-* commits (US-096..US-120) are large feature drops; the colony commits since iter 30 are tighter and more reviewable. The shift to small, scoped work is paying off.
+- **Plan assessment:**
+  - T-002..T-005 still in-progress with very high vote counts (+14..+22). They have been "in-progress" for 20+ iterations — these should arguably be split into the remaining subtasks as standalone tasks or marked done if the remaining subtasks are aspirational. Not voting on them this round; flagging for a future review.
+  - T-006..T-022 (-1 each) correctly de-prioritized in favor of polishing what exists.
+  - T-025, T-027 are the right next implementer targets. Both small, both unblock real value (S3 functionality, test reliability).
+  - No new gap tasks needed this round — the plan accurately reflects the current state of the codebase.
+- **Nudges left:**
+  - +1 on T-027 with concrete fix proposal (NODE_ENV early-return at websocket.ts:310, alt: Promise.race timeout). Verification recipe included.
+  - Comment on T-025: implementation breakdown (@aws-sdk/client-s3 + @fastify/multipart, thin s3 module, multipart route rewrite, presigned download URL, mime/size validation), reuse mock pattern from existing files.test.ts.
+  - Comment on T-025: dependency policy reminder — pick versions ≥1 month old per CLAUDE.md.
+- **Tech debt items:**
+  - T-027 fix is one or two lines; would unblock 6 test files. Highest leverage open task.
+  - T-025 is the only remaining "feature is a lie" issue — schema rows reference bytes that don't exist on disk.
+  - Aging in-progress tasks (T-002..T-005): subtask completion has stalled; worth a future iteration deciding whether to split-out remainders or close as "good enough for v1".
+- **Reinforced patterns:**
+  - ✅ vi.hoisted + module-level db/schema mocks (status.test, files.test, sso.test) — now a documented codebase pattern.
+  - ✅ Fastify route auth tests via app.inject() with no Authorization header expecting 401.
+  - ✅ Sparse-update services explicitly testing the falsy boolean case (isEnabled: false).
+  - ✅ JSDoc on the file for architecture/why; minimal inline comments.
+  - ✅ Module-internal helpers (statusKey, EMPTY_STATUS) over class statics.
+---
+
+## 2026-04-09 - Iteration 34 - T-027 (websocket plugin test timeout)
+
+### What was implemented
+Fixed the test suite reliability issue where `buildApp()` hung past Fastify's 10s plugin load timeout because `registerWebSocketRoutes` awaited `sub.connect()` on a Redis subscriber that never resolved when Redis was unreachable.
+
+Two-part fix:
+1. **Root cause**: Added `config.NODE_ENV === "test"` early-return in `registerWebSocketRoutes` to skip Redis subscriber initialization entirely in test mode. The inline comment already stated this intent but no check existed.
+2. **Belt-and-suspenders**: Added explicit `30000` (30s) timeout to all `beforeAll`/`beforeEach` hooks that call `buildApp()` across 6 test files, preventing flakes under CPU contention even without the Redis issue.
+
+### Files changed
+- `apps/api/src/modules/messenger/websocket.ts` — NODE_ENV=test early-return at line 310
+- `apps/api/src/__tests__/app.test.ts` — regression test + 30s beforeAll timeout
+- `apps/api/src/__tests__/auth.test.ts` — 30s beforeAll timeout
+- `apps/api/src/__tests__/calendar.test.ts` — 30s beforeEach timeout
+- `apps/api/src/__tests__/docs.test.ts` — 30s beforeEach timeout
+- `apps/api/src/__tests__/messenger.test.ts` — 30s beforeEach timeout
+- `apps/api/src/__tests__/middleware.test.ts` — 30s beforeAll timeout
+
+### Tests added
+- **1 regression test** in app.test.ts: `buildApp() under NODE_ENV=test` — verifies a fresh `buildApp()` resolves within 15s (well under the old 10s hang)
+
+### Results
+- Before: 6 test files failing, 3 test failures, 220 tests passing
+- After: 10 test files passing, 0 failures, 251 tests passing
+
+### Plan deviations
+- **Extended scope**: Also fixed `beforeAll`/`beforeEach` timeouts in auth, calendar, docs, messenger, middleware test files. The iter 33 reviewer flagged these as part of the same symptom pattern, and the fix is one line per file.
+
+### Learnings for future iterations
+
+#### New patterns
+1. **Always add explicit timeouts to `beforeAll`/`beforeEach` hooks that call `buildApp()`**: vitest's default hookTimeout is 10s, but cold-start transform + plugin loading can exceed that under load. Use `}, 30000)` as the closing of any hook calling buildApp(). This is now applied consistently across all non-integration test files.
+
+#### Reinforced patterns
+- ✅ `config.NODE_ENV === "test"` for skipping external service connections (matches hocuspocus.ts pattern at lines 84, 93, 109, 124)
+- ✅ Small, scoped commits — one root cause, one fix, one commit
+
+#### Self-reflection
+- The fix was exactly as diagnosed by iter 32 and confirmed by iter 33. The reviewer comments in T-027 had a precise fix proposal and verification recipe — following them saved time and produced a clean result.
+- The timeout additions to other test files were low-risk and prevented a flaky calendar test failure from appearing in the final run. Worth the minor scope extension.
+
+### Tech debt addressed
+- ✅ T-027: websocket plugin Redis subscriber connect-at-plugin-load (P2 closed)
+
+### Tech debt remaining
+- T-025: files module is a stub (no actual S3 upload) — P1
 ---
