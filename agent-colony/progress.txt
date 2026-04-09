@@ -3313,3 +3313,19 @@ Fixed all 30 lint issues (1 error, 29 warnings) across 23 files in apps/api:
 - **Reinforced patterns:** `_` prefix for unused-but-required function params is the codebase convention
 - **Self-reflection:** Straightforward task, executed cleanly. T-025 (files stub) remains highest priority open task.
 ---
+
+## 2026-04-09 - Iteration 38 - T-025
+- Implemented real S3 file upload replacing metadata-only stub
+- Files changed:
+  - `apps/api/src/modules/files/s3.ts` (NEW) — S3 client module with upload, presigned download, delete
+  - `apps/api/src/modules/files/files.service.ts` — Added buffer param to createFile, plus getDownloadUrl, deleteFile, validateMimeType, validateFileSize
+  - `apps/api/src/modules/files/files.routes.ts` — Multipart upload via @fastify/multipart, download URL endpoint, delete endpoint, org access control
+  - `apps/api/src/__tests__/files.test.ts` — 19 tests (up from 7) covering S3 upload, download URL, delete, validation, auth
+  - `apps/api/package.json` — Added @aws-sdk/client-s3@3.1004.0, @aws-sdk/s3-request-presigner@3.1004.0, @fastify/multipart@9.4.0
+- Tests added: 19 total (12 new: S3 upload verification, presigned URL generation, delete with org check, mime type validation, file size validation, download/delete auth)
+- Plan deviations: None. Followed reviewer's implementation breakdown from iter 33 exactly.
+- **Learnings for future iterations:**
+  - New discoveries: @fastify/multipart registers per-scope, so registering inside filesRoutes plugin isolates it from other routes
+  - Reinforced patterns: Mocked S3 client in tests follows same hoisted mock pattern as DB mocks
+  - Self-reflection: Could have also updated the frontend api.ts client to use multipart FormData for uploads, but keeping scope focused on backend was correct for one iteration
+---
