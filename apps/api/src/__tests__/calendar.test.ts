@@ -594,7 +594,7 @@ describe("Calendar API Routes", () => {
 
   beforeEach(async () => {
     app = await buildApp({ logger: false });
-  });
+  }, 30000);
 
   describe("Calendar CRUD endpoints", () => {
     it("GET /api/v1/calendar/calendars should require auth", async () => {

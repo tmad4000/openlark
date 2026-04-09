@@ -306,18 +306,29 @@ export async function notifyUserJoinedChat(
 export async function registerWebSocketRoutes(
   app: FastifyInstance
 ): Promise<void> {
-  // Initialize Redis subscriber (skip in test mode when Redis may not be available)
+  // Initialize Redis subscriber (skip in test mode when Redis may not be available).
+  //
+  // The early-return below is load-bearing for test reliability: ioredis with
+  // lazyConnect retries silently when the server is unreachable, so an
+  // `await sub.connect()` here can hang past Fastify's 10s plugin load timeout
+  // and kill `buildApp()` in `beforeEach` across the suite. NODE_ENV=test
+  // skips the subscriber entirely; tests that exercise the pub/sub path mock
+  // Redis directly. See colony task T-027.
   if (!subscriberInitialized) {
-    try {
-      const sub = getSubscriber();
-      if (sub.status === "wait") {
-        await sub.connect();
-      }
-      initializeRedisSubscriber();
+    if (config.NODE_ENV === "test") {
       subscriberInitialized = true;
-    } catch (error) {
-      // Redis not available - WebSocket real-time features will be disabled
-      app.log.warn({ error }, "Redis not available, WebSocket pub/sub disabled");
+    } else {
+      try {
+        const sub = getSubscriber();
+        if (sub.status === "wait") {
+          await sub.connect();
+        }
+        initializeRedisSubscriber();
+        subscriberInitialized = true;
+      } catch (error) {
+        // Redis not available - WebSocket real-time features will be disabled
+        app.log.warn({ error }, "Redis not available, WebSocket pub/sub disabled");
+      }
     }
   }
 

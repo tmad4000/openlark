@@ -439,7 +439,7 @@ describe("Messenger Routes - Auth Requirements", () => {
 
   beforeEach(async () => {
     app = await buildApp();
-  });
+  }, 30000);
 
   it("GET /messenger/chats requires authentication", async () => {
     const response = await app.inject({

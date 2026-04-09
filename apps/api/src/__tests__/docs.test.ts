@@ -393,7 +393,7 @@ describe("Docs API Routes", () => {
   beforeEach(async () => {
     const { buildApp } = await import("../app.js");
     app = await buildApp();
-  });
+  }, 30000);
 
   afterEach(async () => {
     await app.close();

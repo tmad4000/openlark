@@ -7,7 +7,7 @@ describe("Auth Middleware", () => {
 
   beforeAll(async () => {
     app = await buildApp();
-  });
+  }, 30000);
 
   afterAll(async () => {
     await app.close();
