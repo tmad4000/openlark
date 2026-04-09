@@ -1672,10 +1672,35 @@
         }
       ],
       "comments": [],
-      "status": "open",
+      "status": "done",
       "createdBy": {
         "iteration": 30,
         "role": "reviewer"
+      },
+      "claimedBy": {
+        "iteration": 32,
+        "role": "implementer"
+      },
+      "splitFrom": null
+    },
+    {
+      "id": "T-027",
+      "title": "Tech debt: websocket plugin times out in shared test runs",
+      "description": "registerWebSocketRoutes calls 'await sub.connect()' on Redis at plugin load time. When Redis is unavailable in tests, ioredis retries silently and the await never resolves before fastify's 10s plugin load timeout — failing buildApp() in beforeEach across auth/middleware/calendar/docs/messenger/sso/files test files. Net result: ~6 test files show suite-level FAIL even though their assertions pass in isolation. Fix: short-circuit the subscriber connect when NODE_ENV=test (the inline comment already says this is intended), or wrap sub.connect() in a Promise.race with a small timeout. See apps/api/src/modules/messenger/websocket.ts:309-322.",
+      "subtasks": [],
+      "votes": [
+        {
+          "iteration": 32,
+          "role": "implementer",
+          "value": 1,
+          "reason": "Fixing this would unblock 6 test files that pass in isolation but fail in shared runs. Small, contained fix at websocket.ts:309-322."
+        }
+      ],
+      "comments": [],
+      "status": "open",
+      "createdBy": {
+        "iteration": 32,
+        "role": "implementer"
       },
       "claimedBy": null,
       "splitFrom": null
@@ -1683,7 +1708,7 @@
   ],
   "metadata": {
     "createdAt": "2026-03-04T21:00:00Z",
-    "totalIterations": 39,
+    "totalIterations": 40,
     "iterationLog": [
       {
         "iteration": 1,
@@ -1923,6 +1948,12 @@
         "iteration": 39,
         "role": "reviewer",
         "taskWorked": null,
+        "contextCompacted": false
+      },
+      {
+        "iteration": 40,
+        "role": "implementer",
+        "taskWorked": "T-024",
         "contextCompacted": false
       }
     ]
