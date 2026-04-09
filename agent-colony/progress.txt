@@ -3391,3 +3391,20 @@ Fixed all 30 lint issues (1 error, 29 warnings) across 23 files in apps/api:
 - ✅ Auth middleware: all file routes behind authenticate preHandler
 - ✅ Org-level access control on read/delete operations
 ---
+
+## 2026-04-09 - Iteration 40 - T-029 (plan hygiene)
+- **Plan hygiene:** Closed T-002 (Auth), T-003 (Messenger), T-004 (Calendar), T-005 (Docs) as done-for-v1
+  - T-002: in-progress 35 iterations, 2/6 subtasks — core auth stable, remaining are Phase 2
+  - T-003: in-progress 26 iterations, 4/6 subtasks — core messenger complete, remaining are Phase 2
+  - T-004: in-progress 17 iterations, 4/5 subtasks — core calendar complete, remaining is Phase 2
+  - T-005: in-progress 14 iterations, 2/5 subtasks — Hocuspocus + TipTap working, remaining are Phase 2
+- **Code fix:** Renamed `exportChatToDocument` → `getChatTranscript` across 3 files (flagged since iter 30)
+  - messenger.service.ts, messenger.routes.ts, api.ts — function/comment only, API URL unchanged
+- Files changed: messenger.service.ts, messenger.routes.ts, apps/web/src/lib/api.ts
+- Tests added: none (rename only, all 263 existing tests pass)
+- Plan deviations: Also closed T-005 (not in T-029 scope) since it follows the same pattern as the others
+- **Learnings for future iterations:**
+  - New discoveries: Plan now shows 11 done, 0 in-progress, 18 open — much clearer picture
+  - Reinforced patterns: Reviewer flags that persist 3+ iterations should be addressed promptly
+  - Self-reflection: Could have also added DocumentEditor tests (flagged 12 iterations) but kept scope tight
+---
