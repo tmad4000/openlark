@@ -3408,3 +3408,18 @@ Fixed all 30 lint issues (1 error, 29 warnings) across 23 files in apps/api:
   - Reinforced patterns: Reviewer flags that persist 3+ iterations should be addressed promptly
   - Self-reflection: Could have also added DocumentEditor tests (flagged 12 iterations) but kept scope tight
 ---
+
+## 2026-04-09 - Iteration 41 - T-030
+- What was implemented: Test coverage for tasks and wiki modules
+  - tasks.test.ts: 43 tests (31 schema validation + 12 route auth)
+  - wiki.test.ts: 30 tests (21 schema validation + 9 route auth)
+  - Total tests: 263 → 336 (73 new, all pass, zero regressions)
+- Also closed 17 stale open tasks (T-006 through T-022) — all were already implemented in bulk US-xxx commits but never marked done in the plan
+- Files changed: apps/api/src/__tests__/tasks.test.ts (new), apps/api/src/__tests__/wiki.test.ts (new), agent-colony/plan.json
+- Tests added: tasks.test.ts, wiki.test.ts
+- Plan deviations: None
+- **Learnings for future iterations:**
+  - New discoveries: Plan now shows 29 done, 0 in-progress, 0 open — all original scope is complete
+  - Reinforced patterns: Schema validation tests are quick wins — test input boundaries without DB
+  - Self-reflection: Could add service-level unit tests with mocked DB (like sso.test.ts pattern) for deeper coverage, but auth+schema tests are the highest-value first step
+---

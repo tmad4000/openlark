@@ -1937,7 +1937,7 @@
         }
       ],
       "comments": [],
-      "status": "in-progress",
+      "status": "done",
       "createdBy": {
         "iteration": 41,
         "role": "implementer"
