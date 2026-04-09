@@ -3272,3 +3272,44 @@ Two-part fix:
 - **New task created**: T-028 — fix lint error and warnings in API (quick fix, restores green lint)
 ---
 ---
+
+## 2026-04-09 - Iteration 37 - T-028 (fix lint errors/warnings)
+
+### What was implemented
+Fixed all 30 lint issues (1 error, 29 warnings) across 23 files in apps/api:
+
+1. **Error fix**: `let baseQuery` → `const baseQuery` in tasks.service.ts:144
+2. **Unused import removal** (12 files): Removed unused imports (`text`, `jsonb`, `desc`, `or`, `sql`, `and`, `isNull`, `redis`, `requireAdmin`, `WikiSpaceMember`, `UpdateTableInput`, `UpdateRecordInput`, `FastifyRequest`, `FastifyReply`, `baseRecords`, `bases`)
+3. **Unused parameter prefixing** (7 files): Prefixed unused but structurally required params with `_` (`_error`, `_body`, `_triggerEvent`, `_reply`, `_chatId`, `_userId`)
+4. **Catch binding removal**: Removed unused `error` binding in ai.routes.ts catch block (used bare `catch {}`)
+
+### Files changed
+- apps/api/src/db/schema/ai.ts, attendance.ts
+- apps/api/src/modules/ai/ai.routes.ts, ai.service.ts
+- apps/api/src/modules/approvals/approvals.service.ts
+- apps/api/src/modules/audit/audit.middleware.ts
+- apps/api/src/modules/auth/auth.service.ts
+- apps/api/src/modules/automations/automations.routes.ts, automations.service.ts, automations.worker.ts
+- apps/api/src/modules/base/base.routes.ts, base.schemas.ts, base.service.ts
+- apps/api/src/modules/calendar/calendar.service.ts
+- apps/api/src/modules/meetings/meetings.service.ts
+- apps/api/src/modules/messenger/messenger.service.ts
+- apps/api/src/modules/minutes/minutes.service.ts
+- apps/api/src/modules/notifications/buzz.service.ts
+- apps/api/src/modules/okrs/okrs.service.ts
+- apps/api/src/modules/platform/notification-bot.routes.ts
+- apps/api/src/modules/tasks/tasks.service.ts
+- apps/api/src/modules/wiki/wiki.routes.ts, wiki.service.ts
+
+### Tests
+- No new tests (lint-only change)
+- All 251 existing tests pass, 61 skipped (integration)
+- **Lint status**: PASSING — 0 errors, 0 warnings ✅
+
+### Plan deviations: None
+
+### Learnings for future iterations:
+- **New discoveries:** Turbo caches lint results — use `--force` to bust cache after fixes
+- **Reinforced patterns:** `_` prefix for unused-but-required function params is the codebase convention
+- **Self-reflection:** Straightforward task, executed cleanly. T-025 (files stub) remains highest priority open task.
+---

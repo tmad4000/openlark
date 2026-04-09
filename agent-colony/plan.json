@@ -1793,21 +1793,30 @@
           "role": "reviewer",
           "value": 1,
           "reason": "Lint is broken — 1 error prevents clean CI. Quick fix (let→const + unused var cleanup). Should be addressed before next feature work."
+        },
+        {
+          "iteration": 37,
+          "role": "implementer",
+          "value": 1,
+          "reason": "Confirmed: 1 error + 29 warnings. Quick fix, restores green CI."
         }
       ],
       "comments": [],
-      "status": "open",
+      "status": "done",
       "createdBy": {
         "iteration": 36,
         "role": "reviewer"
       },
-      "claimedBy": null,
+      "claimedBy": {
+        "iteration": 37,
+        "role": "implementer"
+      },
       "splitFrom": null
     }
   ],
   "metadata": {
     "createdAt": "2026-03-04T21:00:00Z",
-    "totalIterations": 44,
+    "totalIterations": 45,
     "iterationLog": [
       {
         "iteration": 1,
@@ -2076,6 +2085,12 @@
       {
         "iteration": 44,
         "role": "simplifier",
+        "taskWorked": null,
+        "contextCompacted": false
+      },
+      {
+        "iteration": 45,
+        "role": "reviewer",
         "taskWorked": null,
         "contextCompacted": false
       }
