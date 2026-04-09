@@ -22,7 +22,6 @@ import {
   lt,
   inArray,
   sql,
-  or,
 } from "drizzle-orm";
 import { notificationsService } from "../notifications/notifications.service.js";
 import type {

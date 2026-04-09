@@ -141,7 +141,7 @@ export class TasksService {
       conditions.push(eq(tasks.parentTaskId, query.parentTaskId));
     }
 
-    let baseQuery = db
+    const baseQuery = db
       .select()
       .from(tasks)
       .where(and(...conditions))
@@ -183,7 +183,7 @@ export class TasksService {
     return task || null;
   }
 
-  async updateTask(taskId: string, input: UpdateTaskInput, userId: string) {
+  async updateTask(taskId: string, input: UpdateTaskInput, _userId: string) {
     const existing = await this.getTaskById(taskId);
     if (!existing) return null;
 

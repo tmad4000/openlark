@@ -5,7 +5,7 @@ import { auditService } from "./audit.service.js";
 function deriveAuditInfo(
   method: string,
   url: string,
-  body: unknown
+  _body: unknown
 ): { action: string; entityType: string; entityId?: string } | null {
   // Only log state-changing methods
   if (!["POST", "PUT", "PATCH", "DELETE"].includes(method)) {

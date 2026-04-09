@@ -100,7 +100,7 @@ export async function baseRoutes(app: FastifyInstance) {
   // ============ BASE ROUTES ============
 
   // List bases
-  app.get("/bases", async (req: FastifyRequest, reply: FastifyReply) => {
+  app.get("/bases", async (req: FastifyRequest, _reply: FastifyReply) => {
     const bases = await baseService.getUserBases(req.user!.id, req.user!.orgId);
     return { data: { bases } };
   });

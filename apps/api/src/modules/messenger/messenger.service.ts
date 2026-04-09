@@ -1017,7 +1017,7 @@ export class MessengerService {
    */
   async getMessagesReadStatus(
     messageIds: string[],
-    chatId: string
+    _chatId: string
   ): Promise<
     Array<{
       messageId: string;

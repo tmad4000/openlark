@@ -32,7 +32,7 @@ export async function aiRoutes(app: FastifyInstance) {
       });
 
       return reply.send({ data: result });
-    } catch (error) {
+    } catch {
       return reply.status(500).send({
         code: "AI_ERROR",
         message: "AI generation failed",

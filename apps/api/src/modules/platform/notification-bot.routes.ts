@@ -3,7 +3,7 @@ import type { FastifyInstance } from "fastify";
 import { db } from "../../db/index.js";
 import { notificationBots } from "../../db/schema/platform.js";
 import { eq, and } from "drizzle-orm";
-import { authenticate, requireAdmin } from "../auth/middleware.js";
+import { authenticate } from "../auth/middleware.js";
 import { messengerService } from "../messenger/messenger.service.js";
 
 function generateToken(): string {

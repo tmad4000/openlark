@@ -10,7 +10,7 @@ import {
   departmentMembers,
 } from "../../db/schema/index.js";
 import { config } from "../../config.js";
-import { eq, and, or, isNull, gt, ilike, sql, count } from "drizzle-orm";
+import { eq, and, or, isNull, gt, ilike, count } from "drizzle-orm";
 import type { User, Organization } from "../../db/schema/auth.js";
 import crypto from "crypto";
 

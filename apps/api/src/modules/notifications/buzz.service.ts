@@ -1,7 +1,6 @@
 import { db } from "../../db/index.js";
 import { buzzNotifications } from "../../db/schema/index.js";
 import { eq, and, sql, gt } from "drizzle-orm";
-import { redis } from "../../redis.js";
 import type { CreateBuzzInput } from "./buzz.schemas.js";
 
 const MAX_BUZZES_PER_MESSAGE = 3;

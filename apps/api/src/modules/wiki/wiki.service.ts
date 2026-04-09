@@ -6,7 +6,6 @@ import {
   documents,
   documentPermissions,
   type WikiSpace,
-  type WikiSpaceMember,
   type WikiPage,
 } from "../../db/schema/index.js";
 import { eq, and, isNull, or, asc } from "drizzle-orm";

@@ -3,7 +3,6 @@ import {
   pgEnum,
   uuid,
   varchar,
-  text,
   timestamp,
   jsonb,
   integer,

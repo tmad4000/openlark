@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { AccessToken } from "livekit-server-sdk";
 import { db } from "../../db/index.js";
 import {

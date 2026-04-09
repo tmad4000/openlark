@@ -52,7 +52,7 @@ export const updateRecordSchema = z.object({
 
 // ============ QUERY ============
 
-const filterOpSchema = z.object({
+const _filterOpSchema = z.object({
   op: z.enum(["eq", "gt", "lt", "contains", "in"]),
   value: z.unknown(),
 });

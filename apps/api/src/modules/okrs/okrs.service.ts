@@ -6,7 +6,7 @@ import {
   okrCheckins,
   okrAlignments,
 } from "../../db/schema/index.js";
-import { eq, and, isNull, desc } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import type {
   CreateCycleInput,
   UpdateCycleInput,

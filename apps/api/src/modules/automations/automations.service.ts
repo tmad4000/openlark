@@ -2,10 +2,8 @@ import { db } from "../../db/index.js";
 import {
   baseAutomations,
   automationRuns,
-  baseRecords,
-  bases,
 } from "../../db/schema/index.js";
-import { eq, and, isNull, asc, sql } from "drizzle-orm";
+import { eq, and, asc } from "drizzle-orm";
 import type {
   BaseAutomation,
   AutomationRun,

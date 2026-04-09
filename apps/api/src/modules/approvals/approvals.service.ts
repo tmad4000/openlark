@@ -4,7 +4,7 @@ import {
   approvalRequests,
   approvalSteps,
 } from "../../db/schema/index.js";
-import { eq, and, or, sql } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import type {
   CreateTemplateInput,
   CreateRequestInput,

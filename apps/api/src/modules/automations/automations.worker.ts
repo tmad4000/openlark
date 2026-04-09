@@ -21,7 +21,7 @@ export interface AutomationJobData {
 
 async function executeAction(
   action: { type: string; config: Record<string, unknown> },
-  triggerEvent: Record<string, unknown>
+  _triggerEvent: Record<string, unknown>
 ): Promise<void> {
   switch (action.type) {
     case "update_record": {

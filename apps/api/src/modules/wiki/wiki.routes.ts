@@ -17,7 +17,7 @@ export async function wikiRoutes(app: FastifyInstance) {
   // ============ SPACE ROUTES ============
 
   // List user's spaces
-  app.get("/spaces", async (req: FastifyRequest, reply: FastifyReply) => {
+  app.get("/spaces", async (req: FastifyRequest, _reply: FastifyReply) => {
     const spaces = await wikiService.getUserSpaces(
       req.user!.id,
       req.user!.orgId
