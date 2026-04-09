@@ -3211,3 +3211,25 @@ Two-part fix:
 ### Tech debt remaining
 - T-025: files module is a stub (no actual S3 upload) — P1
 ---
+
+## 2026-04-09 - Iteration 35 - SIMPLIFY
+- **Scope**: Reviewed HEAD~5..HEAD (5 commits: T-024 status→Redis, T-026 sso/files tests, T-027 websocket timeout fix)
+- **Files reviewed**: status.service.ts, websocket.ts, files.test.ts, sso.test.ts, status.test.ts, app.test.ts + 5 existing test files with timeout additions
+- **Reuse findings:**
+  - Drizzle mock chain in files.test.ts and sso.test.ts is near-identical (insert/select chain builders). Assessed as premature to extract — only 2 files, and vitest hoisting constraints make shared mock factories non-trivial. Skip unless a 3rd file appears.
+- **Quality findings:**
+  - No issues. status.service.ts refactor is clean: good type extraction (CustomStatus interface), EMPTY_STATUS sentinel, clear Redis TTL logic with edge cases (past expiresAt, corrupt JSON). websocket.ts test-mode skip is well-documented with T-027 reference.
+- **Efficiency findings:**
+  - setStatus reads Redis twice (once for merge in getCustomStatus, once for return in getStatus→getCustomStatus). Acceptable: status updates are low-frequency, and the double-read ensures the return value reflects actual persisted state. Skip.
+- **Deferred to tasks:**
+  - None
+- **Skipped:**
+  - Drizzle mock chain duplication (2 files, premature abstraction)
+  - setStatus double Redis read (low-frequency path, correctness benefit)
+  - 30000ms timeout pattern across test files (mechanical, correct, unavoidable given vitest defaults)
+- **Reinforced patterns:**
+  - ✅ NODE_ENV=test early-return for external services (websocket.ts, hocuspocus.ts)
+  - ✅ Redis for transient state, Postgres for durable prefs (status module)
+  - ✅ vi.hoisted() for mock state shared between vi.mock() factories and test bodies
+- **Test baseline**: API tests 251 passed, 61 skipped. Web tests crash with fork resource exhaustion (machine issue, not code regression).
+---
