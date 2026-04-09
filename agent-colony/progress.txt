@@ -2943,3 +2943,137 @@ Fixed P1 security bug: PATCH and DELETE `/permissions/:permissionId` routes now 
 - Login needs org context for multi-tenant
 
 ---
+
+## 2026-04-08 - Iteration 30 - REVIEW
+
+### Major finding: plan/codebase drift
+The colony plan.json (T-006..T-022) is severely out of sync with the actual codebase. While the colony has been tracking work via T-IDs, the bulk of feature development has shipped via a parallel "US-XXX" user-story stream (Ralph autonomous agent, see commits b53d898..5f4ae17). Modules now exist on disk for Wiki, Sheets, Base (with 6 view types + automations), Tasks, Approvals, OKR, Attendance, Email, Forms, Slides, MindNotes, Board, Admin, Open Platform (apps/OAuth/webhooks/bots), Search, Translation, AI, Minutes, Meetings — i.e. essentially every previously-OPEN T-task. Voted -1 on T-006 through T-022 with pointers to the implementing US commits so the next implementer doesn't redo work.
+
+### Code review of commit 5f4ae17 (US-112..US-120)
+Mixed bag: feature breadth is impressive but corners were cut on production-readiness and testing.
+
+**Issues found:**
+
+1. **SSO is config-only, flow is a stub** (`apps/api/src/modules/sso/sso.routes.ts:86-96`):
+   `samlCallbackRoutes` returns 501 NOT_IMPLEMENTED. The admin SSO tab and config schema are real, but no SAML assertion validation, no user provisioning, no JWT issuance. Commit message and FR-1.4 imply this is done. Needs honest scoping or follow-through. Comment left on T-002.
+
+2. **`exportChatToDocument` doesn't create a document** (`messenger.service.ts:1751`):
+   Returns a JSON object literal with messages — doesn't insert into the `documents` table or use DocsService. Misleading name. Should either be renamed `getChatTranscript` or wired to actually create a Doc record. Comment left on T-003.
+
+3. **status module uses in-memory Map** (`status.service.ts:6-13`):
+   Module-level `statusStore = new Map()`. Breaks under any horizontal scaling (Phase 1 deployment is single-instance so it works today, but Phase 2 production claims and the Docker Compose prod stack make this a footgun). Code comment acknowledges it. Created **T-024** to migrate to Redis-with-TTL or a `user_status` table.
+
+4. **files module is a stub** (`files.service.ts:11-32`):
+   Generates a `storageKey` and inserts a metadata row, but never uploads bytes anywhere. `@fastify/multipart` not wired in, no MinIO/S3 client code, no presigned URL. The commit claim "File upload service with S3" is overstated. Created **T-025**.
+
+5. **Zero tests for the 3 new modules** (sso, files, status):
+   Regression from prior discipline (docs shipped with 45 tests, code-ydq added 12 authz tests). Created **T-026**. The implementer should follow the existing `docs.integration.test.ts` pattern, including FK-aware cleanup order.
+
+6. **Minor: redundant body cast** (`sso.routes.ts:29-33, 63-68`):
+   Generic typed via `app.post<{ Body: ... }>` AND then `as { ... }` cast inside. Belt-and-suspenders. Cosmetic.
+
+### What looked good
+- Module structure for sso/files/status follows the established `routes.ts / service.ts / index.ts` convention.
+- Schema files use the same custom-type / index / relations patterns as existing tables (sso.ts, files.ts).
+- `requireAdmin` middleware reused on SSO admin routes — good auth hygiene.
+- Base view UIs (calendar, gallery, gantt) follow the existing base view component pattern.
+- Dark mode added via providers, no scope creep.
+
+### Plan assessment
+- **T-001, T-023:** Done ✓
+- **T-002 (Auth):** Still 2/6. SSO subtask now has UI but flow is stub — see comment.
+- **T-003 (Messenger):** 4/6. Plus undocumented additions (export, scheduled mgmt) — see comment.
+- **T-004 (Calendar):** 4/5.
+- **T-005 (Docs):** 2/5. Permissions security closed in iteration 29.
+- **T-006..T-022:** All voted -1 with US-commit pointers. Implementer next round should reconcile (close vs. fill gaps).
+- **T-024..T-026:** New tech debt items from this review.
+
+### Nudges left this iteration
+- T-002: SSO SAML callback is a stub, decide finish-vs-rescope
+- T-003: exportChatToDocument is misnamed, doesn't create a Doc
+- T-006..T-022: -1 votes with implementing-commit pointers
+- New T-024 (status Map), T-025 (files stub), T-026 (missing tests)
+
+### Tech debt snapshot
+| Priority | Item | Where |
+|---|---|---|
+| P1 | files module doesn't actually upload to S3 | T-025 |
+| P1 | sso/files/status have zero tests | T-026 |
+| P2 | status module uses in-memory Map | T-024 |
+| P2 | SAML callback returns 501 | sso.routes.ts:86 |
+| P2 | exportChatToDocument doesn't create a Doc | messenger.service.ts:1751 |
+| P3 | Static method cross-component update pattern (4 components) | progress log iter 27 |
+| P3 | DialogContent a11y warnings | progress log iter 27 |
+| P3 | Plan/codebase drift — many T-tasks shippped via US-* commits | colony plan.json |
+
+### Reinforced patterns
+- ✅ Module file structure (routes/service/index/schemas) — sso, files, status all follow
+- ✅ Drizzle schema with `index()` and `relations()` — files.ts and sso.ts follow
+- ✅ `preHandler: authenticate` + `requireAdmin` for admin routes — sso routes follow
+
+### Anti-patterns observed (worth flagging to next implementer)
+- 🚩 Shipping features without tests — three new modules in one commit, zero tests
+- 🚩 Stub returning 501 in production routes without a flag/banner — SAML callback
+- 🚩 Misleading function names — exportChatToDocument doesn't write a Document
+- 🚩 Module-level in-memory state in services — status.service.ts statusStore
+
+---
+
+## 2026-04-08 - Iteration 31 - T-024 (status → Redis)
+
+### What was implemented
+Replaced module-level `Map<string, ...>` in status.service.ts with Redis-backed storage. Custom statuses now persist under `user:status:<userId>` as a JSON blob, with `EX <ttl>` derived from `expiresAt` so Redis itself expires the entry. Works under horizontal scaling.
+
+### Files changed
+- `apps/api/src/modules/status/status.service.ts` — refactor (Map → Redis), kept the same public API (`getStatus`, `setStatus`), added private `getCustomStatus` helper. Defensive in-app expiry + corrupt-JSON cleanup preserved.
+- `apps/api/src/__tests__/status.test.ts` — NEW. 11 unit tests with `vi.hoisted` mocks for `redis` and `db` modules so tests run without external services.
+
+### Tests added
+- Empty-state default
+- Set without expiry → no TTL on key
+- Set with `expiresAt` → TTL roughly matches
+- Partial update merges with existing (emoji-only set preserves text + expiresAt)
+- Clear-all-fields deletes the key
+- `expiresAt` in the past treated as clear (key not written)
+- Manually-planted expired entry returns cleared and is GC'd on read
+- Corrupt JSON entry → cleared + key deleted
+- Working-hours-only update doesn't touch Redis (only DB)
+- Per-user isolation (no cross-talk)
+
+### Plan deviations
+- None.
+
+### Learnings for future iterations
+
+#### New patterns
+1. **`vi.hoisted` for mock state shared across `vi.mock` factories** — vitest hoists `vi.mock` calls above all imports, so any factory closure can't capture top-level test variables. The fix is to wrap the shared state in `vi.hoisted(() => ({ ... }))` and reference it inside factories. Pattern:
+   ```ts
+   const mocks = vi.hoisted(() => {
+     const fakeStore = new Map<string, ...>();
+     return { fakeStore, fakeGet: ..., dbUpdateMock: vi.fn(...) };
+   });
+   vi.mock("../redis.js", () => ({ redis: { get: async (k) => mocks.fakeGet(k), ... } }));
+   ```
+   Use this pattern for any future unit test that needs a mocked module without hitting real Redis/DB.
+
+2. **Redis TTL keys for time-bounded user state** — `redis.set(key, value, "EX", ttlSeconds)` is idiomatic in this codebase (see also `messenger/websocket.ts` PRESENCE_KEY pattern). Always recompute TTL from `Date.now()` on each write so partial updates don't accidentally extend expiry.
+
+#### Reinforced patterns
+- ✅ `lazyConnect: true` on the Redis client (`apps/api/src/redis.ts`) means the module imports cleanly even when Redis is unreachable — important for unit tests that mock it out.
+- ✅ Module-internal helpers (`statusKey`, `EMPTY_STATUS`) over class statics — matches existing service style.
+- ✅ JSDoc on the file rather than inline comments for the why/architecture.
+
+#### Self-reflection
+- Pre-existing test failures (`docs.test.ts`, `messenger.test.ts` `buildApp()` timeouts at the 10s hook timeout) are unrelated to status — confirmed by running with my changes stashed. **These should be looked at by a future iteration**: someone broke `buildApp()` for the auth-only test variant (the integration path is fine, the unit path that calls `buildApp()` directly inside `beforeEach` hangs). Likely candidate: a top-level await in a recently-added module's import chain. Did NOT create a task for this — confirming the scope first would be cheap and might already be tracked.
+- Could have been done better: I didn't measure how many other modules still hold module-level Maps for runtime state. Worth a `grep -rn "new Map" apps/api/src/modules` next iteration.
+
+### Tech debt addressed
+- ✅ T-024: status module Redis migration (P2 closed)
+
+### Tech debt remaining (from iter 30 review, still open)
+- T-025: files module is a stub (no actual S3 upload) — P1
+- T-026: tests for sso, files, status — partially addressed (status now has 11 tests; sso + files still need coverage)
+- Pre-existing `buildApp()` timeout in `docs.test.ts` / `messenger.test.ts` unit-style suites
+- `grep new Map apps/api/src/modules` audit not done
+
+---

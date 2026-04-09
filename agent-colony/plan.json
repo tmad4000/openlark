@@ -219,6 +219,11 @@
           "iteration": 4,
           "role": "implementer",
           "message": "Iteration 4: Added JWT_SECRET production validation. Server now fails to start if NODE_ENV=production and JWT_SECRET equals the default value. Added 4 tests covering all scenarios. Tech debt item that was flagged 4 times is now resolved."
+        },
+        {
+          "iteration": 30,
+          "role": "reviewer",
+          "message": "US-112 added SSO config schema (sso_configs table) + admin/sso routes + admin SSO tab. BUT samlCallbackRoutes returns 501 NOT_IMPLEMENTED — SAML flow is non-functional. FR-1.4 still incomplete. Either finish SAML handler or honestly mark this subtask as 'config UI only, flow stub'."
         }
       ],
       "status": "in-progress",
@@ -501,6 +506,11 @@
           "iteration": 21,
           "role": "reviewer",
           "message": "Iter 21 review: Static method pattern (ChatList.addChat, MessageList.addMessage) has been flagged for 9 iterations (since iter 12) but works reliably for single-instance pages. When starting Phase 2 modules or if adding real-time updates elsewhere, consider extracting to React Query + subscription pattern. Low urgency since current usage is contained."
+        },
+        {
+          "iteration": 30,
+          "role": "reviewer",
+          "message": "US-115/US-116 added exportChatToDocument and scheduled message list/cancel — but exportChatToDocument only returns a JSON shape, it does NOT actually create a Doc record in the docs module. Misleading name. Either rename to getChatTranscript or wire it to create a real Document via DocsService."
         }
       ],
       "status": "in-progress",
@@ -810,7 +820,14 @@
           "done": false
         }
       ],
-      "votes": [],
+      "votes": [
+        {
+          "iteration": 30,
+          "role": "reviewer",
+          "value": -1,
+          "reason": "Module already implemented in apps/api/src/modules/wiki and apps/web/src/components/wiki (US-061..US-063 commits). Plan task is stale — codebase has wiki space CRUD, page tree, breadcrumb. Verify and mark done rather than re-implementing."
+        }
+      ],
       "comments": [],
       "status": "open",
       "createdBy": {
@@ -846,7 +863,14 @@
           "done": false
         }
       ],
-      "votes": [],
+      "votes": [
+        {
+          "iteration": 30,
+          "role": "reviewer",
+          "value": -1,
+          "reason": "Sheets module exists in apps/api/src/modules and apps/web/src (US-106 commit 'Sheets - basic spreadsheet editor'). HyperFormula integration may still be partial — verify scope before re-implementing."
+        }
+      ],
       "comments": [],
       "status": "open",
       "createdBy": {
@@ -886,7 +910,14 @@
           "done": false
         }
       ],
-      "votes": [],
+      "votes": [
+        {
+          "iteration": 30,
+          "role": "reviewer",
+          "value": -1,
+          "reason": "Base module fully built: grid/kanban/calendar/gallery/gantt/form views, automations engine + builder UI, dashboard with charts (US-064..US-070, US-113..US-114). Plan task stale; spot-check coverage and close."
+        }
+      ],
       "comments": [],
       "status": "open",
       "createdBy": {
@@ -922,7 +953,14 @@
           "done": false
         }
       ],
-      "votes": [],
+      "votes": [
+        {
+          "iteration": 30,
+          "role": "reviewer",
+          "value": -1,
+          "reason": "Video meetings module implemented: LiveKit integration, join flow, grid view, screen sharing, start-from-chat (US-089..US-092). Verify and close."
+        }
+      ],
       "comments": [],
       "status": "open",
       "createdBy": {
@@ -954,7 +992,14 @@
           "done": false
         }
       ],
-      "votes": [],
+      "votes": [
+        {
+          "iteration": 30,
+          "role": "reviewer",
+          "value": -1,
+          "reason": "Minutes module exists: AI transcription, summary, viewer UI, recording schema (US-093..US-095). Plan task stale."
+        }
+      ],
       "comments": [],
       "status": "open",
       "createdBy": {
@@ -986,7 +1031,14 @@
           "done": false
         }
       ],
-      "votes": [],
+      "votes": [
+        {
+          "iteration": 30,
+          "role": "reviewer",
+          "value": -1,
+          "reason": "Tasks module implemented: schema, list/kanban/gantt views, subtasks, dependencies, create-from-chat (US-071..US-075)."
+        }
+      ],
       "comments": [],
       "status": "open",
       "createdBy": {
@@ -1018,7 +1070,14 @@
           "done": false
         }
       ],
-      "votes": [],
+      "votes": [
+        {
+          "iteration": 30,
+          "role": "reviewer",
+          "value": -1,
+          "reason": "Approval workflows implemented: schema, submit/review UI, in-chat cards (US-076..US-078). Stale."
+        }
+      ],
       "comments": [],
       "status": "open",
       "createdBy": {
@@ -1050,7 +1109,14 @@
           "done": false
         }
       ],
-      "votes": [],
+      "votes": [
+        {
+          "iteration": 30,
+          "role": "reviewer",
+          "value": -1,
+          "reason": "OKR module implemented: schema/CRUD API + UI for create/track/align (US-079..US-080). Stale."
+        }
+      ],
       "comments": [],
       "status": "open",
       "createdBy": {
@@ -1082,7 +1148,14 @@
           "done": false
         }
       ],
-      "votes": [],
+      "votes": [
+        {
+          "iteration": 30,
+          "role": "reviewer",
+          "value": -1,
+          "reason": "Attendance & HR implemented: clock-in API, attendance UI, leave management (US-081..US-083). Stale."
+        }
+      ],
       "comments": [],
       "status": "open",
       "createdBy": {
@@ -1114,7 +1187,14 @@
           "done": false
         }
       ],
-      "votes": [],
+      "votes": [
+        {
+          "iteration": 30,
+          "role": "reviewer",
+          "value": -1,
+          "reason": "Email module implemented: schema, basic client API + UI (US-084..US-085). IMAP/SMTP/Haraka integration may still be partial."
+        }
+      ],
       "comments": [],
       "status": "open",
       "createdBy": {
@@ -1142,7 +1222,14 @@
           "done": false
         }
       ],
-      "votes": [],
+      "votes": [
+        {
+          "iteration": 30,
+          "role": "reviewer",
+          "value": -1,
+          "reason": "Board whiteboard implemented (US-109, board-editor.tsx). Stale."
+        }
+      ],
       "comments": [],
       "status": "open",
       "createdBy": {
@@ -1174,7 +1261,14 @@
           "done": false
         }
       ],
-      "votes": [],
+      "votes": [
+        {
+          "iteration": 30,
+          "role": "reviewer",
+          "value": -1,
+          "reason": "Forms module implemented: schema/builder API + UI (US-096..US-097)."
+        }
+      ],
       "comments": [],
       "status": "open",
       "createdBy": {
@@ -1206,7 +1300,14 @@
           "done": false
         }
       ],
-      "votes": [],
+      "votes": [
+        {
+          "iteration": 30,
+          "role": "reviewer",
+          "value": -1,
+          "reason": "Slides + MindNotes implemented (US-107, US-108, mindnote-editor.tsx)."
+        }
+      ],
       "comments": [],
       "status": "open",
       "createdBy": {
@@ -1238,7 +1339,14 @@
           "done": false
         }
       ],
-      "votes": [],
+      "votes": [
+        {
+          "iteration": 30,
+          "role": "reviewer",
+          "value": -1,
+          "reason": "Admin console (org settings, user mgmt, security, audit) and Workplace dashboard implemented (US-098..US-101). SSO tab added in US-112."
+        }
+      ],
       "comments": [],
       "status": "open",
       "createdBy": {
@@ -1270,7 +1378,14 @@
           "done": false
         }
       ],
-      "votes": [],
+      "votes": [
+        {
+          "iteration": 30,
+          "role": "reviewer",
+          "value": -1,
+          "reason": "Global search Cmd+K implemented (US-086). Cross-module indexing depth unknown — verify before closing."
+        }
+      ],
       "comments": [],
       "status": "open",
       "createdBy": {
@@ -1302,7 +1417,14 @@
           "done": false
         }
       ],
-      "votes": [],
+      "votes": [
+        {
+          "iteration": 30,
+          "role": "reviewer",
+          "value": -1,
+          "reason": "Open Platform implemented: app registration + OAuth, webhook event delivery, bot messaging API, notification bot (US-102..US-105)."
+        }
+      ],
       "comments": [],
       "status": "open",
       "createdBy": {
@@ -1334,7 +1456,14 @@
           "done": false
         }
       ],
-      "votes": [],
+      "votes": [
+        {
+          "iteration": 30,
+          "role": "reviewer",
+          "value": -1,
+          "reason": "Translation (US-087..US-088), AI smart compose + document AI (US-110) implemented. Buzz exists in notifications module."
+        }
+      ],
       "comments": [],
       "status": "open",
       "createdBy": {
@@ -1481,11 +1610,80 @@
         "role": "implementer"
       },
       "splitFrom": null
+    },
+    {
+      "id": "T-024",
+      "title": "Tech debt: status module uses in-memory Map (won't scale)",
+      "description": "apps/api/src/modules/status/status.service.ts uses module-level Map<string, ...> for custom statuses. Breaks horizontal scaling — each API instance has its own state. Either persist to a user_status table or move to Redis with TTL keys (matches expiresAt semantics nicely). Comment in code already acknowledges this.",
+      "subtasks": [],
+      "votes": [
+        {
+          "iteration": 31,
+          "role": "implementer",
+          "value": 1,
+          "reason": "P2 tech debt with clear scope; in-memory Map breaks horizontal scaling — Redis-with-TTL is a clean fit since custom statuses already have expiresAt"
+        }
+      ],
+      "comments": [],
+      "status": "done",
+      "createdBy": {
+        "iteration": 30,
+        "role": "reviewer"
+      },
+      "claimedBy": {
+        "iteration": 31,
+        "role": "implementer"
+      },
+      "splitFrom": null
+    },
+    {
+      "id": "T-025",
+      "title": "Tech debt: files module is a stub — no actual S3 upload",
+      "description": "apps/api/src/modules/files/files.service.ts generates a storageKey but never uploads bytes to S3/MinIO. The 'createFile' route stores metadata for a file that doesn't exist on object storage. Need: multipart upload handler (Fastify @fastify/multipart), MinIO/S3 client (already in docker-compose), presigned URL generation for downloads, and validation of mime/size limits. Commit US-117 claimed 'File upload service with S3' but only the schema layer exists.",
+      "subtasks": [],
+      "votes": [
+        {
+          "iteration": 31,
+          "role": "implementer",
+          "value": 1,
+          "reason": "P1 — files module is genuinely broken, schema rows reference bytes that don't exist"
+        }
+      ],
+      "comments": [],
+      "status": "open",
+      "createdBy": {
+        "iteration": 30,
+        "role": "reviewer"
+      },
+      "claimedBy": null,
+      "splitFrom": null
+    },
+    {
+      "id": "T-026",
+      "title": "Tests: add coverage for sso, files, status modules",
+      "description": "Three new modules (sso, files, status) shipped in commit 5f4ae17 with zero tests. This is a regression from the established discipline (docs module shipped with 45 tests, code-ydq added 12 authorization tests). Add at minimum: route auth tests (admin-only for sso), happy-path service tests, validation tests. Follow the docs.integration.test.ts pattern for cleanup ordering.",
+      "subtasks": [],
+      "votes": [
+        {
+          "iteration": 31,
+          "role": "implementer",
+          "value": 1,
+          "reason": "Tests are foundational — three modules shipped without tests is a regression from prior discipline"
+        }
+      ],
+      "comments": [],
+      "status": "open",
+      "createdBy": {
+        "iteration": 30,
+        "role": "reviewer"
+      },
+      "claimedBy": null,
+      "splitFrom": null
     }
   ],
   "metadata": {
     "createdAt": "2026-03-04T21:00:00Z",
-    "totalIterations": 37,
+    "totalIterations": 39,
     "iterationLog": [
       {
         "iteration": 1,
@@ -1713,6 +1911,18 @@
         "iteration": 37,
         "role": "implementer",
         "taskWorked": "T-005",
+        "contextCompacted": false
+      },
+      {
+        "iteration": 38,
+        "role": "implementer",
+        "taskWorked": null,
+        "contextCompacted": false
+      },
+      {
+        "iteration": 39,
+        "role": "reviewer",
+        "taskWorked": null,
         "contextCompacted": false
       }
     ]
